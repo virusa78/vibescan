@@ -1,0 +1,248 @@
+/**
+ * VibeScan - Main Application Entry Point
+ *
+ * A SaaS vulnerability scanning platform with dual-scanner architecture
+ * (Grype free + Codescoring/BlackDuck enterprise).
+ */
+
+import fastify from 'fastify';
+import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
+import { runMigrations } from './database/migrate.js';
+import { ensureBucketsExist, setupLifecyclePolicies } from './s3/client.js';
+import { getRedisClient } from './redis/client.js';
+import { getFreeScanQueue, getEnterpriseScanQueue, getWebhookDeliveryQueue, getReportGenerationQueue } from './queues/config.js';
+import config from './config/index.js';
+import { getWorkerConfigs, createWorker } from './queues/config.js';
+import { registerSwagger } from './config/swagger.js';
+
+// Create Fastify instance
+const app = fastify({
+    logger: {
+        level: config.NODE_ENV === 'production' ? 'info' : 'debug'
+    }
+});
+
+// Register plugins
+await app.register(cors, {
+    origin: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-VibeScan-Signature']
+});
+
+await app.register(rateLimit, {
+    max: config.RATE_LIMIT_MAX_REQUESTS,
+    timeWindow: config.RATE_LIMIT_WINDOW_MS,
+    keyGenerator: (req: any) => {
+        return req.headers['x-forwarded-for'] || req.ip || req.connection?.remoteAddress;
+    }
+});
+
+// Health check endpoint
+app.get('/health', async (request, reply) => {
+    const health = {
+        status: 'healthy' as string,
+        timestamp: new Date().toISOString(),
+        services: {
+            database: 'unknown' as string,
+            redis: 'unknown' as string,
+            s3: 'unknown' as string,
+            queues: {} as { free_scan: string; enterprise_scan: string; webhook_delivery: string; report_generation: string } | string
+        }
+    };
+
+    // Check database
+    try {
+        const pool = require('./database/client.js').getPool();
+        await pool.query('SELECT 1');
+        health.services.database = 'ok';
+    } catch (error) {
+        health.services.database = 'error';
+        health.status = 'degraded';
+    }
+
+    // Check Redis
+    try {
+        const redis = await getRedisClient();
+        await redis.ping();
+        health.services.redis = 'ok';
+    } catch (error) {
+        health.services.redis = 'error';
+        health.status = 'degraded';
+    }
+
+    // Check S3
+    try {
+        const s3 = require('./s3/client.js').getS3Client();
+        await s3.send(new (require('@aws-sdk/client-s3')).ListBucketsCommand({}));
+        health.services.s3 = 'ok';
+    } catch (error) {
+        health.services.s3 = 'error';
+        health.status = 'degraded';
+    }
+
+    // Check queues
+    try {
+        const freeQueue = await getFreeScanQueue();
+        const enterpriseQueue = await getEnterpriseScanQueue();
+        const webhookQueue = await getWebhookDeliveryQueue();
+        const reportQueue = await getReportGenerationQueue();
+
+        // Use queue.getName() instead of .key for BullMQ v3
+        health.services.queues = {
+            free_scan: freeQueue.name,
+            enterprise_scan: enterpriseQueue.name,
+            webhook_delivery: webhookQueue.name,
+            report_generation: reportQueue.name
+        };
+    } catch (error) {
+        health.services.queues = 'error';
+        health.status = 'degraded';
+    }
+
+    return reply.send(health);
+});
+
+// Root endpoint
+app.get('/', async (request, reply) => {
+    return {
+        name: 'VibeScan',
+        version: '0.1.0',
+        description: 'Dual-scanner vulnerability scanning platform',
+        endpoints: {
+            auth: '/auth/*',
+            scans: '/scans/*',
+            reports: '/reports/*',
+            webhooks: '/webhooks/*',
+            github: '/github/*',
+            billing: '/billing/*'
+        }
+    };
+});
+
+// Import handlers
+import * as authHandlers from './handlers/authHandlers.js';
+import * as apiKeyHandlers from './handlers/apiKeyHandlers.js';
+import * as scanHandlers from './handlers/scanHandlers.js';
+import * as billingHandlers from './handlers/billingHandlers.js';
+import * as middleware from './middleware/apiGateway.js';
+
+// JWT verification hook - use preHandler to run before all route handlers
+app.addHook('preHandler', async (request: any, reply: any) => {
+    console.log(`preHandler called for ${request.method} ${request.url}`);
+    const authorizationHeader = request.headers['authorization'];
+    console.log(`Authorization header present: ${!!authorizationHeader}`);
+    if (authorizationHeader) {
+        console.log(`Authorization header value: ${authorizationHeader.substring(0, 20)}...`);
+    }
+
+    if (authorizationHeader && authorizationHeader.startsWith('Bearer ')) {
+        const token = authorizationHeader.substring(7);
+        try {
+            const jwt = await import('jsonwebtoken');
+            const decoded = (jwt.default as any).verify(token, config.JWT_SECRET);
+            request.user = decoded;
+            console.log('JWT verified for user:', decoded.userId, 'email:', decoded.email);
+        } catch (error) {
+            console.log('JWT verification failed:', (error as Error).message);
+            // Token is invalid, continue without authentication
+        }
+    }
+});
+
+// Register API routes
+app.post('/auth/register', authHandlers.registerHandler);
+app.post('/auth/login', authHandlers.loginHandler);
+app.post('/auth/refresh', authHandlers.refreshHandler);
+app.post('/auth/logout', authHandlers.logoutHandler);
+app.get('/auth/me', authHandlers.getMeHandler);
+
+app.post('/api-keys', apiKeyHandlers.generateApiKeyHandler);
+app.get('/api-keys', apiKeyHandlers.listApiKeysHandler);
+app.delete('/api-keys/:id', apiKeyHandlers.revokeApiKeyHandler);
+
+app.post('/scans', scanHandlers.submitScanHandler);
+app.get('/scans', scanHandlers.listScansHandler);
+app.get('/scans/:id', scanHandlers.getScanStatusHandler);
+app.delete('/scans/:id', scanHandlers.cancelScanHandler);
+
+// Billing routes
+app.post('/billing/checkout', billingHandlers.createCheckoutHandler);
+app.get('/billing/subscription', billingHandlers.getSubscriptionHandler);
+app.post('/billing/cancel', billingHandlers.cancelSubscriptionHandler);
+app.post('/billing/webhook', billingHandlers.stripeWebhookHandler);
+app.get('/billing/regional-pricing', billingHandlers.getRegionalPricingHandler);
+
+// Swagger documentation (development only)
+if (config.NODE_ENV !== 'production') {
+    await registerSwagger(app);
+}
+
+// Error handling
+app.addHook('onError', (request, reply, error, done) => {
+    middleware.errorHandlingMiddleware(error, request, reply, done);
+});
+
+// Start server
+async function start() {
+    try {
+        // Run migrations
+        console.log('Running database migrations...');
+        await runMigrations();
+
+        // Initialize Redis
+        console.log('Connecting to Redis...');
+        await getRedisClient();
+
+        // Initialize S3
+        console.log('Initializing S3 buckets...');
+        await ensureBucketsExist();
+        try {
+            await setupLifecyclePolicies();
+        } catch (error) {
+            console.log('S3: Lifecycle policy setup skipped (MinIO may not support it):', error.message);
+        }
+
+        // Initialize queues
+        console.log('Initializing queues...');
+        const freeQueue = await getFreeScanQueue();
+        const enterpriseQueue = await getEnterpriseScanQueue();
+        const webhookQueue = await getWebhookDeliveryQueue();
+        const reportQueue = await getReportGenerationQueue();
+
+        console.log(`Free scan queue: ${freeQueue.name}`);
+        console.log(`Enterprise scan queue: ${enterpriseQueue.name}`);
+        console.log(`Webhook delivery queue: ${webhookQueue.name}`);
+        console.log(`Report generation queue: ${reportQueue.name}`);
+
+        // Start workers
+        console.log('Starting workers...');
+        const workerConfigs = getWorkerConfigs();
+        for (const config of workerConfigs) {
+            createWorker(config).catch(console.error);
+        }
+
+        // Start server
+        const port = config.PORT;
+        await app.listen({ port, host: '0.0.0.0' });
+        console.log(`Server listening on port ${port}`);
+        console.log(`Environment: ${config.NODE_ENV}`);
+
+        // Graceful shutdown
+        process.on('SIGTERM', async () => {
+            console.log('SIGTERM received, shutting down gracefully...');
+            await app.close();
+            await require('./redis/client.js').closeRedisConnection();
+            await require('./s3/client.js').closeS3Connection();
+            await require('./queues/config.js').closeAllQueues();
+            process.exit(0);
+        });
+
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+// Start the application
+start();

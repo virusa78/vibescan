@@ -1,0 +1,549 @@
+
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .api-wrap { padding: 1rem 0; font-size: 13px; color: var(--color-text-primary); }
+  .group-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; cursor: pointer;
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    margin-bottom: 4px; user-select: none;
+  }
+  .group-header:hover { background: var(--color-background-tertiary); }
+  .group-title { font-weight: 500; font-size: 14px; color: var(--color-text-primary); flex: 1; }
+  .group-count { font-size: 11px; color: var(--color-text-tertiary); }
+  .group-body { margin-bottom: 12px; }
+  .endpoint {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 12px 8px 24px;
+    border-left: 2px solid var(--color-border-tertiary);
+    margin: 2px 0 2px 8px; cursor: pointer;
+    border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+  }
+  .endpoint:hover { background: var(--color-background-secondary); }
+  .endpoint.active { background: var(--color-background-secondary); border-left-color: var(--color-border-info); }
+  .method {
+    font-size: 11px; font-weight: 500; padding: 2px 7px;
+    border-radius: 4px; min-width: 46px; text-align: center; flex-shrink: 0; margin-top: 1px;
+  }
+  .GET    { background: #E1F5EE; color: #085041; }
+  .POST   { background: #E6F1FB; color: #0C447C; }
+  .DELETE { background: #FCEBEB; color: #791F1F; }
+  .PATCH  { background: #FAEEDA; color: #633806; }
+  .ep-path { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-primary); }
+  .ep-desc { font-size: 12px; color: var(--color-text-secondary); margin-top: 1px; }
+  .detail-panel {
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 16px; margin-top: 16px;
+  }
+  .detail-title { font-size: 15px; font-weight: 500; margin: 0 0 4px; }
+  .detail-path { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-secondary); margin: 0 0 12px; }
+  .detail-section { font-size: 11px; font-weight: 500; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; margin: 12px 0 6px; }
+  .auth-badge {
+    display: inline-block; font-size: 11px; padding: 2px 8px;
+    border-radius: 4px; margin-bottom: 8px;
+    background: var(--color-background-warning); color: var(--color-text-warning);
+  }
+  .auth-badge.pub { background: var(--color-background-success); color: var(--color-text-success); }
+  .schema-row { display: flex; gap: 8px; padding: 4px 0; border-bottom: 0.5px solid var(--color-border-tertiary); align-items: baseline; }
+  .schema-row:last-child { border-bottom: none; }
+  .field-name { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-primary); min-width: 160px; }
+  .field-type { font-size: 11px; color: var(--color-text-info); min-width: 80px; }
+  .field-req  { font-size: 11px; color: var(--color-text-danger); min-width: 30px; }
+  .field-desc { font-size: 12px; color: var(--color-text-secondary); }
+  .resp-code  { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 2px 7px; border-radius: 4px; margin: 2px 4px 2px 0; }
+  .r2 { background: var(--color-background-success); color: var(--color-text-success); }
+  .r4 { background: var(--color-background-danger);  color: var(--color-text-danger); }
+  .r5 { background: var(--color-background-warning); color: var(--color-text-warning); }
+  .resp-row { margin: 4px 0; font-size: 12px; color: var(--color-text-secondary); }
+  .chevron { font-size: 10px; color: var(--color-text-tertiary); transition: transform 0.15s; }
+  .chevron.open { transform: rotate(90deg); }
+  .filter-bar { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filter-btn {
+    font-size: 11px; padding: 3px 10px; border-radius: 12px; cursor: pointer;
+    border: 0.5px solid var(--color-border-secondary);
+    background: transparent; color: var(--color-text-secondary);
+  }
+  .filter-btn.active-f { background: var(--color-background-info); color: var(--color-text-info); border-color: var(--color-border-info); }
+</style>
+
+<div class="api-wrap">
+  <div class="filter-bar" id="filter-bar"></div>
+  <div id="api-list"></div>
+  <div id="detail-panel" style="display:none" class="detail-panel"></div>
+</div>
+
+<script>
+const SPEC = {
+  groups: [
+    {
+      tag: "Auth",
+      endpoints: [
+        {
+          method: "POST", path: "/v1/auth/register", summary: "Register new user",
+          auth: false,
+          body: [
+            { name: "email", type: "string", req: true, desc: "Valid email address" },
+            { name: "password", type: "string", req: true, desc: "Min 8 chars, 1 uppercase, 1 digit" },
+            { name: "region", type: "enum", req: false, desc: "IN | PK | OTHER — affects pricing" },
+          ],
+          responses: [
+            { code: "201", cls: "r2", desc: "{ user_id, access_token, refresh_token }" },
+            { code: "409", cls: "r4", desc: "Email already registered" },
+            { code: "422", cls: "r4", desc: "Validation error — password too weak" },
+          ]
+        },
+        {
+          method: "POST", path: "/v1/auth/login", summary: "Login, receive token pair",
+          auth: false,
+          body: [
+            { name: "email", type: "string", req: true, desc: "" },
+            { name: "password", type: "string", req: true, desc: "" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ access_token (15m), refresh_token (30d) }" },
+            { code: "401", cls: "r4", desc: "Invalid credentials" },
+          ]
+        },
+        {
+          method: "POST", path: "/v1/auth/refresh", summary: "Rotate refresh token",
+          auth: false,
+          body: [
+            { name: "refresh_token", type: "string", req: true, desc: "Previous refresh token — invalidated after use" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ access_token, refresh_token }" },
+            { code: "401", cls: "r4", desc: "Token expired or already rotated" },
+          ]
+        },
+        {
+          method: "POST", path: "/v1/auth/logout", summary: "Revoke refresh token",
+          auth: true,
+          body: [
+            { name: "refresh_token", type: "string", req: true, desc: "" },
+          ],
+          responses: [
+            { code: "204", cls: "r2", desc: "No content" },
+          ]
+        },
+      ]
+    },
+    {
+      tag: "API Keys",
+      endpoints: [
+        {
+          method: "POST", path: "/v1/api-keys", summary: "Generate new API key for CI/CD",
+          auth: true,
+          body: [
+            { name: "label", type: "string", req: true, desc: "Human label e.g. 'GitHub Actions prod'" },
+            { name: "scopes", type: "array", req: true, desc: "sbom_submit | scan_read | webhook_manage" },
+            { name: "expires_at", type: "datetime", req: false, desc: "ISO 8601 — null means no expiry" },
+          ],
+          responses: [
+            { code: "201", cls: "r2", desc: "{ key_id, key_prefix, raw_key } — raw_key shown ONCE" },
+            { code: "400", cls: "r4", desc: "Invalid scopes" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/api-keys", summary: "List all API keys (no raw values)",
+          auth: true,
+          params: [
+            { name: "—", type: "—", req: false, desc: "No query params" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Array of { key_id, key_prefix, label, scopes, last_used_at, revoked_at }" },
+          ]
+        },
+        {
+          method: "DELETE", path: "/v1/api-keys/{key_id}", summary: "Revoke API key immediately",
+          auth: true,
+          params: [
+            { name: "key_id", type: "uuid", req: true, desc: "Path param" },
+          ],
+          responses: [
+            { code: "204", cls: "r2", desc: "Revoked" },
+            { code: "404", cls: "r4", desc: "Key not found or not owned by user" },
+          ]
+        },
+      ]
+    },
+    {
+      tag: "Scans",
+      endpoints: [
+        {
+          method: "POST", path: "/v1/scans/source", summary: "Submit source ZIP for scanning",
+          auth: true,
+          body: [
+            { name: "file", type: "binary", req: true, desc: "ZIP archive, max 50MB, multipart/form-data" },
+          ],
+          responses: [
+            { code: "202", cls: "r2", desc: "{ scan_id, status: 'pending', estimated_seconds: N }" },
+            { code: "429", cls: "r4", desc: "Quota exceeded — { remaining: 0, reset_at }" },
+            { code: "413", cls: "r4", desc: "File too large (>50MB)" },
+          ]
+        },
+        {
+          method: "POST", path: "/v1/scans/sbom", summary: "Submit CycloneDX SBOM — no source code required",
+          auth: true,
+          body: [
+            { name: "sbom", type: "object", req: true, desc: "CycloneDX JSON v1.4+ document" },
+            { name: "webhook_url", type: "string", req: false, desc: "Override user-level webhook for this scan" },
+            { name: "meta.ref", type: "string", req: false, desc: "Git ref e.g. refs/heads/main — for audit trail" },
+            { name: "meta.repo", type: "string", req: false, desc: "Repository slug e.g. org/repo" },
+            { name: "meta.commit_sha", type: "string", req: false, desc: "Commit SHA — displayed in report" },
+          ],
+          responses: [
+            { code: "202", cls: "r2", desc: "{ scan_id, status: 'pending' }" },
+            { code: "400", cls: "r4", desc: "{ error: 'invalid_sbom', validation_errors: [...] }" },
+            { code: "429", cls: "r4", desc: "Quota exceeded" },
+          ]
+        },
+        {
+          method: "POST", path: "/v1/scans/github", summary: "Trigger scan from GitHub repo (GitHub App)",
+          auth: true,
+          body: [
+            { name: "installation_id", type: "string", req: true, desc: "GitHub App installation ID" },
+            { name: "repo", type: "string", req: true, desc: "owner/repo format" },
+            { name: "ref", type: "string", req: true, desc: "Branch, tag, or commit SHA" },
+          ],
+          responses: [
+            { code: "202", cls: "r2", desc: "{ scan_id, status: 'pending' }" },
+            { code: "403", cls: "r4", desc: "Installation not authorized for this repo" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/scans/{scan_id}", summary: "Get scan status and results",
+          auth: true,
+          params: [
+            { name: "scan_id", type: "uuid", req: true, desc: "Path param" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "ScanView — full or locked based on plan (see schemas)" },
+            { code: "404", cls: "r4", desc: "Not found or not owned by caller" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/scans", summary: "List scans for current user/org",
+          auth: true,
+          params: [
+            { name: "status", type: "enum", req: false, desc: "pending | scanning | done | error" },
+            { name: "input_type", type: "enum", req: false, desc: "sbom_upload | source_zip | github_app | ci_plugin" },
+            { name: "from", type: "datetime", req: false, desc: "ISO 8601 start date filter" },
+            { name: "limit", type: "integer", req: false, desc: "Default 20, max 100" },
+            { name: "cursor", type: "string", req: false, desc: "Pagination cursor from previous response" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ items: ScanSummary[], next_cursor, total }" },
+          ]
+        },
+        {
+          method: "DELETE", path: "/v1/scans/{scan_id}", summary: "Cancel pending scan and refund quota",
+          auth: true,
+          params: [
+            { name: "scan_id", type: "uuid", req: true, desc: "Path param" },
+          ],
+          responses: [
+            { code: "204", cls: "r2", desc: "Cancelled — quota refunded if still pending" },
+            { code: "409", cls: "r4", desc: "Scan already completed — cannot cancel" },
+          ]
+        },
+      ]
+    },
+    {
+      tag: "Reports",
+      endpoints: [
+        {
+          method: "GET", path: "/v1/scans/{scan_id}/report", summary: "Get full report view (paywall applied)",
+          auth: true,
+          params: [
+            { name: "scan_id", type: "uuid", req: true, desc: "Path param" },
+            { name: "format", type: "enum", req: false, desc: "json (default) | summary" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "ReportView — delta locked for starter plan" },
+            { code: "202", cls: "r2", desc: "Scan still running — { status, progress_pct }" },
+          ]
+        },
+        {
+          method: "POST", path: "/v1/scans/{scan_id}/report/pdf", summary: "Generate PDF report — pro/enterprise only",
+          auth: true,
+          params: [
+            { name: "scan_id", type: "uuid", req: true, desc: "Path param" },
+          ],
+          responses: [
+            { code: "202", cls: "r2", desc: "{ job_id } — PDF generated async, link sent by email" },
+            { code: "403", cls: "r4", desc: "Plan does not include PDF export" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/scans/{scan_id}/ci-decision", summary: "Get pass/fail decision for CI gate",
+          auth: true,
+          params: [
+            { name: "scan_id", type: "uuid", req: true, desc: "Path param" },
+            { name: "fail_on", type: "enum", req: false, desc: "CRITICAL | HIGH | MEDIUM | LOW — default CRITICAL" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ pass: bool, max_severity, blocking_count, exit_code: 0|1 }" },
+            { code: "202", cls: "r2", desc: "Scan not yet complete" },
+          ]
+        },
+      ]
+    },
+    {
+      tag: "Quota",
+      endpoints: [
+        {
+          method: "GET", path: "/v1/quota", summary: "Get current quota usage",
+          auth: true,
+          params: [],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ plan, scans_used, scans_limit, remaining, reset_at }" },
+          ]
+        },
+      ]
+    },
+    {
+      tag: "Webhooks",
+      endpoints: [
+        {
+          method: "PATCH", path: "/v1/settings/webhook", summary: "Set or update webhook URL",
+          auth: true,
+          body: [
+            { name: "webhook_url", type: "string", req: true, desc: "HTTPS endpoint — we POST results here" },
+            { name: "signing_secret", type: "string", req: false, desc: "Used for HMAC-SHA256 signature in X-VibeScan-Signature header" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ webhook_url, verified: false } — sends test ping" },
+            { code: "400", cls: "r4", desc: "URL must be HTTPS" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/webhooks/deliveries", summary: "List webhook delivery attempts",
+          auth: true,
+          params: [
+            { name: "scan_id", type: "uuid", req: false, desc: "Filter by scan" },
+            { name: "status", type: "enum", req: false, desc: "pending | delivered | failed | exhausted" },
+            { name: "limit", type: "integer", req: false, desc: "Default 20" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Array of WebhookDelivery objects" },
+          ]
+        },
+        {
+          method: "POST", path: "/v1/webhooks/deliveries/{delivery_id}/retry", summary: "Manually retry failed delivery",
+          auth: true,
+          params: [
+            { name: "delivery_id", type: "uuid", req: true, desc: "Path param" },
+          ],
+          responses: [
+            { code: "202", cls: "r2", desc: "Retry queued" },
+            { code: "409", cls: "r4", desc: "Delivery already succeeded or not exhausted yet" },
+          ]
+        },
+      ]
+    },
+    {
+      tag: "GitHub App",
+      endpoints: [
+        {
+          method: "POST", path: "/v1/github/webhook", summary: "GitHub App webhook receiver (called by GitHub)",
+          auth: false,
+          body: [
+            { name: "—", type: "—", req: false, desc: "Standard GitHub webhook payload — verified via X-Hub-Signature-256" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Accepted" },
+            { code: "401", cls: "r4", desc: "Signature mismatch" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/github/installations", summary: "List GitHub App installations for org",
+          auth: true,
+          params: [],
+          responses: [
+            { code: "200", cls: "r2", desc: "Array of GithubInstallation objects" },
+          ]
+        },
+        {
+          method: "PATCH", path: "/v1/github/installations/{installation_id}", summary: "Update installation settings",
+          auth: true,
+          body: [
+            { name: "target_branches", type: "array", req: false, desc: "e.g. ['main', 'develop']" },
+            { name: "fail_pr_on_severity", type: "enum", req: false, desc: "CRITICAL | HIGH | MEDIUM | LOW | NONE" },
+            { name: "trigger_on_pr", type: "boolean", req: false, desc: "" },
+            { name: "trigger_on_push", type: "boolean", req: false, desc: "" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Updated GithubInstallation object" },
+          ]
+        },
+      ]
+    },
+    {
+      tag: "Billing",
+      endpoints: [
+        {
+          method: "POST", path: "/v1/billing/checkout", summary: "Create Stripe Checkout session",
+          auth: true,
+          body: [
+            { name: "plan", type: "enum", req: true, desc: "starter | pro | enterprise" },
+            { name: "success_url", type: "string", req: true, desc: "Redirect after payment" },
+            { name: "cancel_url", type: "string", req: true, desc: "Redirect on cancel" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ checkout_url } — redirect user here" },
+          ]
+        },
+        {
+          method: "POST", path: "/v1/billing/stripe-webhook", summary: "Stripe event receiver (called by Stripe)",
+          auth: false,
+          body: [
+            { name: "—", type: "—", req: false, desc: "Stripe event payload — verified via Stripe-Signature header" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Acknowledged" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/billing/subscription", summary: "Get current subscription details",
+          auth: true,
+          params: [],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ plan, status, current_period_end, cancel_at_period_end }" },
+          ]
+        },
+      ]
+    },
+  ]
+};
+
+let activeFilter = "All";
+let activeEp = null;
+
+function renderMethodBadge(method) {
+  return `<span class="method ${method}">${method}</span>`;
+}
+
+function renderEndpoint(ep, groupIdx, epIdx) {
+  const id = `ep-${groupIdx}-${epIdx}`;
+  const isActive = activeEp === id;
+  return `
+    <div class="endpoint ${isActive ? 'active' : ''}" onclick="toggleDetail('${id}', ${groupIdx}, ${epIdx})">
+      ${renderMethodBadge(ep.method)}
+      <div>
+        <div class="ep-path">${ep.path}</div>
+        <div class="ep-desc">${ep.summary}</div>
+      </div>
+    </div>`;
+}
+
+function renderDetail(ep) {
+  const fields = ep.body || ep.params || [];
+  const authHtml = ep.auth
+    ? `<span class="auth-badge">Bearer JWT or API Key required</span>`
+    : `<span class="auth-badge pub">Public endpoint</span>`;
+
+  const fieldRows = fields.map(f => `
+    <div class="schema-row">
+      <span class="field-name">${f.name}</span>
+      <span class="field-type">${f.type}</span>
+      <span class="field-req">${f.req ? '✱' : ''}</span>
+      <span class="field-desc">${f.desc}</span>
+    </div>`).join('');
+
+  const respRows = ep.responses.map(r => `
+    <div class="resp-row">
+      <span class="resp-code ${r.cls}">${r.code}</span>
+      ${r.desc}
+    </div>`).join('');
+
+  const sectionLabel = ep.body ? 'Request body' : 'Query parameters';
+
+  return `
+    <div class="detail-title">${ep.summary}</div>
+    <div class="detail-path">${ep.method} ${ep.path}</div>
+    ${authHtml}
+    ${fields.length ? `<div class="detail-section">${sectionLabel}</div>${fieldRows}` : ''}
+    <div class="detail-section">Responses</div>
+    ${respRows}
+  `;
+}
+
+function toggleDetail(id, gIdx, eIdx) {
+  if (activeEp === id) {
+    activeEp = null;
+  } else {
+    activeEp = id;
+  }
+  render();
+  if (activeEp) {
+    const panel = document.getElementById('detail-panel');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function render() {
+  const tags = ["All", ...SPEC.groups.map(g => g.tag)];
+  document.getElementById('filter-bar').innerHTML = tags.map(t =>
+    `<button class="filter-btn ${activeFilter === t ? 'active-f' : ''}" onclick="setFilter('${t}')">${t}</button>`
+  ).join('');
+
+  const filtered = SPEC.groups.filter(g => activeFilter === "All" || g.tag === activeFilter);
+  let html = '';
+  let activeEpData = null;
+  let activeGIdx = null, activeEIdx = null;
+
+  filtered.forEach((group, gIdx) => {
+    const realGIdx = SPEC.groups.indexOf(group);
+    const count = group.endpoints.length;
+    html += `<div class="group-header" onclick="toggleGroup(${realGIdx})">
+      <span class="chevron ${openGroups.has(realGIdx) ? 'open' : ''}">&#9654;</span>
+      <span class="group-title">${group.tag}</span>
+      <span class="group-count">${count} endpoint${count !== 1 ? 's' : ''}</span>
+    </div>`;
+    if (openGroups.has(realGIdx)) {
+      html += `<div class="group-body">`;
+      group.endpoints.forEach((ep, eIdx) => {
+        const id = `ep-${realGIdx}-${eIdx}`;
+        html += renderEndpoint(ep, realGIdx, eIdx);
+        if (activeEp === id) { activeEpData = ep; }
+      });
+      html += `</div>`;
+    }
+  });
+
+  document.getElementById('api-list').innerHTML = html;
+
+  const panel = document.getElementById('detail-panel');
+  if (activeEpData) {
+    panel.style.display = 'block';
+    panel.innerHTML = renderDetail(activeEpData);
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+const openGroups = new Set([0, 2]);
+
+function toggleGroup(idx) {
+  if (openGroups.has(idx)) openGroups.delete(idx);
+  else openGroups.add(idx);
+  render();
+}
+
+function setFilter(tag) {
+  activeFilter = tag;
+  activeEp = null;
+  openGroups.clear();
+  SPEC.groups.forEach((g, i) => {
+    if (tag === "All" || g.tag === tag) openGroups.add(i);
+  });
+  render();
+}
+
+render();
+</script>

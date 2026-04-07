@@ -1,0 +1,180 @@
+
+<style>
+#erd svg { width: 100%; height: auto; }
+#erd svg.erDiagram .divider path { stroke-opacity: 0.5; }
+#erd svg.erDiagram .row-rect-odd path,
+#erd svg.erDiagram .row-rect-odd rect,
+#erd svg.erDiagram .row-rect-even path,
+#erd svg.erDiagram .row-rect-even rect { stroke: none !important; }
+</style>
+<div id="erd" style="padding: 1rem 0"></div>
+<script type="module">
+import mermaid from 'https://esm.sh/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+await document.fonts.ready;
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  fontFamily: '"Anthropic Sans", sans-serif',
+  themeVariables: {
+    darkMode: dark,
+    fontSize: '13px',
+    fontFamily: '"Anthropic Sans", sans-serif',
+    lineColor: dark ? '#9c9a92' : '#73726c',
+    textColor: dark ? '#c2c0b6' : '#3d3d3a',
+    primaryColor: dark ? '#2a2a28' : '#f1efe8',
+    primaryBorderColor: dark ? '#5f5e5a' : '#b4b2a9',
+  },
+});
+const diagram = `erDiagram
+  USERS {
+    uuid id PK
+    string email
+    string password_hash
+    string plan
+    string stripe_customer_id
+    string stripe_subscription_id
+    string api_key_hash
+    string region
+    timestamp created_at
+    timestamp last_active_at
+  }
+  ORGANIZATIONS {
+    uuid id PK
+    string name
+    uuid owner_user_id FK
+    string plan
+    string github_installation_id
+    timestamp created_at
+  }
+  ORG_MEMBERS {
+    uuid org_id FK
+    uuid user_id FK
+    string role
+  }
+  API_KEYS {
+    uuid id PK
+    uuid user_id FK
+    string key_prefix
+    string key_hash
+    string label
+    jsonb scopes
+    timestamp last_used_at
+    timestamp expires_at
+    timestamp revoked_at
+    timestamp created_at
+  }
+  SCANS {
+    uuid id PK
+    uuid user_id FK
+    uuid org_id FK
+    string input_type
+    string input_ref
+    jsonb components
+    string status
+    string plan_at_submission
+    string error_message
+    timestamp created_at
+    timestamp completed_at
+  }
+  SBOM_DOCUMENTS {
+    uuid id PK
+    uuid scan_id FK
+    string spec_version
+    string serial_number
+    int component_count
+    string tool_name
+    string tool_version
+    string raw_s3_key
+    timestamp validated_at
+    jsonb validation_errors
+  }
+  SCAN_RESULTS {
+    uuid id PK
+    uuid scan_id FK
+    string source
+    jsonb vulnerabilities
+    string scanner_version
+    timestamp cve_db_timestamp
+    int duration_ms
+    timestamp created_at
+  }
+  SCAN_DELTAS {
+    uuid id PK
+    uuid scan_id FK
+    int total_free_count
+    int total_enterprise_count
+    int delta_count
+    jsonb delta_by_severity
+    jsonb delta_vulnerabilities
+    boolean is_locked
+    timestamp created_at
+  }
+  QUOTA_LEDGER {
+    uuid id PK
+    uuid user_id FK
+    string month
+    int scans_used
+    int scans_limit
+    timestamp reset_at
+  }
+  GITHUB_INSTALLATIONS {
+    uuid id PK
+    uuid org_id FK
+    string github_installation_id
+    jsonb target_branches
+    boolean trigger_on_push
+    boolean trigger_on_pr
+    string fail_pr_on_severity
+    timestamp created_at
+  }
+  WEBHOOK_DELIVERIES {
+    uuid id PK
+    uuid scan_id FK
+    string target_url
+    string payload_hash
+    int attempt_number
+    int http_status
+    string status
+    timestamp delivered_at
+    timestamp next_retry_at
+  }
+
+  USERS ||--o{ SCANS : "submits"
+  USERS ||--o{ API_KEYS : "owns"
+  USERS ||--o{ QUOTA_LEDGER : "tracked by"
+  USERS ||--o{ ORG_MEMBERS : "belongs to"
+  ORGANIZATIONS ||--o{ ORG_MEMBERS : "has"
+  ORGANIZATIONS ||--o{ SCANS : "owns"
+  ORGANIZATIONS ||--o| GITHUB_INSTALLATIONS : "has"
+  SCANS ||--o| SBOM_DOCUMENTS : "has"
+  SCANS ||--o{ SCAN_RESULTS : "produces"
+  SCANS ||--o| SCAN_DELTAS : "has"
+  SCANS ||--o{ WEBHOOK_DELIVERIES : "triggers"
+`;
+const { svg } = await mermaid.render('erd-main', diagram);
+document.getElementById('erd').innerHTML = svg;
+
+document.querySelectorAll('#erd svg.erDiagram .node').forEach(node => {
+  const firstPath = node.querySelector('path[d]');
+  if (!firstPath) return;
+  const d = firstPath.getAttribute('d');
+  const nums = d.match(/-?[\d.]+/g)?.map(Number);
+  if (!nums || nums.length < 8) return;
+  const xs = [nums[0], nums[2], nums[4], nums[6]];
+  const ys = [nums[1], nums[3], nums[5], nums[7]];
+  const x = Math.min(...xs), y = Math.min(...ys);
+  const w = Math.max(...xs) - x, h = Math.max(...ys) - y;
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  rect.setAttribute('x', x); rect.setAttribute('y', y);
+  rect.setAttribute('width', w); rect.setAttribute('height', h);
+  rect.setAttribute('rx', '8');
+  for (const a of ['fill', 'stroke', 'stroke-width', 'class', 'style']) {
+    if (firstPath.hasAttribute(a)) rect.setAttribute(a, firstPath.getAttribute(a));
+  }
+  firstPath.replaceWith(rect);
+});
+document.querySelectorAll('#erd svg.erDiagram .row-rect-odd path, #erd svg.erDiagram .row-rect-even path').forEach(p => {
+  p.setAttribute('stroke', 'none');
+});
+</script>

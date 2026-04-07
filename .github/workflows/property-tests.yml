@@ -1,0 +1,53 @@
+name: Property Tests
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Run daily at 6 AM
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  property-tests:
+    name: Run Property-Based Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run property-based tests
+        run: |
+          npm run test -- test/unit/property-tests.test.ts --coverage
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: property-test-results
+          path: coverage/
+
+  alerting-rules-validation:
+    name: Validate Alerting Rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate alerting rules
+        run: |
+          node -e "const rules = require('./src/alerting/rules.ts'); console.log('Alerting rules valid:'); console.log(JSON.stringify(rules, null, 2));"

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vibescan-auth-service
+  namespace: vibescan
+  labels:
+    app: vibescan
+    component: auth-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: vibescan
+      component: auth-service
+  template:
+    metadata:
+      labels:
+        app: vibescan
+        component: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: vibescan/auth:latest
+          imagePullPolicy: Always
+          command:
+            - node
+            - dist/services/authService.js
+          envFrom:
+            - configMapRef:
+                name: vibescan-config
+            - secretRef:
+                name: vibescan-secrets
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

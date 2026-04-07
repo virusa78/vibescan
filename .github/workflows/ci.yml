@@ -1,0 +1,151 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+  pull_request:
+    branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm run test:coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: dist/
+
+  docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            vibescan/api:latest
+            vibescan/api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            vibescan/worker:latest
+            vibescan/worker:${{ github.sha }}
+          file: Dockerfile.worker
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure Kubernetes cluster
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          kubectl config use-context ${{ secrets.KUBE_CONTEXT }}
+
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -f deploy/kubernetes/namespace.yaml
+          kubectl apply -f deploy/kubernetes/secret.yaml
+          kubectl apply -f deploy/kubernetes/configmap.yaml
+          kubectl apply -f deploy/kubernetes/postgres-deployment.yaml
+          kubectl apply -f deploy/kubernetes/redis-deployment.yaml
+          kubectl apply -f deploy/kubernetes/api-deployment.yaml
+          kubectl apply -f deploy/kubernetes/free-worker-deployment.yaml
+          kubectl apply -f deploy/kubernetes/enterprise-worker-deployment.yaml
+          kubectl apply -f deploy/kubernetes/network-policy.yaml
+
+          # Update deployments with new image tags
+          kubectl set image deployment/vibescan-api api=vibescan/api:${{ github.sha }} -n vibescan
+          kubectl set image deployment/vibescan-free-worker worker=vibescan/worker:${{ github.sha }} -n vibescan
+          kubectl set image deployment/vibescan-enterprise-worker worker=vibescan/worker:${{ github.sha }} -n vibescan
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/vibescan-api -n vibescan --timeout=120s
+          kubectl rollout status deployment/vibescan-free-worker -n vibescan --timeout=120s

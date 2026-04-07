@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vibescan-config
+  namespace: vibescan
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  LOG_LEVEL: "info"
+
+  # Database
+  DB_HOST: "vibescan-postgres"
+  DB_PORT: "5432"
+  DB_NAME: "vibescan"
+  DB_USER: "postgres"
+  DB_POOL_SIZE: "20"
+
+  # Redis
+  REDIS_URL: "redis://vibescan-redis:6379"
+
+  # S3
+  AWS_REGION: "us-east-1"
+  S3_BUCKET_SOURCES: "vibescan-sources"
+  S3_BUCKET_SBOMS: "vibescan-sboms"
+  S3_BUCKET_PDFS: "vibescan-pdfs"
+
+  # JWT
+  JWT_ACCESS_EXPIRY: "15m"
+  JWT_REFRESH_EXPIRY: "30d"
+
+  # Scanning
+  MAX_SOURCE_SIZE_MB: "50"
+  CVE_UPDATE_INTERVAL_HOURS: "6"
+
+  # Rate Limiting
+  RATE_LIMIT_WINDOW_MS: "60000"
+  RATE_LIMIT_MAX_REQUESTS: "100"

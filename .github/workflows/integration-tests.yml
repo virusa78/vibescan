@@ -1,0 +1,64 @@
+name: Integration Tests
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Run every 6 hours
+  workflow_dispatch:
+
+jobs:
+  integration-tests:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: vibescan
+          POSTGRES_PASSWORD: vibescan
+          POSTGRES_DB: vibescan
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for services
+        run: |
+          echo "Waiting for PostgreSQL..."
+          until pg_isready -h localhost -p 5432; do sleep 1; done
+          echo "Waiting for Redis..."
+          until redis-cli -h localhost ping > /dev/null 2>&1; do sleep 1; done
+
+      - name: Run integration tests
+        run: |
+          npm run test -- test/integration/integration-tests.test.ts
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: coverage/

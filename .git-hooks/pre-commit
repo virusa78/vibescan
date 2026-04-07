@@ -1,0 +1,14 @@
+#!/bin/bash
+# Pre-commit hook for VibeScan
+# Runs tests before allowing commits
+
+echo "Running tests before commit..."
+
+# Check if npm test passes
+if ! npm test > /dev/null 2>&1; then
+    echo "Tests failed. Please fix them before committing."
+    exit 1
+fi
+
+echo "Pre-commit checks passed!"
+exit 0
