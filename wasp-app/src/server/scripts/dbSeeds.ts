@@ -1,16 +1,28 @@
 import { faker } from "@faker-js/faker";
 import type { PrismaClient } from "@prisma/client";
-import { type User } from "wasp/entities";
+import { PlanTier } from "@prisma/client";
 import {
-  getSubscriptionPaymentPlanIds,
   SubscriptionStatus,
 } from "../../payment/plans";
 
-type MockUserData = Omit<User, "id">;
+type MockUserData = {
+  email: string;
+  username: string;
+  passwordHash?: string | null;
+  displayName?: string;
+  isAdmin: boolean;
+  plan: PlanTier;
+  stripeCustomerId?: string | null;
+  subscriptionStatus?: string | null;
+  monthlyQuotaLimit: number;
+  monthlyQuotaUsed: number;
+  region: string;
+  timezone?: string | null;
+  language: string;
+};
 
 /**
- * This function, which we've imported in `app.db.seeds` in the `main.wasp` file,
- * seeds the database with mock users via the `wasp db seed` command.
+ * Seed the database with mock users via the `wasp db seed` command.
  * For more info see: https://wasp.sh/docs/data-model/backends#seeding-the-database
  */
 export async function seedMockUsers(prismaClient: PrismaClient) {
@@ -26,34 +38,28 @@ function generateMockUsersData(numOfUsers: number): MockUserData[] {
 function generateMockUserData(): MockUserData {
   const firstName = faker.person.firstName();
   const lastName = faker.person.lastName();
-  const subscriptionStatus =
-    faker.helpers.arrayElement<SubscriptionStatus | null>([
-      ...Object.values(SubscriptionStatus),
-      null,
-    ]);
-  const now = new Date();
-  const createdAt = faker.date.past({ refDate: now });
-  const timePaid = faker.date.between({ from: createdAt, to: now });
-  const credits = subscriptionStatus
-    ? 0
-    : faker.number.int({ min: 0, max: 10 });
-  const hasUserPaidOnStripe = !!subscriptionStatus || credits > 3;
+  
+  // Randomly assign plans
+  const planOptions: PlanTier[] = ["free_trial", "starter", "pro", "enterprise"];
+  const plan = faker.helpers.arrayElement(planOptions);
+  
+  const subscriptionStatus = plan === "free_trial" ? null : "active";
+  const hasCustomer = plan !== "free_trial";
+  
   return {
     email: faker.internet.email({ firstName, lastName }),
     username: faker.internet.userName({ firstName, lastName }),
-    createdAt,
-    isAdmin: false,
-    credits,
-    subscriptionStatus,
-    lemonSqueezyCustomerPortalUrl: null,
-    paymentProcessorUserId: hasUserPaidOnStripe
+    displayName: `${firstName} ${lastName}`,
+    isAdmin: faker.datatype.boolean({ probability: 0.1 }),
+    plan,
+    stripeCustomerId: hasCustomer
       ? `cus_test_${faker.string.uuid()}`
       : null,
-    datePaid: hasUserPaidOnStripe
-      ? faker.date.between({ from: createdAt, to: timePaid })
-      : null,
-    subscriptionPlan: subscriptionStatus
-      ? faker.helpers.arrayElement(getSubscriptionPaymentPlanIds())
-      : null,
+    subscriptionStatus,
+    monthlyQuotaLimit: plan === "enterprise" ? 1000 : plan === "pro" ? 100 : 10,
+    monthlyQuotaUsed: faker.number.int({ min: 0, max: 50 }),
+    region: faker.helpers.arrayElement(["IN", "PK", "OTHER"]),
+    timezone: faker.location.timeZone(),
+    language: faker.helpers.arrayElement(["en", "ru"]),
   };
 }

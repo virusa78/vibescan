@@ -76,7 +76,7 @@ export default function ScanDetailsPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              {scan.githubRepo || "Unknown repository"} ({scan.githubRef || "main"})
+              {scan.inputRef || "Scan " + scan.id}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">

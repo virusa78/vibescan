@@ -5,11 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "../client/components/u
 
 function getStatusClass(status: string) {
   const normalized = status.toLowerCase();
-  if (normalized === "failed") return "bg-red-500/10 text-red-500 border-red-500/30";
-  if (normalized === "completed" || normalized === "done") {
+  if (normalized === "error") return "bg-red-500/10 text-red-500 border-red-500/30";
+  if (normalized === "done") {
     return "bg-green-500/10 text-green-500 border-green-500/30";
   }
-  if (normalized === "running" || normalized === "processing") {
+  if (normalized === "scanning") {
     return "bg-blue-500/10 text-blue-500 border-blue-500/30";
   }
   return "bg-yellow-500/10 text-yellow-500 border-yellow-500/30";
@@ -19,11 +19,11 @@ export default function DashboardPage() {
   const { data: scans, isLoading } = useQuery(getScans);
   const recentScans = scans ?? [];
   const totalScans = recentScans.length;
-  const queuedScans = recentScans.filter((scan) => scan.status === "queued").length;
+  const queuedScans = recentScans.filter((scan) => scan.status === "pending").length;
   const runningScans = recentScans.filter((scan) =>
-    ["running", "processing"].includes(scan.status.toLowerCase()),
+    scan.status === "scanning",
   ).length;
-  const failedScans = recentScans.filter((scan) => scan.status === "failed").length;
+  const failedScans = recentScans.filter((scan) => scan.status === "error").length;
 
   return (
     <div className="py-10 lg:mt-10">
@@ -126,10 +126,9 @@ export default function DashboardPage() {
                       params={{ scanId: scan.id }}
                       className="font-medium hover:underline"
                     >
-                      {scan.githubRepo || "Unknown repo"}
+                      {scan.inputRef || "Unknown scan"}
                     </WaspRouterLink>
                     <p className="text-muted-foreground text-sm">
-                      {scan.githubRef || "main"} •{" "}
                       {new Date(scan.createdAt).toLocaleString()}
                     </p>
                   </div>

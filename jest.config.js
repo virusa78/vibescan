@@ -20,7 +20,8 @@ const config = {
         '/test/e2e-wasp/',
         '/\\.tmp-wasp/',
         '/e2e-tests/',
-        '/vibescan-ui/e2e/'
+        '/vibescan-ui/e2e/',
+        '/wasp-app/'  // Wasp tests run separately
     ],
     transform: {
         '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.test.json', useESM: false }]

@@ -3,79 +3,65 @@ name: start-dev-server
 description: Start the Wasp dev server and set up full debugging visibility. This includes running the server (with access to logs), and connecting browser console access so the agent can see client-side errors. Essential for any development or debugging work.
 ---
 
-## Step 0: Get User Preferences
+## Project-Specific Flow (VibeScan)
 
-- [ ] Ask the user if they want to start the dev server(s) as a background task in the current session, or on their own in a separate terminal:
-  - Starting as a background task
-    - Pros: The agent has more autonomy, can respond directly to dev server logs (warnings, errors).
-    - Cons: Certain actions can be slower, and the user has less direct control. Server logs are only visibile to the user from within the `background tasks` tab.
-  - Starting externally (User)
-    - Pros: The user has more direct control over app development and the Wasp CLI commands. Can be advantageous for more advanced users.
-    - Cons: Debugging and feature discovery can be slower, as the agent doesn't have direct access to dev server logs (warnings, errors) or Wasp CLI commands.
-- [ ] Depending on the user's choice, follow the steps below and run the commands for the user as background tasks, or guide them through running them manually in a separate terminal.
+Use this repository's managed Wasp contour, not raw `wasp start db`.
 
-### Step 1: Ensure the Development Database is Running
+### Step 0: Confirm start mode
 
-Grep the `.env.server` file for `DATABASE_URL`. If no line starts with `DATABASE_URL`, continue following this step.
-If the user does have their own DATABASE_URL env var set, move on to [Step 2](#step-2-start-dev-server).
+Ask whether to:
+- run locally in the current agent session (preferred for autonomous debugging), or
+- have the user run commands in their own terminal and paste logs.
 
-Check the `schema.prisma` file in the project root for the `datasource` block to see which database is being used.
+### Step 1: Start the VibeScan Wasp contour
 
-#### SQLite
-**Skip to [Step 2](#step-2-start-dev-server):** SQLite stores data in a local file, no database server needed.
+From repo root, run:
 
-#### PostgreSQL
-Start the managed database container as a background task:
 ```bash
-wasp start db
+npm run wasp:up
 ```
 
-**Docker needs to be installed and running** for the managed Postgres database container (`wasp start db`) to work.
+This wrapper (`scripts/wasp-dev.sh up`) does all of the following:
+- starts Docker infra (`postgres`, `redis`, `minio`),
+- loads env from `wasp-app/.env.server` and root `.env`,
+- attempts `npx wasp db migrate-dev --name dev_auto_sync`,
+- launches `npx wasp start` and waits for readiness.
 
-Run this as a background task in the current session.
-Wait 5-15 seconds for the database to be ready.
+### Step 2: Verify readiness and logs
 
-### Step 2: Start Dev Server
+Run:
 
-Start the Wasp development server as a background task:
 ```bash
-wasp start
+bash ./scripts/wasp-dev.sh status
+curl -fsS http://127.0.0.1:3001/health
+curl -fsS http://127.0.0.1:3000
 ```
 
-If this is the first time starting the app, or if there are pending migrations, run the following command:
+Primary log file:
+
+`./.logs/wasp-dev/wasp-dev.log`
+
+### Step 3: Stop when done
+
 ```bash
-wasp db migrate-dev --name <migration-name>
+npm run wasp:down
 ```
 
-### Step 3: Verify Server is Running
+### Step 4: Fallback mode (only if needed)
 
-Confirm client (`localhost:3000`) and server (`localhost:3001`) are running by checking the background task output.
+For direct foreground debugging:
 
-**If started as background task in current session:** Listen to the output for development and debugging information.
-**If started externally:** Instruct the user to check the output of the external terminal and share its output with you.
-
-### Step 4: Connect Browser Console Access (Important!)
-
-**This step is critical for effective development and debugging.** Without browser console access, the agent cannot see client-side errors, warnings, or React issues that occur in the browser.
-
-Ask the user (via the AskUserQuestion tool) which method they'd like to use for giving the agent visibility into the browser console:
-
-| Option | Description |
-|--------|-------------|
-| **Chrome DevTools MCP (recommended)** | Must be installed |
-| **Built-in Chrome** | Use Claude Code's built-in browser connection (check status with `/chrome` command) |
-| **Manual** | User will manually copy/paste console output when needed |
-| **Other** | User has another preference |
-
-For the Chrome DevTools MCP option, if not already installed, add the following config to their mcp client:
-
-```json
-{
-  "mcpServers": {
-    "chrome-devtools": {
-      "command": "npx",
-      "args": ["-y", "chrome-devtools-mcp@latest"]
-    }
-  }
-}
+```bash
+npm run wasp:dev
 ```
+
+If schema/entity changes are pending, run migration with descriptive name:
+
+```bash
+cd wasp-app
+npx wasp db migrate-dev --name <descriptive-name>
+```
+
+### Step 5: Browser console visibility
+
+Prefer Chrome DevTools MCP so the agent can inspect console errors and failed network requests during UI debugging. If unavailable, require pasted browser console logs from the user.

@@ -1,91 +1,67 @@
 import { User } from "wasp/entities";
 import { PrismaClient } from "wasp/server";
-import { PaymentPlanId, SubscriptionStatus } from "./plans";
+import { SubscriptionStatus } from "./plans";
 
-export async function fetchUserPaymentProcessorUserId(
+// Fetch Stripe customer ID for a user
+export async function fetchUserStripeCustomerId(
   userId: User["id"],
   prismaUserDelegate: PrismaClient["user"],
 ): Promise<string | null> {
   const user = await prismaUserDelegate.findUniqueOrThrow({
-    where: {
-      id: userId,
-    },
-    select: {
-      paymentProcessorUserId: true,
-    },
+    where: { id: userId },
+    select: { stripeCustomerId: true },
   });
-
-  return user.paymentProcessorUserId;
+  return user.stripeCustomerId;
 }
 
-interface UpdateUserPaymentProcessorUserIdArgs {
+// Legacy alias for backwards compatibility
+export async function fetchUserPaymentProcessorUserId(
+  userId: User["id"],
+  prismaUserDelegate: PrismaClient["user"],
+): Promise<string | null> {
+  return fetchUserStripeCustomerId(userId, prismaUserDelegate);
+}
+
+// Update Stripe customer ID
+interface UpdateUserStripeCustomerIdArgs {
   userId: User["id"];
-  paymentProcessorUserId: NonNullable<User["paymentProcessorUserId"]>;
+  stripeCustomerId: string;
 }
 
-export function updateUserPaymentProcessorUserId(
-  { userId, paymentProcessorUserId }: UpdateUserPaymentProcessorUserIdArgs,
+export function updateUserStripeCustomerId(
+  { userId, stripeCustomerId }: UpdateUserStripeCustomerIdArgs,
   prismaUserDelegate: PrismaClient["user"],
 ): Promise<User> {
   return prismaUserDelegate.update({
-    where: {
-      id: userId,
-    },
-    data: {
-      paymentProcessorUserId,
-    },
+    where: { id: userId },
+    data: { stripeCustomerId },
   });
 }
 
+// Legacy alias for backwards compatibility
+export function updateUserPaymentProcessorUserId(
+  { userId, paymentProcessorUserId }: { userId: User["id"]; paymentProcessorUserId: string },
+  prismaUserDelegate: PrismaClient["user"],
+): Promise<User> {
+  return updateUserStripeCustomerId({ userId, stripeCustomerId: paymentProcessorUserId }, prismaUserDelegate);
+}
+
+// Update subscription status and plan
 interface UpdateUserSubscriptionArgs {
-  paymentProcessorUserId: NonNullable<User["paymentProcessorUserId"]>;
+  stripeCustomerId: string;
   subscriptionStatus: SubscriptionStatus;
-  paymentPlanId?: PaymentPlanId;
-  datePaid?: Date;
+  plan?: string;
 }
 
 export function updateUserSubscription(
-  {
-    paymentProcessorUserId,
-    paymentPlanId,
-    subscriptionStatus,
-    datePaid,
-  }: UpdateUserSubscriptionArgs,
+  { stripeCustomerId, plan, subscriptionStatus }: UpdateUserSubscriptionArgs,
   userDelegate: PrismaClient["user"],
 ): Promise<User> {
   return userDelegate.update({
-    where: {
-      paymentProcessorUserId,
-    },
+    where: { stripeCustomerId },
     data: {
-      subscriptionPlan: paymentPlanId,
       subscriptionStatus,
-      datePaid,
-    },
-  });
-}
-
-interface UpdateUserCreditsArgs {
-  paymentProcessorUserId: NonNullable<User["paymentProcessorUserId"]>;
-  numOfCreditsPurchased: number;
-  datePaid: Date;
-}
-
-export function updateUserCredits(
-  {
-    paymentProcessorUserId,
-    numOfCreditsPurchased,
-    datePaid,
-  }: UpdateUserCreditsArgs,
-  userDelegate: PrismaClient["user"],
-): Promise<User> {
-  return userDelegate.update({
-    where: {
-      paymentProcessorUserId,
-    },
-    data: {
-      credits: { increment: numOfCreditsPurchased },
-      datePaid,
+      plan: plan as any,
     },
   });
 }

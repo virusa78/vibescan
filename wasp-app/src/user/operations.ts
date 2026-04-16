@@ -154,3 +154,43 @@ export const getPaginatedUsers = async (
     totalPages,
   };
 };
+
+// Update user settings
+const updateUserSettingsSchema = z.object({
+  displayName: z.string().optional(),
+  timezone: z.string().optional(),
+  region: z.enum(['IN', 'PK', 'OTHER']).optional(),
+  language: z.string().optional(),
+});
+
+type UpdateUserSettingsInput = z.infer<typeof updateUserSettingsSchema>;
+
+export const updateUserSettings = async (
+  rawArgs: any,
+  context: any
+): Promise<User> => {
+  if (!context.user) {
+    throw new HttpError(401, 'User not authenticated');
+  }
+
+  const args = ensureArgsSchemaOrThrowHttpError(updateUserSettingsSchema, rawArgs);
+
+  const updateData: any = {};
+  if (args.displayName !== undefined) {
+    updateData.displayName = args.displayName;
+  }
+  if (args.timezone !== undefined) {
+    updateData.timezone = args.timezone;
+  }
+  if (args.region !== undefined) {
+    updateData.region = args.region;
+  }
+  if (args.language !== undefined) {
+    updateData.language = args.language;
+  }
+
+  return prisma.user.update({
+    where: { id: context.user.id },
+    data: updateData,
+  });
+};

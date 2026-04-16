@@ -6,20 +6,15 @@ import { type PaymentsWebhook } from "wasp/server/api";
 import { emailSender } from "wasp/server/email";
 import { assertUnreachable } from "../../shared/utils";
 import { UnhandledWebhookEventError } from "../errors";
-import {
-  PaymentPlanId,
-  paymentPlans,
-  SubscriptionStatus,
-} from "../plans";
-import { getPaymentPlanIdByPaymentProcessorPlanId } from "../paymentProcessorPlans";
-import { updateUserCredits, updateUserSubscription } from "../user";
+import { SubscriptionStatus } from "../plans";
+import { updateUserSubscription } from "../user";
 import { stripeClient } from "./stripeClient";
 
 /**
  * Stripe requires a raw request to construct events successfully.
  */
 export const stripeMiddlewareConfigFn: MiddlewareConfigFn = (
-  middlewareConfig,
+  middlewareConfig: any,
 ) => {
   middlewareConfig.delete("express.json");
   middlewareConfig.set(
@@ -30,9 +25,9 @@ export const stripeMiddlewareConfigFn: MiddlewareConfigFn = (
 };
 
 export const stripeWebhook: PaymentsWebhook = async (
-  request,
-  response,
-  context,
+  request: any,
+  response: any,
+  context: any,
 ) => {
   const prismaUserDelegate = context.entities.User;
   try {
@@ -99,39 +94,9 @@ async function handleInvoicePaid(
   event: Stripe.InvoicePaidEvent,
   prismaUserDelegate: PrismaClient["user"],
 ): Promise<void> {
-  const invoice = event.data.object;
-  const customerId = getCustomerId(invoice.customer);
-  const invoicePaidAtDate = getInvoicePaidAtDate(invoice);
-  const paymentPlanId = getPaymentPlanIdByPaymentProcessorPlanId(
-    getInvoicePriceId(invoice),
-  );
-
-  switch (paymentPlanId) {
-    case PaymentPlanId.Credits10:
-      await updateUserCredits(
-        {
-          paymentProcessorUserId: customerId,
-          datePaid: invoicePaidAtDate,
-          numOfCreditsPurchased: paymentPlans[paymentPlanId].effect.amount,
-        },
-        prismaUserDelegate,
-      );
-      break;
-    case PaymentPlanId.Pro:
-    case PaymentPlanId.Hobby:
-      await updateUserSubscription(
-        {
-          paymentProcessorUserId: customerId,
-          datePaid: invoicePaidAtDate,
-          paymentPlanId,
-          subscriptionStatus: SubscriptionStatus.Active,
-        },
-        prismaUserDelegate,
-      );
-      break;
-    default:
-      assertUnreachable(paymentPlanId);
-  }
+  // For VibeScan, we handle subscription updates instead
+  // Invoice.paid events are for recurring subscriptions
+  // which are already handled by customer.subscription.updated
 }
 
 function getInvoicePriceId(invoice: Stripe.Invoice): Stripe.Price["id"] {
@@ -156,30 +121,18 @@ async function handleCustomerSubscriptionUpdated(
 ): Promise<void> {
   const subscription = event.data.object;
 
-  // There are other subscription statuses, such as `trialing` that we are not handling.
+  // Get subscription status
   const subscriptionStatus = getOpenSaasSubscriptionStatus(subscription);
   if (!subscriptionStatus) {
     return;
   }
 
   const customerId = getCustomerId(subscription.customer);
-  const paymentPlanId = getPaymentPlanIdByPaymentProcessorPlanId(
-    getSubscriptionPriceId(subscription),
-  );
 
-  const user = await updateUserSubscription(
-    { paymentProcessorUserId: customerId, paymentPlanId, subscriptionStatus },
+  await updateUserSubscription(
+    { stripeCustomerId: customerId, subscriptionStatus },
     prismaUserDelegate,
   );
-
-  if (subscription.cancel_at_period_end && user.email) {
-    await emailSender.send({
-      to: user.email,
-      subject: "We hate to see you go :(",
-      text: "We hate to see you go. Here is a sweet offer...",
-      html: "We hate to see you go. Here is a sweet offer...",
-    });
-  }
 }
 
 function getOpenSaasSubscriptionStatus(
@@ -236,7 +189,7 @@ async function handleCustomerSubscriptionDeleted(
 
   await updateUserSubscription(
     {
-      paymentProcessorUserId: customerId,
+      stripeCustomerId: customerId,
       subscriptionStatus: SubscriptionStatus.Deleted,
     },
     prismaUserDelegate,

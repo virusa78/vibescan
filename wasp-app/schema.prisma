@@ -78,6 +78,7 @@ model User {
   webhooks                  Webhook[]
   vulnAcceptances           VulnAcceptance[]
   aiFixPrompts              AiFixPrompt[]
+  findings                  Finding[]
   organizations             Organization[]  @relation("members")
 
   @@map("users")
@@ -133,12 +134,13 @@ model Scan {
 
   // Scan status and plan at submission time
   status                    ScanStatus      @default(pending)
-  planAtSubmission          String          @map("plan_at_submission") // free_trial, starter, pro, enterprise
+  planAtSubmission          String          @default("free_trial") @map("plan_at_submission") // free_trial, starter, pro, enterprise
   errorMessage              String?         @map("error_message")
 
   // Relations
   user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   scanResults               ScanResult[]
+  findings                  Finding[]
   scanDeltas                ScanDelta[]
   aiFixPrompts              AiFixPrompt[]
   securityScores            SecurityScore[]
@@ -168,6 +170,79 @@ model ScanResult {
   @@map("scan_results")
 }
 
+// Individual vulnerability findings with fingerprint-based deduplication
+model Finding {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  scanId                    String          @map("scan_id") @db.Uuid
+  userId                    String          @map("user_id") @db.Uuid
+
+  // Fingerprint for deduplication across scans
+  fingerprint               String          // HASH(cve_id + package_name + installed_version + file_path)
+
+  // Finding details (immutable except severity/fixed_version which can update from CVE DB)
+  cveId                     String          @map("cve_id")
+  packageName               String          @map("package_name")
+  installedVersion          String          @map("installed_version")
+  filePath                  String?         @map("file_path")
+  
+  // Severity and fix info (can change if CVE DB updates)
+  severity                  String          // CRITICAL, HIGH, MEDIUM, LOW, INFO
+  cvssScore                 Decimal?        @map("cvss_score") @db.Decimal(3, 1)
+  fixedVersion              String?         @map("fixed_version")
+
+  // Status tracking
+  status                    String          @default("active") // active, mitigated
+  mitigatedAt               DateTime?       @map("mitigated_at")
+  mitigatedInScanId         String?         @map("mitigated_in_scan_id") @db.Uuid
+
+  // Source scanner
+  source                    ScanSource      // free or enterprise
+
+  // Description and details (updated at import time)
+  description               String?
+  detectedData              Json?           @map("detected_data")
+
+  // Relations
+  scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  history                   FindingHistory[]
+
+  @@index([fingerprint])
+  @@index([userId, status])
+  @@index([scanId])
+  @@index([cveId])
+  @@unique([scanId, fingerprint], map: "idx_finding_unique_per_scan")
+  @@map("findings")
+}
+
+// Audit trail for finding status changes
+model FindingHistory {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+
+  findingId                 String          @map("finding_id") @db.Uuid
+  
+  // Event type: severity_changed, auto_mitigated, manually_accepted, etc.
+  event                     String
+  
+  // Previous and new values for the event
+  prevValue                 String?         @map("prev_value")
+  newValue                  String?         @map("new_value")
+  
+  // Optional additional context
+  metadata                  Json?
+
+  // Relation
+  finding                   Finding         @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([findingId])
+  @@index([event])
+  @@map("finding_history")
+}
+
 // Delta comparison (enterprise vs free)
 model ScanDelta {
   id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -181,6 +256,10 @@ model ScanDelta {
   deltaBySeverity           Json            @map("delta_by_severity")
   deltaVulnerabilities      Json?           @map("delta_vulnerabilities")
   isLocked                  Boolean         @default(false) @map("is_locked")
+
+  // Reimport summary from fingerprint-based deduplication
+  // { new_count, mitigated_count, updated_count, unchanged_count }
+  reimportSummary           Json?           @map("reimport_summary")
 
   scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
 

@@ -1,5 +1,3 @@
-import { getUserSettings, updateUserSettings } from "wasp/client/operations";
-
 export type UserSettingsInput = {
   displayName?: string;
   timezone?: string;
@@ -8,6 +6,9 @@ export type UserSettingsInput = {
 };
 
 export const settingsApi = {
-  get: () => getUserSettings(),
-  update: (input: UserSettingsInput) => updateUserSettings(input),
+  // TODO: Implement settings operations in Wasp
+  update: async (input: UserSettingsInput) => {
+    // This will be implemented as a Wasp action
+    console.log("Updating settings:", input);
+  },
 };

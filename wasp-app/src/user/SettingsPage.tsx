@@ -1,53 +1,52 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "wasp/client/auth";
-import { useQuery } from "wasp/client/operations";
+import { updateUserSettings } from "wasp/client/operations";
 import { Alert, AlertDescription } from "../client/components/ui/alert";
 import { Button } from "../client/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
 import { Input } from "../client/components/ui/input";
 import { Label } from "../client/components/ui/label";
-import { getUserSettings } from "wasp/client/operations";
-import { settingsApi } from "./settingsApi";
 
 export default function SettingsPage() {
   const { data: user } = useAuth();
-  const { data: settings, isLoading, refetch } = useQuery(getUserSettings);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
-  const [githubUsername, setGithubUsername] = useState("");
-  const [githubToken, setGithubToken] = useState("");
-  const [defaultRepo, setDefaultRepo] = useState("");
-  const [defaultBranch, setDefaultBranch] = useState("main");
+  const [timezone, setTimezone] = useState("");
+  const [language, setLanguage] = useState("en");
+  const [region, setRegion] = useState<"IN" | "PK" | "OTHER">("OTHER");
 
   useEffect(() => {
-    setDisplayName(settings?.displayName ?? user?.username ?? "");
-    setGithubUsername(settings?.githubUsername ?? "");
-    setGithubToken(settings?.githubToken ?? "");
-    setDefaultRepo(settings?.defaultRepo ?? "");
-    setDefaultBranch(settings?.defaultBranch ?? "main");
-  }, [settings, user?.username]);
+    if (user) {
+      setDisplayName(user.displayName ?? user.username ?? "");
+      setTimezone(user.timezone ?? "");
+      setLanguage(user.language ?? "en");
+      setRegion((user.region as any) ?? "OTHER");
+    }
+  }, [user]);
 
   const onSave = async (event: FormEvent) => {
     event.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
+    setIsLoading(true);
 
     try {
-      await settingsApi.update({
+      await updateUserSettings({
         displayName,
-        githubUsername,
-        githubToken,
-        defaultRepo,
-        defaultBranch,
+        timezone,
+        language,
+        region,
       });
-      setSuccessMessage("Settings saved.");
-      await refetch();
+      setSuccessMessage("Settings saved successfully.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to save settings.";
       setErrorMessage(message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -76,48 +75,44 @@ export default function SettingsPage() {
                 id="displayName"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                disabled={isLoading}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="githubUsername">GitHub username</Label>
+              <Label htmlFor="timezone">Timezone</Label>
               <Input
-                id="githubUsername"
-                value={githubUsername}
-                onChange={(e) => setGithubUsername(e.target.value)}
-                disabled={isLoading}
+                id="timezone"
+                placeholder="e.g., UTC, Asia/Kolkata"
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="githubToken">GitHub token (for private repos)</Label>
-              <Input
-                id="githubToken"
-                type="password"
-                value={githubToken}
-                onChange={(e) => setGithubToken(e.target.value)}
-                disabled={isLoading}
-              />
+              <Label htmlFor="language">Language</Label>
+              <select
+                id="language"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="rounded border px-2 py-1"
+              >
+                <option value="en">English</option>
+                <option value="ru">Русский</option>
+              </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="defaultRepo">Default repository (owner/name)</Label>
-              <Input
-                id="defaultRepo"
-                value={defaultRepo}
-                onChange={(e) => setDefaultRepo(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="defaultBranch">Default branch</Label>
-              <Input
-                id="defaultBranch"
-                value={defaultBranch}
-                onChange={(e) => setDefaultBranch(e.target.value)}
-                disabled={isLoading}
-              />
+              <Label htmlFor="region">Region</Label>
+              <select
+                id="region"
+                value={region}
+                onChange={(e) => setRegion(e.target.value as any)}
+                className="rounded border px-2 py-1"
+              >
+                <option value="IN">India (IN)</option>
+                <option value="PK">Pakistan (PK)</option>
+                <option value="OTHER">Other</option>
+              </select>
             </div>
             <Button type="submit" disabled={isLoading}>
-              Save settings
+              {isLoading ? "Saving..." : "Save settings"}
             </Button>
           </form>
         </CardContent>

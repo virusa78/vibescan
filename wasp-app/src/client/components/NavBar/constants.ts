@@ -17,5 +17,4 @@ export const appNavigationItems: NavigationItem[] = [
   { name: "Dashboard", to: routes.DashboardRoute.to },
   { name: "New Scan", to: routes.NewScanRoute.to },
   { name: "Settings", to: routes.SettingsRoute.to },
-  { name: "Admin", to: routes.AdminRoute.to },
 ] as const;

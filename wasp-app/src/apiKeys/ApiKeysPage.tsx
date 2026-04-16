@@ -1,0 +1,197 @@
+import { useState } from 'react';
+import { useAuth } from 'wasp/client/auth';
+import {
+  generateApiKey,
+  listApiKeys,
+  revokeApiKey,
+} from 'wasp/client/operations';
+import type { ApiKey } from 'wasp/entities';
+import { Alert, AlertDescription } from '../client/components/ui/alert';
+import { Button } from '../client/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
+import { Input } from '../client/components/ui/input';
+import { Label } from '../client/components/ui/label';
+
+export default function ApiKeysPage() {
+  const { data: user } = useAuth();
+  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showNewKeyForm, setShowNewKeyForm] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [generatedKey, setGeneratedKey] = useState<{ key: string; id: string } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Load API keys on mount
+  const loadApiKeys = async () => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      const keys = await listApiKeys();
+      setApiKeys(keys);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to load API keys';
+      setErrorMessage(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGenerateKey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newKeyName.trim()) {
+      setErrorMessage('Key name is required');
+      return;
+    }
+
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setIsLoading(true);
+
+    try {
+      const result = await generateApiKey({ name: newKeyName });
+      setGeneratedKey(result);
+      setNewKeyName('');
+      setShowNewKeyForm(false);
+      setSuccessMessage('API key generated. Copy it now—you won\'t see it again!');
+      
+      // Reload keys
+      const keys = await listApiKeys();
+      setApiKeys(keys);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to generate API key';
+      setErrorMessage(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRevokeKey = async (keyId: string) => {
+    if (!confirm('Are you sure you want to revoke this API key?')) return;
+
+    setErrorMessage(null);
+    try {
+      await revokeApiKey({ id: keyId });
+      setSuccessMessage('API key revoked');
+      const keys = await listApiKeys();
+      setApiKeys(keys);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to revoke API key';
+      setErrorMessage(message);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setSuccessMessage('Copied to clipboard!');
+    setTimeout(() => setSuccessMessage(null), 2000);
+  };
+
+  return (
+    <div className="mt-10 px-6">
+      <Card className="mb-4 lg:m-8">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>API Keys</CardTitle>
+          <Button
+            onClick={() => {
+              setShowNewKeyForm(!showNewKeyForm);
+              loadApiKeys();
+            }}
+            disabled={isLoading}
+          >
+            {showNewKeyForm ? 'Cancel' : 'Generate New Key'}
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {errorMessage && (
+            <Alert variant="destructive">
+              <AlertDescription>{errorMessage}</AlertDescription>
+            </Alert>
+          )}
+          {successMessage && (
+            <Alert>
+              <AlertDescription>{successMessage}</AlertDescription>
+            </Alert>
+          )}
+
+          {generatedKey && (
+            <Alert className="border-green-600 bg-green-50 dark:bg-green-950">
+              <AlertDescription>
+                <div className="space-y-3">
+                  <p className="font-semibold">Your new API key:</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 rounded bg-gray-800 px-3 py-2 font-mono text-sm text-gray-100">
+                      {generatedKey.key}
+                    </code>
+                    <Button
+                      size="sm"
+                      onClick={() => copyToClipboard(generatedKey.key)}
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    Save this key somewhere safe. You won't be able to see it again.
+                  </p>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {showNewKeyForm && !generatedKey && (
+            <form onSubmit={handleGenerateKey} className="space-y-4 rounded border p-4">
+              <div className="space-y-2">
+                <Label htmlFor="keyName">Key Name</Label>
+                <Input
+                  id="keyName"
+                  placeholder="e.g., My CI Pipeline"
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? 'Generating...' : 'Generate'}
+              </Button>
+            </form>
+          )}
+
+          <div className="space-y-2">
+            <h3 className="font-semibold">Your API Keys</h3>
+            {apiKeys.length === 0 ? (
+              <p className="text-gray-500">No API keys yet. Create one to get started.</p>
+            ) : (
+              <div className="space-y-2">
+                {apiKeys.map((key: any) => (
+                  <div
+                    key={key.id}
+                    className="flex items-center justify-between rounded border p-3"
+                  >
+                    <div>
+                      <p className="font-medium">{key.name}</p>
+                      <p className="text-xs text-gray-500">
+                        Created {new Date(key.createdAt).toLocaleDateString()}
+                        {key.lastUsedAt && ` • Used ${new Date(key.lastUsedAt).toLocaleDateString()}`}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleRevokeKey(key.id)}
+                      disabled={isLoading}
+                    >
+                      Revoke
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

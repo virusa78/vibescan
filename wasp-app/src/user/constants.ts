@@ -1,4 +1,4 @@
-import { LayoutDashboard, PlusCircle, Settings, Shield } from "lucide-react";
+import { LayoutDashboard, PlusCircle, Settings, Shield, Key } from "lucide-react";
 import { routes } from "wasp/client/router";
 
 export const userMenuItems = [
@@ -24,10 +24,10 @@ export const userMenuItems = [
     isAdminOnly: false,
   },
   {
-    name: "Admin Dashboard",
-    to: routes.AdminRoute.to,
-    icon: Shield,
-    isAuthRequired: false,
-    isAdminOnly: true,
+    name: "API Keys",
+    to: routes.ApiKeysRoute.to,
+    icon: Key,
+    isAuthRequired: true,
+    isAdminOnly: false,
   },
 ] as const;
