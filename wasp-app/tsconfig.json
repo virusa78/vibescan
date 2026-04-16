@@ -25,5 +25,5 @@
     "outDir": ".wasp/out/user",
     "types": ["jest"]
   },
-  "include": ["src", "tests"]
+  "include": ["src"]
 }
