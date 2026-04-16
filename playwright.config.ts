@@ -7,8 +7,10 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
+  globalSetup: './test/e2e/global-setup.ts',
   use: {
-    baseURL: process.env.API_URL || 'http://localhost:3000',
+    baseURL: process.env.API_URL || 'http://localhost:3001',
+    screenshot: 'on',
   },
 
   projects: [

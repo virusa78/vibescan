@@ -10,6 +10,7 @@ import { authService } from '../services/authService.js';
 import { checkAndConsumeQuota } from '../redis/quota.js';
 import config from '../config/index.js';
 import { createError } from '../utils/index.js';
+import { getPool } from '../database/client.js';
 
 // Rate limiter middleware
 export async function rateLimitMiddleware(
@@ -93,7 +94,7 @@ export async function ownershipVerificationMiddleware(
 
     if (resourceId && resourceId !== userId) {
         // Check if user is member of organization that owns the resource
-        const pool = require('../database/client.js').getPool();
+        const pool = getPool();
         const result = await pool.query(
             `SELECT 1 FROM scans WHERE id = $1 AND (user_id = $2 OR org_id IN (
                 SELECT id FROM organizations WHERE owner_user_id = $2 OR $2 = ANY(members)
@@ -118,8 +119,7 @@ export function requestValidationMiddleware(schema: any) {
     return async (request: any, reply: any, done: any) => {
         // Validate request body against schema
         try {
-            const { z } = require('zod');
-            const parsed = z.parse(request.body);
+            const parsed = schema.parse(request.body);
             request.validatedBody = parsed;
         } catch (error: any) {
             reply.code(400).send({
@@ -151,6 +151,12 @@ export function errorHandlingMiddleware(
 
     if (error.code) {
         switch (error.code) {
+            case 'FST_ERR_CTP_BODY_TOO_LARGE':
+            case 'payload_too_large':
+                statusCode = 413;
+                errorCode = 'payload_too_large';
+                errorMessage = error.message || 'Payload too large';
+                break;
             case 'unauthorized':
                 statusCode = 401;
                 errorCode = 'unauthorized';

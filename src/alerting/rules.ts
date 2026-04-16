@@ -8,6 +8,8 @@
  * - Worker failure alert
  */
 
+import yaml from 'js-yaml';
+
 /**
  * Alerting rules configuration
  */
@@ -193,7 +195,6 @@ export const alertingRules = {
  * Get alerting rules as YAML string
  */
 export function getAlertingRulesYaml(): string {
-    const yaml = require('js-yaml');
     return yaml.dump(alertingRules);
 }
 
@@ -202,7 +203,6 @@ export function getAlertingRulesYaml(): string {
  */
 export function validateAlertingRules(): boolean {
     try {
-        const yaml = require('js-yaml');
         yaml.load(getAlertingRulesYaml());
         return true;
     } catch (error) {

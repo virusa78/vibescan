@@ -9,6 +9,11 @@ import { generateHMAC } from '../utils/index.js';
 import { getPool } from '../database/client.js';
 import { addWebhookDeliveryJob } from '../queues/config.js';
 import { generateUUID } from '../utils/index.js';
+import { randomBytes } from 'crypto';
+import config from '../config/index.js';
+import { getReportAccessPolicy } from './reportAccessPolicy.js';
+
+const WEBHOOK_RETRY_DELAYS_MS = [60000, 300000, 1800000, 7200000, 86400000];
 
 /**
  * WebhookService
@@ -27,14 +32,16 @@ export class WebhookService {
     async scheduleDelivery(scanId: string): Promise<void> {
         const pool = getPool();
 
-        // Get scan and user
+        // Get scan and enabled webhook config
         const scanResult = await pool.query(
             `SELECT s.id, s.user_id, s.status, s.plan_at_submission, s.created_at,
-                    u.webhook_url
+                    w.id as webhook_id,
+                    w.url as webhook_url,
+                    pgp_sym_decrypt(w.signing_secret_encrypted::bytea, $2)::text as signing_secret
              FROM scans s
-             JOIN users u ON s.user_id = u.id
-             WHERE s.id = $1 AND u.webhook_url IS NOT NULL`,
-            [scanId]
+             JOIN webhooks w ON w.user_id = s.user_id
+             WHERE s.id = $1 AND w.enabled = TRUE`,
+            [scanId, config.ENCRYPTION_KEY]
         );
 
         if (scanResult.rows.length === 0) {
@@ -50,19 +57,31 @@ export class WebhookService {
         );
         const delta = deltaResult.rows[0];
 
-        // Build payload (excluding delta details for starter plan)
-        const payload = this.buildPayload(scan, delta);
-
-        // Create webhook delivery record
-        const deliveryId = generateUUID();
-        await pool.query(
-            `INSERT INTO webhook_deliveries (id, scan_id, target_url, payload_hash, status)
-             VALUES ($1, $2, $3, $4, 'pending')`,
-            [deliveryId, scanId, scan.webhook_url, generateHMAC(JSON.stringify(payload), 'webhook')]
+        // Get scan results for plan-aware payload shaping
+        const resultsResult = await pool.query(
+            'SELECT source, vulnerabilities FROM scan_results WHERE scan_id = $1',
+            [scanId]
         );
 
-        // Queue delivery job
-        await addWebhookDeliveryJob(deliveryId, scanId, payload, scan.webhook_url);
+        const payload = this.buildPayload(scan, delta, resultsResult.rows);
+        const payloadString = this.serializePayload(payload);
+
+        for (const webhook of scanResult.rows) {
+            if (!webhook.signing_secret) {
+                throw { code: 'webhook_signing_secret_missing', message: `Webhook signing secret missing for webhook ${webhook.webhook_id}` };
+            }
+
+            // Create webhook delivery record
+            const deliveryId = generateUUID();
+            await pool.query(
+                `INSERT INTO webhook_deliveries (id, webhook_id, scan_id, target_url, payload_hash, status)
+                 VALUES ($1, $2, $3, $4, $5, 'pending')`,
+                [deliveryId, webhook.webhook_id, scanId, webhook.webhook_url, generateHMAC(payloadString, webhook.signing_secret, 'sha256')]
+            );
+
+            // Queue delivery job
+            await addWebhookDeliveryJob(deliveryId, scanId, payload, webhook.webhook_url);
+        }
     }
 
     /**
@@ -71,9 +90,10 @@ export class WebhookService {
      * @param delta - Scan delta
      * @returns Payload object
      */
-    buildPayload(scan: any, delta: any): any {
-        // Determine if delta details should be excluded (starter plan)
-        const isStarter = scan.plan_at_submission === 'starter';
+    buildPayload(scan: any, delta: any, results: any[] = []): any {
+        const freeVulnerabilities = results.find((r: any) => r.source === 'free')?.vulnerabilities || [];
+        const enterpriseVulnerabilities = results.find((r: any) => r.source === 'enterprise')?.vulnerabilities || [];
+        const policy = getReportAccessPolicy(scan.plan_at_submission);
 
         // Build summary
         const summary: any = {
@@ -87,28 +107,15 @@ export class WebhookService {
             deltaBySeverity: delta?.delta_by_severity || {}
         };
 
-        // For starter plan, only include counts - no vulnerability details
-        if (isStarter) {
-            return {
-                scanId: scan.id,
-                status: scan.status,
-                summary: {
-                    ...summary,
-                    freeVulnerabilities: null,
-                    enterpriseVulnerabilities: null,
-                    deltaVulnerabilities: null
-                }
-            };
-        }
-
-        // For pro/enterprise, include full details
         return {
             scanId: scan.id,
             status: scan.status,
+            planAtSubmission: scan.plan_at_submission,
+            locked: policy.locked,
             summary: summary,
-            freeVulnerabilities: [], // In production, fetch from DB
-            enterpriseVulnerabilities: [], // In production, fetch from DB
-            deltaVulnerabilities: delta?.delta_vulnerabilities || []
+            freeVulnerabilities,
+            enterpriseVulnerabilities: policy.includeEnterpriseDetails ? enterpriseVulnerabilities : [],
+            deltaVulnerabilities: policy.includeDeltaDetails ? (delta?.delta_vulnerabilities || []) : []
         };
     }
 
@@ -120,6 +127,10 @@ export class WebhookService {
      */
     signPayload(payload: string, signingSecret: string): string {
         return generateHMAC(payload, signingSecret, 'sha256');
+    }
+
+    private serializePayload(payload: any): string {
+        return JSON.stringify(payload);
     }
 
     /**
@@ -143,15 +154,14 @@ export class WebhookService {
 
         const delivery = deliveryResult.rows[0];
 
-        // Calculate retry delay based on attempt number (exponential backoff)
-        // 1 min, 5 min, 30 min, 2 hours, 24 hours
-        const retryDelays = [60000, 300000, 1800000, 7200000, 86400000];
-        const attemptNumber = delivery.attempt_number;
-        const delay = retryDelays[attemptNumber - 1] || 86400000; // Default to 24 hours
+        const attemptNumber = Number(delivery.attempt_number || 1);
+        const nextAttempt = attemptNumber + 1;
 
         try {
             // Sign payload
-            const signature = this.signPayload(JSON.stringify(payload), delivery.signing_secret || 'default');
+            const signingSecret = await this.getSigningSecretForDelivery(deliveryId);
+            const serializedPayload = this.serializePayload(payload);
+            const signature = this.signPayload(serializedPayload, signingSecret);
 
             // Make HTTP POST request
             const response = await fetch(targetUrl, {
@@ -160,8 +170,12 @@ export class WebhookService {
                     'Content-Type': 'application/json',
                     'X-VibeScan-Signature': signature
                 },
-                body: JSON.stringify(payload)
+                body: serializedPayload
             });
+
+            if (!response.ok) {
+                throw new Error(`Webhook delivery failed with status ${response.status}`);
+            }
 
             // Update delivery record
             await pool.query(
@@ -174,9 +188,6 @@ export class WebhookService {
             console.log(`WebhookService: Delivered ${deliveryId} with status ${response.status}`);
 
         } catch (error: any) {
-            // Update delivery record with error
-            const nextAttempt = attemptNumber + 1;
-
             if (nextAttempt > 5) {
                 // Exhausted all retries
                 await pool.query(
@@ -188,6 +199,7 @@ export class WebhookService {
                 console.log(`WebhookService: Delivery ${deliveryId} exhausted after 5 attempts`);
             } else {
                 // Schedule next retry
+                const delay = WEBHOOK_RETRY_DELAYS_MS[attemptNumber - 1] || WEBHOOK_RETRY_DELAYS_MS[WEBHOOK_RETRY_DELAYS_MS.length - 1];
                 const nextRetryAt = new Date(Date.now() + delay);
                 await pool.query(
                     `UPDATE webhook_deliveries
@@ -195,9 +207,28 @@ export class WebhookService {
                      WHERE id = $3`,
                     [nextAttempt, nextRetryAt, deliveryId]
                 );
+                await addWebhookDeliveryJob(deliveryId, delivery.scan_id, payload, targetUrl, { delay });
                 console.log(`WebhookService: Scheduled retry ${nextAttempt} for ${deliveryId} at ${nextRetryAt}`);
             }
         }
+    }
+
+    private async getSigningSecretForDelivery(deliveryId: string): Promise<string> {
+        const pool = getPool();
+        const result = await pool.query(
+            `SELECT pgp_sym_decrypt(w.signing_secret_encrypted::bytea, $2)::text as signing_secret
+             FROM webhook_deliveries wd
+             JOIN webhooks w ON wd.webhook_id = w.id
+             WHERE wd.id = $1`,
+            [deliveryId, config.ENCRYPTION_KEY]
+        );
+
+        const signingSecret = result.rows[0]?.signing_secret;
+        if (!signingSecret) {
+            throw { code: 'webhook_signing_secret_missing', message: `Signing secret missing for delivery ${deliveryId}` };
+        }
+
+        return signingSecret;
     }
 
     /**
@@ -248,7 +279,7 @@ export class WebhookService {
         const pool = getPool();
 
         // Generate signing secret
-        const signingSecret = require('crypto').randomBytes(32).toString('hex');
+        const signingSecret = randomBytes(32).toString('hex');
 
         // Check if webhook exists
         const existingResult = await pool.query(
@@ -259,16 +290,17 @@ export class WebhookService {
         if (existingResult.rows.length > 0) {
             // Update existing webhook
             await pool.query(
-                `UPDATE webhooks SET url = $1, signing_secret = $2, enabled = TRUE
-                 WHERE user_id = $3`,
-                [url, signingSecret, userId]
+                `UPDATE webhooks
+                 SET url = $1, signing_secret_encrypted = pgp_sym_encrypt($2, $3), enabled = TRUE
+                 WHERE user_id = $4`,
+                [url, signingSecret, config.ENCRYPTION_KEY, userId]
             );
         } else {
             // Create new webhook
             await pool.query(
-                `INSERT INTO webhooks (user_id, url, signing_secret, enabled)
-                 VALUES ($1, $2, $3, TRUE)`,
-                [userId, url, signingSecret]
+                `INSERT INTO webhooks (user_id, url, signing_secret_encrypted, enabled)
+                 VALUES ($1, $2, pgp_sym_encrypt($3, $4), TRUE)`,
+                [userId, url, signingSecret, config.ENCRYPTION_KEY]
             );
         }
     }

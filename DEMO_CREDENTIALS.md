@@ -28,8 +28,8 @@ All demo accounts use different passwords as specified below:
 
 ## Access Information
 
-- **Frontend:** http://192.168.1.15:3001
-- **Backend API:** http://192.168.1.15:3000
+- **Frontend:** http://192.168.1.15:3000
+- **Backend API:** http://192.168.1.15:3001
 - **MinIO Console:** http://192.168.1.15:9001
 
 ## Features Enabled
@@ -54,8 +54,8 @@ All demo accounts use different passwords as specified below:
 - Passwords are unique per user (see above)
 
 **Frontend can't connect to API:**
-- Check .env.local has correct IP: `NEXT_PUBLIC_API_URL=http://192.168.1.15:3000`
-- Backend must be running on port 3000
+- Check .env.local has correct IP: `NEXT_PUBLIC_API_URL=http://192.168.1.15:3001`
+- Backend must be running on port 3001
 
 ## To Restart Everything
 

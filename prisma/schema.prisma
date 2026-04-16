@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ScanStatus {
+  pending
+  scanning
+  done
+  error
+  cancelled
+}
+
+enum ScanSource {
+  free
+  enterprise
+}
+
+enum WebhookDeliveryStatus {
+  pending
+  delivered
+  failed
+  exhausted
+}
+
+enum VulnAcceptanceStatus {
+  accepted
+  revoked
+  expired
+}
+
+model Scan {
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String     @map("user_id") @db.Uuid
+  orgId            String?    @map("org_id") @db.Uuid
+  inputType        String     @map("input_type")
+  inputRef         String     @map("input_ref")
+  sbomRaw          Json?      @map("sbom_raw")
+  components       Json
+  status           ScanStatus @default(pending)
+  planAtSubmission String     @map("plan_at_submission")
+  errorMessage     String?    @map("error_message")
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt      DateTime?  @map("completed_at") @db.Timestamptz(6)
+
+  scanResults      ScanResult[]
+  scanDeltas       ScanDelta[]
+  aiFixPrompts     AiFixPrompt[]
+  securityScores   SecurityScore[]
+  vulnAcceptances  VulnAcceptance[]
+  webhookDeliveries WebhookDelivery[]
+
+  @@map("scans")
+}
+
+model ScanResult {
+  id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scanId         String     @map("scan_id") @db.Uuid
+  source         ScanSource
+  rawOutput      Json       @map("raw_output")
+  vulnerabilities Json
+  scannerVersion String     @map("scanner_version")
+  cveDbTimestamp DateTime   @map("cve_db_timestamp") @db.Timestamptz(6)
+  durationMs     Int        @map("duration_ms")
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@unique([scanId, source], map: "idx_scan_results_unique")
+  @@map("scan_results")
+}
+
+model ScanDelta {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scanId               String    @map("scan_id") @db.Uuid
+  totalFreeCount       Int       @default(0) @map("total_free_count")
+  totalEnterpriseCount Int       @default(0) @map("total_enterprise_count")
+  deltaCount           Int       @default(0) @map("delta_count")
+  deltaBySeverity      Json      @map("delta_by_severity")
+  deltaVulnerabilities Json?     @map("delta_vulnerabilities")
+  isLocked             Boolean   @default(false) @map("is_locked")
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("scan_deltas")
+}
+
+model AiFixPrompt {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scanId          String   @map("scan_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  vulnerabilityId String   @map("vulnerability_id")
+  promptText      String   @map("prompt_text")
+  modelName       String?  @map("model_name")
+  responsePayload Json?    @map("response_payload")
+  status          String   @default("generated")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("ai_fix_prompts")
+}
+
+model SecurityScore {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scanId       String   @unique @map("scan_id") @db.Uuid
+  score        Decimal  @db.Decimal(5, 2)
+  grade        String
+  breakdown    Json
+  calculatedAt DateTime @default(now()) @map("calculated_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("security_scores")
+}
+
+model VulnAcceptance {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scanId          String               @map("scan_id") @db.Uuid
+  userId          String               @map("user_id") @db.Uuid
+  vulnerabilityId String               @map("vulnerability_id")
+  reason          String?
+  status          VulnAcceptanceStatus @default(accepted)
+  acceptedAt      DateTime             @default(now()) @map("accepted_at") @db.Timestamptz(6)
+  expiresAt       DateTime?            @map("expires_at") @db.Timestamptz(6)
+  updatedAt       DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@unique([scanId, userId, vulnerabilityId])
+  @@map("vuln_acceptances")
+}
+
+model GithubInstallation {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId                String   @map("org_id") @db.Uuid
+  githubInstallationId BigInt   @map("github_installation_id")
+  githubAppId          String   @map("github_app_id")
+  reposScope           String[] @default([]) @map("repos_scope")
+  triggerOnPush        Boolean  @default(true) @map("trigger_on_push")
+  triggerOnPr          Boolean  @default(true) @map("trigger_on_pr")
+  targetBranches       String[] @default(["main", "develop"]) @map("target_branches")
+  failPrOnSeverity     String   @default("CRITICAL") @map("fail_pr_on_severity")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("github_installations")
+}
+
+model Webhook {
+  id                     String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                 String            @map("user_id") @db.Uuid
+  url                    String
+  signingSecretEncrypted Bytes             @map("signing_secret_encrypted")
+  enabled                Boolean           @default(true)
+  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  deliveries WebhookDelivery[]
+
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  webhookId     String                @map("webhook_id") @db.Uuid
+  scanId        String                @map("scan_id") @db.Uuid
+  targetUrl     String                @map("target_url")
+  payloadHash   String                @map("payload_hash")
+  attemptNumber Int                   @default(1) @map("attempt_number")
+  httpStatus    Int?                  @map("http_status")
+  responseBody  String?               @map("response_body")
+  deliveredAt   DateTime?             @map("delivered_at") @db.Timestamptz(6)
+  nextRetryAt   DateTime?             @map("next_retry_at") @db.Timestamptz(6)
+  status        WebhookDeliveryStatus @default(pending)
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  scan    Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("webhook_deliveries")
+}

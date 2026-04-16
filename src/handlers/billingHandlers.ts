@@ -237,9 +237,14 @@ export async function stripeWebhookHandler(request: Request, reply: Reply) {
             });
         }
 
+        const rawBody = (request as any).rawBody;
+        const payload = Buffer.isBuffer(rawBody)
+            ? rawBody
+            : Buffer.from(typeof request.body === 'string' ? request.body : JSON.stringify(request.body || {}));
+
         // Verify and process webhook
         const eventType = await billingService.handleStripeWebhook(
-            request.body as Buffer,
+            payload,
             signature
         );
 

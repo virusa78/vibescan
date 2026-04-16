@@ -7,14 +7,17 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { uploadFile, downloadFile, BUCKET_SBOMS, BUCKET_SOURCES } from '../s3/client.js';
 import { scanOrchestrator } from '../services/scanOrchestrator.js';
+import { remoteScannerAgent } from '../services/remoteScannerAgent.js';
 import { acquireLock, releaseLock } from '../redis/lock.js';
 import { generateUUID, generateSecureString } from '../utils/index.js';
 import config from '../config/index.js';
+import { parseScanWorkerJob } from './jobContract.js';
+import { canonicalizeVulnerabilities } from '../services/vulnerabilityCanonicalizer.js';
 
 const execAsync = promisify(exec);
 
@@ -30,8 +33,8 @@ export class FreeScannerWorker {
     constructor() {
         this.s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
         this.tempDir = '/tmp/vibescan-free';
-        if (!require('fs').existsSync(this.tempDir)) {
-            require('fs').mkdirSync(this.tempDir, { recursive: true });
+        if (!existsSync(this.tempDir)) {
+            mkdirSync(this.tempDir, { recursive: true });
         }
         this.cveUpdateInterval = config.CVE_UPDATE_INTERVAL_HOURS;
     }
@@ -41,26 +44,48 @@ export class FreeScannerWorker {
      * @param job - Queue job data
      */
     async processJob(job: any): Promise<void> {
-        const { scanId, components } = job.data;
+        const { scanId, components, scenarioInput } = parseScanWorkerJob(job);
 
         console.log(`FreeScannerWorker: Processing scan ${scanId} with ${components.length} components`);
 
         try {
-            // Build SBOM from components
-            const sbom = this.buildSBOMFromComponents(components);
+            let normalizedResult: any;
 
-            // Save SBOM to temp file
-            const sbomPath = join(this.tempDir, `${scanId}-sbom.json`);
-            writeFileSync(sbomPath, JSON.stringify(sbom, null, 2));
+            if (config.REMOTE_SCANNER_ENABLED) {
+                const fallbackScenario = {
+                    scenario: 'sbom_upload' as const,
+                    sbomRaw: this.buildSBOMFromComponents(components),
+                    inputRef: `scan:${scanId}`,
+                };
+                normalizedResult = await remoteScannerAgent.executeScenario(
+                    scenarioInput || fallbackScenario,
+                    'grype_like',
+                    config.REMOTE_SCANNER_PROVIDER_ID,
+                    'free',
+                );
+                normalizedResult.scanId = scanId;
+            } else {
+                // Build SBOM from components
+                const sbom = this.buildSBOMFromComponents(components);
 
-            // Run Grype scan
-            const result = await this.runGrypeScan(sbomPath);
+                // Save SBOM to temp file
+                const sbomPath = join(this.tempDir, `${scanId}-sbom.json`);
+                writeFileSync(sbomPath, JSON.stringify(sbom, null, 2));
 
-            // Clean up temp file
-            unlinkSync(sbomPath);
-
-            // Normalize output
-            const normalizedResult = this.normalizeGrypeOutput(result);
+                try {
+                    // Run Grype scan
+                    const result = await this.runGrypeScan(sbomPath);
+                    // Normalize output
+                    normalizedResult = this.normalizeGrypeOutput(result);
+                } finally {
+                    // Clean up temp file
+                    try {
+                        unlinkSync(sbomPath);
+                    } catch {
+                        // ignore cleanup errors
+                    }
+                }
+            }
 
             // Save cve_db_timestamp
             normalizedResult.cveDbTimestamp = this.getCveDbTimestamp();
@@ -195,7 +220,7 @@ export class FreeScannerWorker {
             scanId: rawResult.scanId,
             source: 'free',
             rawOutput: rawResult.rawOutput,
-            vulnerabilities,
+            vulnerabilities: canonicalizeVulnerabilities(vulnerabilities, 'free'),
             scannerVersion: 'grype-unknown',
             cveDbTimestamp: this.getCveDbTimestamp(),
             durationMs: rawResult.durationMs || (Date.now() - startTime)

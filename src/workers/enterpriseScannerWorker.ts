@@ -9,6 +9,8 @@ import { scanOrchestrator } from '../services/scanOrchestrator.js';
 import { acquireLock, releaseLock, EnterpriseLockManager } from '../redis/lock.js';
 import { generateUUID } from '../utils/index.js';
 import config from '../config/index.js';
+import { parseScanWorkerJob } from './jobContract.js';
+import { canonicalizeVulnerabilities } from '../services/vulnerabilityCanonicalizer.js';
 
 // Codescoring API configuration
 const CODESCORING_API_URL = process.env.CODESCORING_API_URL || 'https://api.blackduck.com';
@@ -75,7 +77,7 @@ export class EnterpriseScannerWorker {
      * @param job - Queue job data
      */
     async processJob(job: any): Promise<void> {
-        const { scanId, components } = job.data;
+        const { scanId, components } = parseScanWorkerJob(job);
 
         console.log(`EnterpriseScannerWorker: Processing scan ${scanId} with ${components.length} components`);
 
@@ -422,7 +424,7 @@ export class EnterpriseScannerWorker {
             scanId: rawItems[0]?.scanId || generateUUID(),
             source: 'enterprise',
             rawOutput: { items: rawItems },
-            vulnerabilities,
+            vulnerabilities: canonicalizeVulnerabilities(vulnerabilities, 'enterprise'),
             scannerVersion: 'blackduck-api',
             cveDbTimestamp: new Date().toISOString(),
             durationMs: rawItems[0]?.durationMs || 0

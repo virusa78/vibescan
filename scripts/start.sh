@@ -56,7 +56,7 @@ echo ""
 # Step 3: Wait for backend API
 echo "Step 3: Waiting for backend API..."
 for i in {1..30}; do
-    if curl -s http://localhost:3000/health > /dev/null 2>&1; then
+    if curl -s http://localhost:3001/health > /dev/null 2>&1; then
         echo "✅ Backend API is ready!"
         break
     fi
@@ -74,9 +74,9 @@ echo "Step 4: Configuring frontend..."
 mkdir -p vibescan-ui
 cat > vibescan-ui/.env.local << EOF
 # API Configuration
-NEXT_PUBLIC_API_URL=http://${SERVER_IP}:3000
+NEXT_PUBLIC_API_URL=http://${SERVER_IP}:3001
 EOF
-echo "✅ Frontend configured to use API at: http://${SERVER_IP}:3000"
+echo "✅ Frontend configured to use API at: http://${SERVER_IP}:3001"
 echo ""
 
 # Step 5: Start frontend
@@ -95,8 +95,8 @@ echo "Frontend started with PID: $FRONTEND_PID"
 echo "Waiting for frontend to start..."
 FRONTEND_PORT=""
 for i in {1..20}; do
-    # Check ports 3001-3004
-    for port in 3001 3002 3003 3004; do
+    # Check ports 3000-3004
+    for port in 3000 3001 3002 3003 3004; do
         if curl -s http://localhost:$port > /dev/null 2>&1; then
             FRONTEND_PORT=$port
             echo "✅ Frontend is ready on port $port!"
@@ -111,7 +111,7 @@ echo "=== VibeScan is running ==="
 echo ""
 echo "🌐 Access URLs:"
 echo "   Frontend:  http://${SERVER_IP}:${FRONTEND_PORT}"
-echo "   Backend:   http://${SERVER_IP}:3000"
+echo "   Backend:   http://${SERVER_IP}:3001"
 echo "   MinIO:     http://${SERVER_IP}:9001 (console)"
 echo ""
 echo "👤 Demo Login:"

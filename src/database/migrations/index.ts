@@ -13,3 +13,4 @@ export { default as createSbomDocumentsTable } from './011_create_sbom_documents
 export { default as createIndexesAndPartitions } from './012_create_indexes_and_partitions.js';
 export { default as createPaymentFailuresTable } from './013_create_payment_failures_table.js';
 export { default as createAlertsTable } from './014_create_alerts_table.js';
+export { default as addUserNameColumn } from './024_add_user_name_column.js';

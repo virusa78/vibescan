@@ -41,10 +41,27 @@ interface EnvConfig {
     GRYPE_IMAGE: string;
     MAX_SOURCE_SIZE_MB: number;
     CVE_UPDATE_INTERVAL_HOURS: number;
+    REMOTE_SCANNER_ENABLED: boolean;
+    REMOTE_SCANNER_API_URL: string | null;
+    REMOTE_SCANNER_API_KEY: string | null;
+    REMOTE_SCANNER_PROVIDER_ID: string;
 
     // Rate limiting
     RATE_LIMIT_WINDOW_MS: number;
     RATE_LIMIT_MAX_REQUESTS: number;
+
+    // OpenSaaS migration boundary controls
+    OPENSAAS_MODE: boolean;
+    OPENSAAS_PLATFORM_OWNED: string[];
+
+    // GitHub App webhooks
+    GITHUB_WEBHOOK_SECRET: string | null;
+    GITHUB_APP_ID: string | null;
+    GITHUB_APP_PRIVATE_KEY: string | null;
+    GITHUB_API_BASE_URL: string;
+
+    // Frontend URL (used for report/check details links)
+    FRONTEND_URL: string;
 }
 
 // Configuration validation
@@ -87,7 +104,7 @@ const config: EnvConfig = {
 
     // Application
     NODE_ENV: (process.env.NODE_ENV as any) || 'development',
-    PORT: parseInt(process.env.PORT || '3000'),
+    PORT: parseInt(process.env.PORT || '3001'),
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || 'dev-only-key-change-in-production',
 
     // JWT
@@ -99,10 +116,30 @@ const config: EnvConfig = {
     GRYPE_IMAGE: process.env.GRYPE_IMAGE || 'anchore/grype:latest',
     MAX_SOURCE_SIZE_MB: parseInt(process.env.MAX_SOURCE_SIZE_MB || '50'),
     CVE_UPDATE_INTERVAL_HOURS: parseInt(process.env.CVE_UPDATE_INTERVAL_HOURS || '6'),
+    REMOTE_SCANNER_ENABLED: process.env.REMOTE_SCANNER_ENABLED === 'true',
+    REMOTE_SCANNER_API_URL: process.env.REMOTE_SCANNER_API_URL || null,
+    REMOTE_SCANNER_API_KEY: process.env.REMOTE_SCANNER_API_KEY || null,
+    REMOTE_SCANNER_PROVIDER_ID: process.env.REMOTE_SCANNER_PROVIDER_ID || 'grype_like',
 
     // Rate limiting
     RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'),
-    RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100')
+    RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
+
+    // OpenSaaS migration boundary controls
+    OPENSAAS_MODE: process.env.OPENSAAS_MODE === 'true',
+    OPENSAAS_PLATFORM_OWNED: (process.env.OPENSAAS_PLATFORM_OWNED || '')
+        .split(',')
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean),
+
+    // GitHub App webhooks
+    GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET || null,
+    GITHUB_APP_ID: process.env.GITHUB_APP_ID || null,
+    GITHUB_APP_PRIVATE_KEY: process.env.GITHUB_APP_PRIVATE_KEY || null,
+    GITHUB_API_BASE_URL: process.env.GITHUB_API_BASE_URL || 'https://api.github.com',
+
+    // Frontend URL
+    FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
 };
 
 // Validate environment

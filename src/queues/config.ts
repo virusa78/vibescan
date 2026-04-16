@@ -9,6 +9,12 @@
  */
 
 import { Queue, QueueEvents, Worker, QueueOptions, WorkerOptions } from 'bullmq';
+import { Component } from '../types/index.js';
+import { ScenarioInput } from '../types/remoteScanner.js';
+import {
+    createEnterpriseScanJobData,
+    createFreeScanJobData,
+} from '../workers/jobContract.js';
 
 // Queue configuration
 const QUEUE_PREFIX = 'vibescan_queue_';
@@ -60,11 +66,7 @@ const QUEUE_SETTINGS: Record<string, Partial<QueueOptions>> = {
     },
     [QUEUE_WEBHOOK_DELIVERY]: {
         defaultJobOptions: {
-            attempts: 5,
-            backoff: {
-                type: 'exponential',
-                delay: 60000 // Start with 1 minute
-            },
+            attempts: 1,
             removeOnComplete: true,
             removeOnFail: false
         },
@@ -81,13 +83,25 @@ const QUEUE_SETTINGS: Record<string, Partial<QueueOptions>> = {
     }
 };
 
-// Priority weights for enterprise queue
+export type PriorityTier = 'high' | 'medium' | 'low';
+
+// BullMQ priority: lower number = higher priority.
 export const PRIORITY_WEIGHTS = {
-    enterprise: 100,
-    pro: 50,
-    starter: 10,
-    free_trial: 5
-};
+    high: 1,
+    medium: 2,
+    low: 3
+} as const;
+
+export function getPriorityTierForPlan(plan: string): PriorityTier {
+    if (plan === 'enterprise') return 'high';
+    if (plan === 'pro') return 'medium';
+    return 'low'; // starter + free_trial
+}
+
+export function getPriorityForPlan(plan: string): number {
+    const tier = getPriorityTierForPlan(plan);
+    return PRIORITY_WEIGHTS[tier];
+}
 
 // Queue instances
 let freeScanQueue: Queue | null = null;
@@ -203,7 +217,7 @@ export async function getReportGenerationQueueEvents(): Promise<QueueEvents> {
 export interface WorkerConfig {
     name: string;
     concurrency: number;
-    processor: (job: any) => Promise<void>;
+    processor: (job: { id?: string | number; data: any }) => Promise<void>;
 }
 
 /**
@@ -237,32 +251,34 @@ export function getWorkerConfigs(): WorkerConfig[] {
             name: QUEUE_FREE_SCAN,
             concurrency: 20,
             processor: async (job) => {
-                // Free scanner worker implementation
-                console.log('Processing free scan:', job.id);
+                const { freeScannerWorker } = await import('../workers/freeScannerWorker.js');
+                await freeScannerWorker.processJob(job);
             }
         },
         {
             name: QUEUE_ENTERPRISE_SCAN,
-            concurrency: 3,
+            // Enterprise analyzer executes sequentially; queue priority controls plan ordering.
+            concurrency: 1,
             processor: async (job) => {
-                // Enterprise scanner worker implementation
-                console.log('Processing enterprise scan:', job.id);
+                const { enterpriseScannerWorker } = await import('../workers/enterpriseScannerWorker.js');
+                await enterpriseScannerWorker.processJob(job);
             }
         },
         {
             name: QUEUE_WEBHOOK_DELIVERY,
             concurrency: 10,
             processor: async (job) => {
-                // Webhook delivery worker implementation
-                console.log('Processing webhook delivery:', job.id);
+                const { webhookService } = await import('../services/webhookService.js');
+                const { deliveryId, payload, targetUrl } = job.data;
+                await webhookService.deliver(deliveryId, payload, targetUrl);
             }
         },
         {
             name: QUEUE_REPORT_GENERATION,
             concurrency: 5,
             processor: async (job) => {
-                // Report generation worker implementation
-                console.log('Processing report generation:', job.id);
+                const { reportService } = await import('../services/reportService.js');
+                await reportService.processReportGenerationJob(job.data);
             }
         }
     ];
@@ -309,13 +325,15 @@ export async function addJob(
  */
 export async function addFreeScanJob(
     scanId: string,
-    components: any[],
-    options?: { priority?: number }
+    components: Component[],
+    options?: { priority?: number; scenarioInput?: ScenarioInput }
 ): Promise<string> {
-    return addJob(QUEUE_FREE_SCAN, 'free-scan', {
-        scanId,
-        components
-    }, options);
+    return addJob(
+        QUEUE_FREE_SCAN,
+        'free-scan',
+        createFreeScanJobData(scanId, components, options?.scenarioInput),
+        options
+    );
 }
 
 /**
@@ -323,13 +341,15 @@ export async function addFreeScanJob(
  */
 export async function addEnterpriseScanJob(
     scanId: string,
-    components: any[],
+    components: Component[],
     options?: { priority?: number }
 ): Promise<string> {
-    return addJob(QUEUE_ENTERPRISE_SCAN, 'enterprise-scan', {
-        scanId,
-        components
-    }, options);
+    return addJob(
+        QUEUE_ENTERPRISE_SCAN,
+        'enterprise-scan',
+        createEnterpriseScanJobData(scanId, components),
+        options
+    );
 }
 
 /**
@@ -356,12 +376,14 @@ export async function addWebhookDeliveryJob(
 export async function addReportGenerationJob(
     reportId: string,
     scanId: string,
+    userId: string,
     format: 'pdf' | 'json' | 'summary',
     options?: { priority?: number }
 ): Promise<string> {
     return addJob(QUEUE_REPORT_GENERATION, 'report-generation', {
         reportId,
         scanId,
+        userId,
         format
     }, options);
 }
@@ -465,5 +487,7 @@ export default {
     QUEUE_ENTERPRISE_SCAN,
     QUEUE_WEBHOOK_DELIVERY,
     QUEUE_REPORT_GENERATION,
-    PRIORITY_WEIGHTS
+    PRIORITY_WEIGHTS,
+    getPriorityTierForPlan,
+    getPriorityForPlan
 };

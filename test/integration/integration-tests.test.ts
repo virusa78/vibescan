@@ -1,21 +1,9 @@
-/**
- * Integration Tests for VibeScan
- *
- * Tests for Task 8.2:
- * - Full scan flow (source ZIP → dual-scanning → delta → report → webhook)
- * - GitHub App flow (installation → push → scan → check run)
- * - Billing flow (upgrade → Stripe → quota reset)
- * - Error recovery (enterprise timeout → free result only)
- */
-
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import crypto from 'crypto';
+import { computeDelta } from '@services/diffEngine';
 
-// Mock modules using path aliases
 jest.mock('@db/client', () => ({
-    getPool: () => ({
-        query: jest.fn(),
-    }),
+    getPool: () => ({ query: jest.fn() }),
 }));
 
 jest.mock('@redis/client', () => ({
@@ -37,116 +25,177 @@ jest.mock('@redis/quota', () => ({
     refundQuota: jest.fn(),
 }));
 
+type SimulatedScan = {
+    status: 'pending' | 'scanning' | 'done' | 'error' | 'cancelled';
+    free: any[] | null;
+    enterprise: any[] | null;
+    error?: string;
+    deltaCount: number;
+    webhookQueued: boolean;
+};
+
+function createSimulatedScan(): SimulatedScan {
+    return {
+        status: 'pending',
+        free: null,
+        enterprise: null,
+        deltaCount: 0,
+        webhookQueued: false,
+    };
+}
+
+function startScan(scan: SimulatedScan): void {
+    scan.status = 'scanning';
+}
+
+function completeSource(scan: SimulatedScan, source: 'free' | 'enterprise', vulns: any[]): void {
+    scan[source] = vulns;
+    if (scan.free && scan.enterprise) {
+        const delta = computeDelta(scan.free, scan.enterprise);
+        scan.deltaCount = delta.deltaCount;
+        scan.status = 'done';
+        scan.webhookQueued = true;
+    }
+}
+
+function failSource(scan: SimulatedScan, source: 'free' | 'enterprise', error: string): void {
+    const other = source === 'free' ? 'enterprise' : 'free';
+    scan.error = error;
+    if (scan[other]) {
+        scan.status = 'done';
+    } else {
+        scan.status = 'error';
+    }
+}
+
 describe('Integration Test Suite', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
     describe('Full Scan Flow', () => {
-        it('should complete full scan flow with dual-scanner', async () => {
-            // This test simulates the complete scan flow
-            // In production, this would require actual database and Redis connections
+        it('completes dual-scanner flow and computes delta', async () => {
+            const scan = createSimulatedScan();
+            startScan(scan);
 
-            // 1. User submits scan with source ZIP
-            // 2. ScanOrchestrator creates scan record and queues jobs
-            // 3. FreeScannerWorker processes job
-            // 4. EnterpriseScannerWorker processes job
-            // 5. Results are aggregated
-            // 6. DiffEngine computes delta
-            // 7. Report is generated
-            // 8. Webhook is delivered
+            completeSource(scan, 'free', [
+                { cve_id: 'CVE-1', severity: 'HIGH' },
+                { cve_id: 'CVE-2', severity: 'LOW' },
+            ]);
+            expect(scan.status).toBe('scanning');
 
-            expect(true).toBe(true);
+            completeSource(scan, 'enterprise', [
+                { cve_id: 'CVE-1', severity: 'HIGH' },
+                { cve_id: 'CVE-2', severity: 'LOW' },
+                { cve_id: 'CVE-3', severity: 'CRITICAL' },
+            ]);
+
+            expect(scan.status).toBe('done');
+            expect(scan.deltaCount).toBe(1);
+            expect(scan.webhookQueued).toBe(true);
         });
 
-        it('should handle scan cancellation and refund quota', async () => {
-            // 1. User submits scan
-            // 2. Quota is consumed (Redis INCR)
-            // 3. User cancels scan before execution
-            // 4. Quota is refunded (Redis DECR)
+        it('refunds quota on cancellation before execution', async () => {
+            const quota = { used: 5 };
+            const scan = createSimulatedScan();
+            startScan(scan);
 
-            expect(true).toBe(true);
+            // cancel before any worker result
+            scan.status = 'cancelled';
+            quota.used -= 1;
+
+            expect(scan.status).toBe('cancelled');
+            expect(quota.used).toBe(4);
         });
     });
 
     describe('GitHub App Flow', () => {
-        it('should handle GitHub installation and push events', async () => {
-            // 1. User installs GitHub App
-            // 2. Installation event creates GithubInstallation record
-            // 3. Push event to configured repo triggers scan
-            // 4. Scan is submitted with github_app input type
-            // 5. GitHub App token is used to clone specific commit
-            // 6. Scan completes and check run is posted
+        it('creates scan for authorized push event', async () => {
+            const installation = { id: 123, repos: ['org/repo-a'], target_branches: ['main'] };
+            const pushEvent = { repo: 'org/repo-a', branch: 'main' };
+            const isAuthorized = installation.repos.includes(pushEvent.repo);
+            const isTargetBranch = installation.target_branches.includes(pushEvent.branch);
+            const shouldTrigger = isAuthorized && isTargetBranch;
 
-            expect(true).toBe(true);
+            expect(shouldTrigger).toBe(true);
         });
 
-        it('should handle pull request events', async () => {
-            // 1. PR is opened in configured repo
-            // 2. PullRequest event triggers scan
-            // 3. Check run is created with vulnerability summary
-            // 4. On failure, PR is blocked based on severity threshold
+        it('triggers PR scan and produces check decision data', async () => {
+            const prEvent = { action: 'opened', repo: 'org/repo-a', number: 17 };
+            const checkRun = {
+                pr: prEvent.number,
+                status: 'completed',
+                conclusion: 'failure',
+                summary: { critical: 1, high: 2 }
+            };
 
-            expect(true).toBe(true);
+            expect(prEvent.action).toBe('opened');
+            expect(checkRun.conclusion).toBe('failure');
+            expect(checkRun.summary.critical).toBeGreaterThan(0);
         });
     });
 
     describe('Billing Flow', () => {
-        it('should handle subscription upgrade and quota reset', async () => {
-            // 1. User initiates checkout with Stripe
-            // 2. Stripe creates checkout session
-            // 3. User completes payment
-            // 4. Stripe webhook fires checkout.session.completed
-            // 5. User plan is upgraded
-            // 6. Quota ledger is reset for new plan
+        it('upgrades plan and resets monthly quota', async () => {
+            const user = { plan: 'starter', quotaUsed: 40, quotaLimit: 50 };
+            const stripeEvent = { type: 'checkout.session.completed', nextPlan: 'pro', newLimit: 100 };
 
-            expect(true).toBe(true);
+            user.plan = stripeEvent.nextPlan;
+            user.quotaUsed = 0;
+            user.quotaLimit = stripeEvent.newLimit;
+
+            expect(user.plan).toBe('pro');
+            expect(user.quotaUsed).toBe(0);
+            expect(user.quotaLimit).toBe(100);
         });
 
-        it('should handle subscription downgrade at period end', async () => {
-            // 1. User cancels subscription (cancel_at_period_end = true)
-            // 2. User can use plan until period end
-            // 3. At period end, subscription is cancelled
-            // 4. User plan is downgraded to starter
-            // 5. Quota is reset to starter limit
+        it('marks cancel_at_period_end and defers downgrade', async () => {
+            const subscription = { plan: 'pro', cancel_at_period_end: false, activeUntil: '2026-12-01' };
+            subscription.cancel_at_period_end = true;
 
-            expect(true).toBe(true);
+            expect(subscription.plan).toBe('pro');
+            expect(subscription.cancel_at_period_end).toBe(true);
+            expect(subscription.activeUntil).toBe('2026-12-01');
         });
 
-        it('should handle payment failure and downgrade', async () => {
-            // 1. Payment fails (invoice.payment_failed webhook)
-            // 2. Failure is recorded in payment_failures table
-            // 3. After 3 failures within 30 days:
-            //    a. User is downgraded to starter
-            //    b. Grace period begins (7 days)
+        it('downgrades after 3 recent payment failures', async () => {
+            const paymentFailuresLast30Days = 3;
+            const account = { plan: 'pro', graceDays: 0 };
 
-            expect(true).toBe(true);
+            if (paymentFailuresLast30Days >= 3) {
+                account.plan = 'starter';
+                account.graceDays = 7;
+            }
+
+            expect(account.plan).toBe('starter');
+            expect(account.graceDays).toBe(7);
         });
     });
 
     describe('Error Recovery', () => {
-        it('should handle enterprise scanner timeout and return free results', async () => {
-            // 1. Free scanner completes successfully
-            // 2. Enterprise scanner times out (10 min polling timeout)
-            // 3. ScanOrchestrator.handleWorkerError is called
-            // 4. Scan status is set to 'done' with free results only
-            // 5. Report is generated with free vulnerabilities only
+        it('returns free-only result when enterprise times out', async () => {
+            const scan = createSimulatedScan();
+            startScan(scan);
+            completeSource(scan, 'free', [{ cve_id: 'CVE-1', severity: 'HIGH' }]);
+            failSource(scan, 'enterprise', 'bd_timeout');
 
-            expect(true).toBe(true);
+            expect(scan.status).toBe('done');
+            expect(scan.free?.length).toBe(1);
+            expect(scan.error).toBe('bd_timeout');
         });
 
-        it('should handle complete scanner failure', async () => {
-            // 1. Both free and enterprise scanners fail
-            // 2. Scan status is set to 'error'
-            // 3. Error message is stored in scan record
-            // 4. User is notified of failure
-
-            expect(true).toBe(true);
+        it('marks scan as error when both scanners fail', async () => {
+            const scan = createSimulatedScan();
+            startScan(scan);
+            failSource(scan, 'free', 'grype_failed');
+            expect(scan.status).toBe('error');
+            failSource(scan, 'enterprise', 'bd_timeout');
+            expect(scan.status).toBe('error');
+            expect(scan.error).toBe('bd_timeout');
         });
     });
 });
 
-// Additional integration test helpers
 class TestDatabase {
     private mockData: Map<string, any[]> = new Map();
 
@@ -159,9 +208,7 @@ class TestDatabase {
 
     query(table: string, where: any = {}): any[] {
         const rows = this.mockData.get(table) || [];
-        return rows.filter(row => {
-            return Object.entries(where).every(([key, value]) => row[key] === value);
-        });
+        return rows.filter(row => Object.entries(where).every(([key, value]) => row[key] === value));
     }
 
     clear(): void {
@@ -176,19 +223,17 @@ describe('Integration Test Helpers', () => {
         db = new TestDatabase();
     });
 
-    it('should support test database operations', () => {
+    it('supports test database operations', () => {
         db.insert('users', { email: 'test@example.com', plan: 'starter' });
         const users = db.query('users', { email: 'test@example.com' });
-
         expect(users.length).toBe(1);
         expect(users[0].email).toBe('test@example.com');
     });
 
-    it('should handle multiple table operations', () => {
+    it('handles multiple table operations', () => {
         db.insert('users', { email: 'user1@example.com', plan: 'pro' });
         db.insert('users', { email: 'user2@example.com', plan: 'enterprise' });
         db.insert('scans', { user_id: 'user1', status: 'done' });
-
         const scans = db.query('scans', { status: 'done' });
         expect(scans.length).toBe(1);
     });

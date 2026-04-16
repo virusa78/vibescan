@@ -5,11 +5,13 @@
  */
 
 import { getRedisClient } from './client.js';
+import { createClient } from 'redis';
 
 // Pub/Sub channels
 const CHANNEL_SCAN_STATUS = 'vibescan:scan:status';
 const CHANNEL_SCAN_COMPLETE = 'vibescan:scan:complete';
 const CHANNEL_SCAN_ERROR = 'vibescan:scan:error';
+const CHANNEL_REPORT_STATUS = 'vibescan:report:status';
 
 /**
  * Publish a message to a channel
@@ -76,6 +78,25 @@ export async function publishScanError(
 }
 
 /**
+ * Publish report generation status update
+ * @param jobId - Report job ID
+ * @param status - Job status
+ * @param details - Additional details
+ */
+export async function publishReportStatus(
+    jobId: string,
+    status: string,
+    details?: Record<string, unknown>
+): Promise<void> {
+    await publish(CHANNEL_REPORT_STATUS, {
+        jobId,
+        status,
+        details,
+        timestamp: new Date().toISOString()
+    });
+}
+
+/**
  * Subscribe to a channel
  * @param channel - Channel name
  * @param callback - Callback function for received messages
@@ -89,7 +110,7 @@ export async function subscribe(
     const subscriptionId = `sub_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
     // Create a dedicated client for subscription
-    const subscriber = require('redis').createClient({
+    const subscriber = createClient({
         url: process.env.REDIS_URL || 'redis://localhost:6379'
     });
 
@@ -169,14 +190,31 @@ export async function subscribeScanError(
     });
 }
 
+/**
+ * Subscribe to report status updates
+ * @param callback - Callback function
+ * @returns Subscription ID
+ */
+export async function subscribeReportStatus(
+    callback?: (data: { jobId: string; status: string; details?: Record<string, unknown> }) => void
+): Promise<string> {
+    return subscribe(CHANNEL_REPORT_STATUS, (message) => {
+        if (callback) {
+            callback(message as any);
+        }
+    });
+}
+
 export default {
     publish,
     publishScanStatus,
     publishScanComplete,
     publishScanError,
+    publishReportStatus,
     subscribe,
     unsubscribe,
     subscribeScanStatus,
     subscribeScanComplete,
-    subscribeScanError
+    subscribeScanError,
+    subscribeReportStatus
 };

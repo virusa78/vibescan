@@ -30,8 +30,14 @@ All tests must pass before committing:
 # Run all tests
 npm test
 
-# Run tests with coverage
+# Coverage report only (no gate)
 npm run test:coverage
+
+# Enforced staged gate (current baseline)
+npm run test:coverage:gate
+
+# Enforced strict target gate (70/70)
+npm run test:coverage:strict
 
 # Run tests in watch mode (development)
 npm run test:watch
@@ -42,6 +48,28 @@ npm run test:watch
 The project includes:
 - **Property-based tests** (20 properties) in `test/unit/property-tests.test.ts`
 - **Integration tests** in `test/integration/integration-tests.test.ts`
+
+Coverage gate policy:
+- `test:coverage:gate` enforces current staged minimums (`lines >= 6`, `branches >= 3`)
+- `test:coverage:strict` enforces the target (`lines >= 70`, `branches >= 70`)
+- Use `test:coverage` for local coverage reporting without thresholds
+
+### E2E Tests
+
+Before running E2E tests, ensure API and frontend are running and reachable:
+
+```bash
+docker compose up -d
+npm run migrate
+cd vibescan-ui && npm run dev
+```
+
+Then run:
+```bash
+npm run test:e2e
+```
+
+`test:e2e` performs a preflight check and exits early with an actionable message if `API_URL` (`/health`) or `FRONTEND_URL` (`/login`) is unavailable.
 
 Run the test script after major changes:
 ```bash

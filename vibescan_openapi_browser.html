@@ -88,7 +88,7 @@ const SPEC = {
           auth: false,
           body: [
             { name: "email", type: "string", req: true, desc: "Valid email address" },
-            { name: "password", type: "string", req: true, desc: "Min 8 chars, 1 uppercase, 1 digit" },
+            { name: "password", type: "string", req: true, desc: "Min 12 chars, 1 uppercase, 1 digit" },
             { name: "region", type: "enum", req: false, desc: "IN | PK | OTHER — affects pricing" },
           ],
           responses: [
@@ -130,6 +130,50 @@ const SPEC = {
             { code: "204", cls: "r2", desc: "No content" },
           ]
         },
+        {
+          method: "GET", path: "/v1/me", summary: "Get current user profile",
+          auth: true,
+          params: [],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ id, email, name, timezone, language, account_locked, ... }" },
+          ]
+        },
+        {
+          method: "PATCH", path: "/v1/me", summary: "Update current user profile",
+          auth: true,
+          body: [
+            { name: "name", type: "string", req: false, desc: "1-100 chars" },
+            { name: "timezone", type: "string", req: false, desc: "IANA timezone (e.g. Europe/Berlin)" },
+            { name: "language", type: "enum", req: false, desc: "en | es | fr | de | ja | zh" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Updated profile" },
+            { code: "400", cls: "r4", desc: "{ error, validation_errors: [{ field, message }] }" },
+          ]
+        },
+        {
+          method: "POST", path: "/v1/me/email/change", summary: "Initiate email change flow",
+          auth: true,
+          body: [
+            { name: "new_email", type: "string", req: true, desc: "New email (blocked domains rejected)" },
+            { name: "current_password", type: "string", req: true, desc: "Password confirmation" },
+          ],
+          responses: [
+            { code: "202", cls: "r2", desc: "Verification token sent to new email" },
+            { code: "400", cls: "r4", desc: "Validation or blocked domain error" },
+          ]
+        },
+        {
+          method: "POST", path: "/v1/me/email/verify", summary: "Confirm email change by token",
+          auth: false,
+          body: [
+            { name: "token", type: "string", req: true, desc: "One-time verification token from email" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Email updated successfully" },
+            { code: "400", cls: "r4", desc: "Token invalid or expired" },
+          ]
+        },
       ]
     },
     {
@@ -140,7 +184,7 @@ const SPEC = {
           auth: true,
           body: [
             { name: "label", type: "string", req: true, desc: "Human label e.g. 'GitHub Actions prod'" },
-            { name: "scopes", type: "array", req: true, desc: "sbom_submit | scan_read | webhook_manage" },
+            { name: "scopes", type: "array", req: false, desc: "Default: [scan_read]. Allowed: sbom_submit | scan_read | webhook_manage | settings_manage" },
             { name: "expires_at", type: "datetime", req: false, desc: "ISO 8601 — null means no expiry" },
           ],
           responses: [
@@ -155,7 +199,22 @@ const SPEC = {
             { name: "—", type: "—", req: false, desc: "No query params" },
           ],
           responses: [
-            { code: "200", cls: "r2", desc: "Array of { key_id, key_prefix, label, scopes, last_used_at, revoked_at }" },
+            { code: "200", cls: "r2", desc: "Array of { key_id, key_prefix, label, scopes, last_used_at, expired_at, revoked_at }" },
+          ]
+        },
+        {
+          method: "PATCH", path: "/v1/api-keys/{key_id}", summary: "Update API key label",
+          auth: true,
+          body: [
+            { name: "label", type: "string", req: true, desc: "1-50 chars" },
+          ],
+          params: [
+            { name: "key_id", type: "uuid", req: true, desc: "Path param" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Updated key metadata" },
+            { code: "400", cls: "r4", desc: "Validation error" },
+            { code: "404", cls: "r4", desc: "Key not found or not owned by user" },
           ]
         },
         {
@@ -257,26 +316,25 @@ const SPEC = {
       tag: "Reports",
       endpoints: [
         {
-          method: "GET", path: "/v1/scans/{scan_id}/report", summary: "Get full report view (paywall applied)",
+          method: "GET", path: "/v1/scans/{scan_id}/report", summary: "Get full report view",
           auth: true,
           params: [
             { name: "scan_id", type: "uuid", req: true, desc: "Path param" },
             { name: "format", type: "enum", req: false, desc: "json (default) | summary" },
           ],
           responses: [
-            { code: "200", cls: "r2", desc: "ReportView — delta locked for starter plan" },
+            { code: "200", cls: "r2", desc: "ReportView — same depth for all plan tiers" },
             { code: "202", cls: "r2", desc: "Scan still running — { status, progress_pct }" },
           ]
         },
         {
-          method: "POST", path: "/v1/scans/{scan_id}/report/pdf", summary: "Generate PDF report — pro/enterprise only",
+          method: "POST", path: "/v1/scans/{scan_id}/report/pdf", summary: "Generate PDF report",
           auth: true,
           params: [
             { name: "scan_id", type: "uuid", req: true, desc: "Path param" },
           ],
           responses: [
             { code: "202", cls: "r2", desc: "{ job_id } — PDF generated async, link sent by email" },
-            { code: "403", cls: "r4", desc: "Plan does not include PDF export" },
           ]
         },
         {
@@ -294,7 +352,7 @@ const SPEC = {
       ]
     },
     {
-      tag: "Quota",
+      tag: "Plan & Quota",
       endpoints: [
         {
           method: "GET", path: "/v1/quota", summary: "Get current quota usage",
@@ -304,21 +362,83 @@ const SPEC = {
             { code: "200", cls: "r2", desc: "{ plan, scans_used, scans_limit, remaining, reset_at }" },
           ]
         },
+        {
+          method: "GET", path: "/v1/settings/plan", summary: "Get plan, quota and billing details",
+          auth: true,
+          params: [],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ current_plan, monthly_limit, scans_used, usage_percentage, warning_flag, next_billing_date, trial_end_date }" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/settings/plan/history", summary: "Get last 5 plan changes",
+          auth: true,
+          params: [],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ items: [{ old_plan, new_plan, changed_at, changed_by }] }" },
+          ]
+        },
       ]
     },
     {
-      tag: "Webhooks",
+      tag: "Settings: Webhooks",
       endpoints: [
         {
-          method: "PATCH", path: "/v1/settings/webhook", summary: "Set or update webhook URL",
+          method: "POST", path: "/v1/settings/webhooks", summary: "Create webhook",
           auth: true,
           body: [
-            { name: "webhook_url", type: "string", req: true, desc: "HTTPS endpoint — we POST results here" },
-            { name: "signing_secret", type: "string", req: false, desc: "Used for HMAC-SHA256 signature in X-VibeScan-Signature header" },
+            { name: "url", type: "string", req: true, desc: "HTTPS endpoint (localhost/127.0.0.1 blocked)" },
+            { name: "label", type: "string", req: false, desc: "Human readable label" },
+            { name: "enabled", type: "boolean", req: false, desc: "Default true" },
           ],
           responses: [
-            { code: "200", cls: "r2", desc: "{ webhook_url, verified: false } — sends test ping" },
-            { code: "400", cls: "r4", desc: "URL must be HTTPS" },
+            { code: "201", cls: "r2", desc: "{ id, url, enabled, signing_secret (generated) }" },
+            { code: "400", cls: "r4", desc: "Validation error" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/settings/webhooks", summary: "List webhooks",
+          auth: true,
+          params: [],
+          responses: [
+            { code: "200", cls: "r2", desc: "Array of webhook resources" },
+          ]
+        },
+        {
+          method: "PATCH", path: "/v1/settings/webhooks/{id}", summary: "Update webhook URL or enabled state",
+          auth: true,
+          body: [
+            { name: "url", type: "string", req: false, desc: "When URL changes, signing_secret rotates" },
+            { name: "enabled", type: "boolean", req: false, desc: "Enable/disable delivery" },
+          ],
+          params: [
+            { name: "id", type: "uuid", req: true, desc: "Path param" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Updated webhook resource" },
+            { code: "404", cls: "r4", desc: "Webhook not found" },
+          ]
+        },
+        {
+          method: "DELETE", path: "/v1/settings/webhooks/{id}", summary: "Delete webhook",
+          auth: true,
+          params: [
+            { name: "id", type: "uuid", req: true, desc: "Path param" },
+          ],
+          responses: [
+            { code: "204", cls: "r2", desc: "Deleted" },
+            { code: "404", cls: "r4", desc: "Webhook not found" },
+          ]
+        },
+        {
+          method: "POST", path: "/v1/settings/webhooks/{id}/test", summary: "Send test delivery",
+          auth: true,
+          params: [
+            { name: "id", type: "uuid", req: true, desc: "Path param" },
+          ],
+          responses: [
+            { code: "202", cls: "r2", desc: "Test delivery queued" },
+            { code: "404", cls: "r4", desc: "Webhook not found" },
           ]
         },
         {
@@ -342,6 +462,134 @@ const SPEC = {
           responses: [
             { code: "202", cls: "r2", desc: "Retry queued" },
             { code: "409", cls: "r4", desc: "Delivery already succeeded or not exhausted yet" },
+          ]
+        },
+      ]
+    },
+    {
+      tag: "Settings: Notifications",
+      endpoints: [
+        {
+          method: "GET", path: "/v1/settings/notifications", summary: "Get notification preferences",
+          auth: true,
+          params: [],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ email_enabled, webhook_enabled, slack_enabled, preferred_delivery_time }" },
+          ]
+        },
+        {
+          method: "PATCH", path: "/v1/settings/notifications", summary: "Update notification preferences",
+          auth: true,
+          body: [
+            { name: "email_enabled", type: "boolean", req: false, desc: "" },
+            { name: "webhook_enabled", type: "boolean", req: false, desc: "" },
+            { name: "slack_enabled", type: "boolean", req: false, desc: "" },
+            { name: "preferred_delivery_time", type: "string", req: false, desc: "HH:MM in user's IANA timezone" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Updated preferences" },
+            { code: "400", cls: "r4", desc: "Validation error" },
+          ]
+        },
+      ]
+    },
+    {
+      tag: "Settings: Security",
+      endpoints: [
+        {
+          method: "GET", path: "/v1/settings/security/events", summary: "Get recent security events",
+          auth: true,
+          params: [
+            { name: "limit", type: "integer", req: false, desc: "Default 50" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Array of login_failed / suspicious_activity / etc." },
+          ]
+        },
+      ]
+    },
+    {
+      tag: "Settings: Regional",
+      endpoints: [
+        {
+          method: "GET", path: "/v1/settings/regional", summary: "Get regional settings",
+          auth: true,
+          params: [],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ timezone, language, currency, date_format, number_format }" },
+          ]
+        },
+        {
+          method: "PATCH", path: "/v1/settings/regional", summary: "Update regional settings",
+          auth: true,
+          body: [
+            { name: "timezone", type: "string", req: false, desc: "IANA timezone" },
+            { name: "language", type: "enum", req: false, desc: "en | es | fr | de | ja | zh" },
+            { name: "currency", type: "enum", req: false, desc: "USD | EUR | GBP | INR | PKR" },
+            { name: "date_format", type: "enum", req: false, desc: "auto | MM/DD/YYYY | DD/MM/YYYY" },
+            { name: "number_format", type: "string", req: false, desc: "Locale number format" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Updated regional settings" },
+            { code: "400", cls: "r4", desc: "Validation error" },
+          ]
+        },
+      ]
+    },
+    {
+      tag: "Settings: Export & Audit",
+      endpoints: [
+        {
+          method: "POST", path: "/v1/settings/export", summary: "Start async user data export (max 10MB)",
+          auth: true,
+          body: [],
+          responses: [
+            { code: "202", cls: "r2", desc: "{ job_id }" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/settings/export/{job_id}", summary: "Get export job status",
+          auth: true,
+          params: [
+            { name: "job_id", type: "uuid", req: true, desc: "Path param" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ status, s3_key }" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/settings/export/{job_id}/download", summary: "Download exported file",
+          auth: true,
+          params: [
+            { name: "job_id", type: "uuid", req: true, desc: "Path param" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "File stream" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/settings/history", summary: "Get settings change history",
+          auth: true,
+          params: [
+            { name: "field_name", type: "string", req: false, desc: "Filter by field" },
+            { name: "date_from", type: "datetime", req: false, desc: "Max range 90 days" },
+            { name: "date_to", type: "datetime", req: false, desc: "Max range 90 days" },
+            { name: "limit", type: "integer", req: false, desc: "Default 50; pagination required >1000 rows" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "{ items, total, limit, offset }" },
+          ]
+        },
+        {
+          method: "GET", path: "/v1/settings/audit-log", summary: "Get audit log",
+          auth: true,
+          params: [
+            { name: "event_type", type: "string", req: false, desc: "profile_update | api_key_created | webhook_created | ..." },
+            { name: "date_from", type: "datetime", req: false, desc: "" },
+            { name: "date_to", type: "datetime", req: false, desc: "" },
+          ],
+          responses: [
+            { code: "200", cls: "r2", desc: "Audit events (admin: org-wide visibility)" },
           ]
         },
       ]

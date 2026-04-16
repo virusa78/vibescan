@@ -19,6 +19,9 @@ export interface User {
     created_at: string;
     last_active_at?: string;
     region: Region;
+    timezone?: string;
+    language?: string;
+    account_locked?: boolean;
 }
 
 export type PlanTier = 'free_trial' | 'starter' | 'pro' | 'enterprise';
@@ -117,6 +120,94 @@ export interface ScanDelta {
     created_at: string;
 }
 
+export interface AiFixPrompt {
+    id: string;
+    scan_id: string;
+    user_id: string;
+    vulnerability_id: string;
+    prompt_text: string;
+    model_name?: string;
+    response_payload?: unknown;
+    status: 'generated' | 'applied' | 'rejected';
+    created_at: string;
+    updated_at: string;
+}
+
+export interface AiFixPromptRequest {
+    cveId?: string;
+    packageName: string;
+    installedVersion: string;
+    modelName?: string;
+}
+
+export interface AiFixPromptGenerationResult {
+    cacheHit: boolean;
+    prompt: AiFixPrompt;
+}
+
+export interface SecurityScore {
+    id: string;
+    scan_id: string;
+    score: number;
+    grade: string;
+    breakdown: Record<string, number>;
+    calculated_at: string;
+    created_at: string;
+}
+
+export interface SecurityScoreTrendPoint {
+    scanId: string;
+    score: number;
+    grade: string;
+    breakdown: Record<string, any>;
+    calculatedAt: string;
+    scanCreatedAt: string;
+    deltaFromPrevious: number | null;
+}
+
+export interface RiskAcceptanceInput {
+    vulnerabilityId: string;
+    reason?: string;
+    expiresAt?: string;
+}
+
+export interface SecuritySlaSummary {
+    scanId: string;
+    snapshotAt: string;
+    targetDays: Record<string, number>;
+    totalTracked: number;
+    acceptedCount: number;
+    breachedCount: number;
+    bySeverity: Record<string, {
+        total: number;
+        breached: number;
+        accepted: number;
+        targetDays: number;
+    }>;
+    items: Array<{
+        vulnerabilityId: string;
+        cveId?: string | null;
+        packageName?: string | null;
+        installedVersion?: string | null;
+        severity: string;
+        dueAt: string;
+        accepted: boolean;
+        breached: boolean;
+    }>;
+}
+
+export interface VulnAcceptance {
+    id: string;
+    scan_id: string;
+    user_id: string;
+    vulnerability_id: string;
+    reason?: string;
+    status: 'accepted' | 'revoked' | 'expired';
+    accepted_at: string;
+    expires_at?: string;
+    updated_at: string;
+}
+
 // API key types
 export interface ApiKey {
     id: string;
@@ -131,7 +222,7 @@ export interface ApiKey {
     created_at: string;
 }
 
-export type ApiKeyScope = 'sbom_submit' | 'scan_read' | 'webhook_manage';
+export type ApiKeyScope = 'sbom_submit' | 'scan_read' | 'webhook_manage' | 'settings_manage';
 
 // Webhook types
 export interface Webhook {
@@ -170,6 +261,23 @@ export interface GithubInstallation {
     target_branches: string[];
     fail_pr_on_severity: Severity | 'NONE';
     created_at: string;
+}
+
+export interface GithubScanCheck {
+    id: string;
+    scan_id: string;
+    user_id: string;
+    github_installation_id: number;
+    repository_full_name: string;
+    head_sha: string;
+    trigger_event: 'push' | 'pull_request';
+    delivery_id?: string;
+    check_run_id?: number;
+    fail_on_severity: Severity | 'NONE';
+    status: 'pending' | 'posted' | 'completed' | 'failed';
+    last_error?: string;
+    created_at: string;
+    updated_at: string;
 }
 
 // Quota ledger types
@@ -244,6 +352,7 @@ export interface CycloneDXValidationResult {
 export interface ScanJob {
     scanId: string;
     components: Component[];
+    scenarioInput?: unknown | null;
 }
 
 export interface WorkerResult {

@@ -16,6 +16,21 @@ This will:
 3. Start the frontend development server
 4. Display access URLs and demo credentials
 
+### Option 1.1: Full local dev runner (port cleanup + session restart)
+
+If you want a single command that clears previous dev sessions, frees occupied ports,
+starts infra, and launches backend + frontend with logs:
+
+```bash
+./scripts/dev-up.sh
+```
+
+Stop everything started by it:
+
+```bash
+./scripts/dev-up.sh --stop
+```
+
 ### Option 2: Manual Start
 
 **Start Docker services:**
@@ -35,8 +50,8 @@ After starting, you'll see output like:
 
 ```
 🌐 Access URLs:
-   Frontend:  http://192.168.1.15:3001
-   Backend:   http://192.168.1.15:3000
+   Frontend:  http://192.168.1.15:3000
+   Backend:   http://192.168.1.15:3001
    MinIO:     http://192.168.1.15:9001 (console)
 ```
 
@@ -76,7 +91,7 @@ vibescan/
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| vibescan-api | 3000 | Backend API |
+| vibescan-api | 3001 | Backend API |
 | vibescan-postgres | 5432 | PostgreSQL database |
 | vibescan-redis | 6379 | Cache & queues |
 | vibescan-minio | 9000 | S3-compatible storage |
@@ -133,6 +148,18 @@ docker compose restart vibescan
 # Rebuild after code changes
 docker compose up -d --build
 ```
+
+## OpenSaaS cutover toggles
+
+Use boundary flags to hand platform-owned surfaces to OpenSaaS/Wasp without touching core scan workflow:
+
+```bash
+OPENSAAS_MODE=true
+OPENSAAS_PLATFORM_OWNED=auth,api_keys,billing,settings
+```
+
+- `OPENSAAS_MODE=false` keeps all routes in the current backend.
+- `core_workflow` (`/scans`, `/reports`, `/remediation`) remains backend-owned in this cutover stage.
 
 ## Database Management
 
@@ -224,7 +251,7 @@ Authorization: Bearer <token>
 **Problem:** Frontend can't connect to backend API.
 
 **Solution:**
-1. Check backend is running: `curl http://localhost:3000/health`
+1. Check backend is running: `curl http://localhost:3001/health`
 2. Check `.env.local` has correct API URL: `cat vibescan-ui/.env.local`
 3. Restart frontend: Kill the process and run `./scripts/start.sh`
 
@@ -245,7 +272,8 @@ npm run dev
 
 **Solution:**
 ```bash
-# Find and kill processes using ports 3000, 5432, 6379, 9000
+# Find and kill processes using ports 3001, 3000, 5432, 6379, 9000
+lsof -ti :3001 | xargs kill -9
 lsof -ti :3000 | xargs kill -9
 lsof -ti :5432 | xargs kill -9
 lsof -ti :6379 | xargs kill -9
@@ -274,7 +302,7 @@ docker compose restart vibescan
 
 ### Frontend Running on Wrong Port
 
-**Problem:** Port 3000 occupied, frontend on 3001+.
+**Problem:** Port 3000 occupied, frontend moved to another port.
 
 **Solution:**
 ```bash
@@ -290,13 +318,13 @@ netstat -tlnp | grep node
 When accessing VibeScan from a different machine:
 
 1. **Server IP Detection:** The start script auto-detects your server's IP
-2. **Firewall:** Ensure ports 3000 and the frontend port are open
+2. **Firewall:** Ensure ports 3001 (backend) and 3000 (frontend) are open
 3. **Access:** Use the server IP URL shown in the startup output, not localhost
 
 Example:
 ```
-✅ http://192.168.1.15:3001  (use this)
-❌ http://localhost:3001      (won't work remotely)
+✅ http://192.168.1.15:3000  (use this)
+❌ http://localhost:3000      (won't work remotely)
 ```
 
 ## Monitoring & Logs
@@ -322,7 +350,7 @@ tail -f /tmp/vibescan-frontend.log
 ### Health Checks
 ```bash
 # Backend health
-curl http://localhost:3000/health | jq '.'
+curl http://localhost:3001/health | jq '.'
 
 # Expected response
 {
@@ -349,7 +377,14 @@ Tests create HTML snapshots in `e2e/screenshots/`.
 ```bash
 npm test
 npm run test:coverage
+npm run test:coverage:gate
+npm run test:coverage:strict
 ```
+
+Coverage command behavior:
+- `test:coverage` generates coverage reports without gating.
+- `test:coverage:gate` enforces staged minimum thresholds (`lines >= 6`, `branches >= 3`).
+- `test:coverage:strict` enforces the long-term target thresholds (`lines >= 70`, `branches >= 70`).
 
 ## Security Notes
 

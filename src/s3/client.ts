@@ -4,7 +4,7 @@
  * Provides S3 client with bucket management and TTL policies.
  */
 
-import { S3Client, CreateBucketCommand, PutBucketLifecycleConfigurationCommand, GetBucketLifecycleConfigurationCommand, DeleteObjectsCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand } from '@aws-sdk/client-s3';
+import { S3Client, CreateBucketCommand, PutBucketLifecycleConfigurationCommand, GetBucketLifecycleConfigurationCommand, DeleteObjectsCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import dotenv from 'dotenv';
@@ -74,7 +74,7 @@ export async function ensureBucketsExist(): Promise<void> {
             } else {
                 // Check if bucket actually exists by listing it
                 try {
-                    await s3.send(new (require('@aws-sdk/client-s3')).HeadBucketCommand({ Bucket: bucket }));
+                    await s3.send(new HeadBucketCommand({ Bucket: bucket }));
                     console.log(`S3: Bucket already exists: ${bucket}`);
                 } catch (headError: any) {
                     if (headError.Code === '404' || headError.name === 'NotFound') {

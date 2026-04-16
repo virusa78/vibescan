@@ -26,5 +26,7 @@ export {
     QUEUE_ENTERPRISE_SCAN,
     QUEUE_WEBHOOK_DELIVERY,
     QUEUE_REPORT_GENERATION,
-    PRIORITY_WEIGHTS
+    PRIORITY_WEIGHTS,
+    getPriorityTierForPlan,
+    getPriorityForPlan
 } from './config.js';

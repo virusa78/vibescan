@@ -14,9 +14,10 @@ import { User, ApiKey } from '../types/index.js';
 import { storeSession, deleteSession, getSession } from '../redis/sessions.js';
 import crypto from 'crypto';
 import { createRequire } from 'module';
+import { getRedisClient } from '../redis/client.js';
 
 // Constants
-const BCRYPT_ROUNDS = 10;
+const BCRYPT_ROUNDS = 12;
 const JWT_ACCESS_EXPIRY = config.JWT_ACCESS_EXPIRY;
 const JWT_REFRESH_EXPIRY = config.JWT_REFRESH_EXPIRY;
 
@@ -371,7 +372,7 @@ export class AuthService {
      */
     async getUserById(userId: string): Promise<User | null> {
         const result = await this.pool.query(
-            'SELECT id, email, name, plan, region, created_at FROM users WHERE id = $1',
+            'SELECT id, email, name, plan, region, timezone, language, created_at FROM users WHERE id = $1',
             [userId]
         );
 
@@ -380,6 +381,61 @@ export class AuthService {
         }
 
         return result.rows[0];
+    }
+
+    /**
+     * Request email change flow
+     */
+    async requestEmailChange(userId: string, newEmail: string, currentPassword: string): Promise<void> {
+        const userResult = await this.pool.query(
+            'SELECT id, email, password_hash FROM users WHERE id = $1',
+            [userId]
+        );
+
+        if (userResult.rows.length === 0) {
+            throw { code: 'not_found', message: 'User not found' };
+        }
+
+        const user = userResult.rows[0];
+        const passwordValid = await bcrypt.compare(currentPassword, user.password_hash);
+        if (!passwordValid) {
+            throw { code: 'unauthorized', message: 'Current password is incorrect' };
+        }
+
+        const token = crypto.randomBytes(24).toString('hex');
+        const redis = await getRedisClient();
+        await redis.setEx(
+            `email_change:${token}`,
+            60 * 30, // 30 minutes
+            JSON.stringify({ userId, newEmail })
+        );
+    }
+
+    /**
+     * Verify email change by token
+     */
+    async verifyEmailChange(token: string): Promise<void> {
+        const redis = await getRedisClient();
+        const payloadRaw = await redis.get(`email_change:${token}`);
+        if (!payloadRaw) {
+            throw { code: 'validation_error', message: 'Invalid or expired verification token' };
+        }
+
+        const payload = JSON.parse(payloadRaw) as { userId: string; newEmail: string };
+
+        try {
+            await this.pool.query(
+                'UPDATE users SET email = $1 WHERE id = $2',
+                [payload.newEmail, payload.userId]
+            );
+        } catch (error: any) {
+            if (error.code === '23505') {
+                throw { code: 'email_taken', message: 'Email already registered' };
+            }
+            throw error;
+        } finally {
+            await redis.del(`email_change:${token}`);
+        }
     }
 
     /**

@@ -66,7 +66,9 @@ export function computeDelta(
     const enterpriseCves = new Set(enterpriseVulns.map((v: any) => v.cve_id).filter(Boolean));
 
     // Find enterprise-only vulnerabilities
-    const deltaVulns = enterpriseVulns.filter((v: any) => !freeCves.has(v.cve_id));
+    const deltaVulns = rankVulnerabilities(
+        enterpriseVulns.filter((v: any) => !freeCves.has(v.cve_id))
+    );
 
     // Calculate severity breakdown
     const deltaBySeverity: Record<string, number> = {
@@ -77,8 +79,9 @@ export function computeDelta(
     };
 
     for (const vuln of deltaVulns) {
-        if (vuln.severity && vuln.severity in deltaBySeverity) {
-            deltaBySeverity[vuln.severity]++;
+        const severity = `${vuln.severity || ''}`.toUpperCase();
+        if (severity in deltaBySeverity) {
+            deltaBySeverity[severity]++;
         }
     }
 
@@ -105,8 +108,9 @@ export function computeSeverityBreakdown(vulns: any[]): Record<string, number> {
     };
 
     for (const vuln of vulns) {
-        if (vuln.severity && vuln.severity in breakdown) {
-            breakdown[vuln.severity]++;
+        const severity = `${vuln.severity || ''}`.toUpperCase();
+        if (severity in breakdown) {
+            breakdown[severity]++;
         }
     }
 
@@ -148,7 +152,14 @@ export function rankVulnerabilities(vulns: any[]): any[] {
         const exploitableA = a.is_exploitable ? 1 : 0;
         const exploitableB = b.is_exploitable ? 1 : 0;
 
-        return exploitableB - exploitableA;
+        if (exploitableB !== exploitableA) {
+            return exploitableB - exploitableA;
+        }
+
+        // Deterministic tie-breakers for stable ordering across runtimes.
+        const identityA = `${a.cve_id || ''}|${a.package_name || ''}|${a.installed_version || ''}|${a.source || ''}`;
+        const identityB = `${b.cve_id || ''}|${b.package_name || ''}|${b.installed_version || ''}|${b.source || ''}`;
+        return identityA.localeCompare(identityB);
     });
 }
 

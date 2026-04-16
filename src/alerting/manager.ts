@@ -5,6 +5,7 @@
  */
 
 import { getPool } from '../database/client.js';
+import { randomUUID } from 'crypto';
 
 /**
  * Alert types
@@ -202,7 +203,7 @@ export class AlertManager {
      * Generate a UUID
      */
     private generateUUID(): string {
-        return require('crypto').randomUUID();
+        return randomUUID();
     }
 
     /**

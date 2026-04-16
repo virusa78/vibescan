@@ -7,15 +7,151 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { createGunzip } from 'zlib';
-import { pipeline } from 'stream';
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { uploadFile, downloadFile, BUCKET_SOURCES, BUCKET_SBOMS } from '../s3/client.js';
+import { readFileSync, unlinkSync, mkdirSync, existsSync, createWriteStream, readdirSync, lstatSync, rmdirSync } from 'fs';
+import { join, dirname, basename } from 'path';
+import { pipeline } from 'stream/promises';
+import { S3Client, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import AjvImport, { ErrorObject, ValidateFunction } from 'ajv';
+import { uploadFile, BUCKET_SOURCES, BUCKET_SBOMS } from '../s3/client.js';
 import { generateUUID } from '../utils/index.js';
 
 const execAsync = promisify(exec);
+
+const DEFAULT_SOURCE_ZIP_MAX_SIZE_BYTES = 50 * 1024 * 1024;
+export const SOURCE_ZIP_MAX_SIZE_BYTES = DEFAULT_SOURCE_ZIP_MAX_SIZE_BYTES;
+const DEFAULT_SYFT_IMAGE = process.env.SYFT_IMAGE || 'anchore/syft:latest';
+const SUPPORTED_CYCLONEDX_VERSIONS = ['1.4', '1.5', '1.6'] as const;
+const GITHUB_OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+const GITHUB_REPO_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$/;
+
+const cycloneDxBaseSchema = {
+    type: 'object',
+    required: ['bomFormat', 'specVersion', 'components'],
+    properties: {
+        bomFormat: { type: 'string', const: 'CycloneDX' },
+        specVersion: { type: 'string' },
+        components: {
+            type: 'array',
+            items: {
+                type: 'object',
+                required: ['name', 'version'],
+                properties: {
+                    type: { type: 'string' },
+                    name: { type: 'string', minLength: 1 },
+                    version: { type: 'string', minLength: 1 },
+                    purl: { type: 'string' }
+                },
+                additionalProperties: true
+            }
+        },
+        serialNumber: { type: 'string' },
+        metadata: { type: 'object' }
+    },
+    additionalProperties: true
+};
+
+const cycloneDxSchemas = SUPPORTED_CYCLONEDX_VERSIONS.map(version => ({
+    $id: `cyclonedx-${version}`,
+    ...cycloneDxBaseSchema,
+    properties: {
+        ...cycloneDxBaseSchema.properties,
+        specVersion: { type: 'string', const: version }
+    }
+}));
+
+const Ajv = (AjvImport as any).default || AjvImport;
+const ajv = new Ajv({ allErrors: true, strict: false });
+const cycloneDxValidators = new Map<string, ValidateFunction>(
+    cycloneDxSchemas.map(schema => [schema.properties.specVersion.const, ajv.compile(schema)])
+);
+
+function shellEscape(value: string): string {
+    return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+export function enforceSourceZipSizeLimit(sizeBytes: number | undefined): void {
+    if (!Number.isFinite(sizeBytes)) {
+        throw {
+            code: 'validation_error',
+            message: 'Unable to validate source ZIP size',
+            validation_errors: [{ field: 'sourceZipKey', message: 'Missing source ZIP size metadata' }]
+        };
+    }
+
+    if ((sizeBytes as number) > SOURCE_ZIP_MAX_SIZE_BYTES) {
+        throw {
+            code: 'payload_too_large',
+            message: `Source ZIP exceeds ${SOURCE_ZIP_MAX_SIZE_BYTES / (1024 * 1024)}MB limit`,
+            maxSizeBytes: SOURCE_ZIP_MAX_SIZE_BYTES,
+            actualSizeBytes: sizeBytes
+        };
+    }
+}
+
+export function buildIsolatedSyftCommand(params: {
+    sourcePath: string;
+    outputPath: string;
+    syftImage?: string;
+}): string {
+    const sourcePath = params.sourcePath;
+    const outputPath = params.outputPath;
+    const outputDir = dirname(outputPath);
+    const outputFile = basename(outputPath);
+    const syftImage = params.syftImage || DEFAULT_SYFT_IMAGE;
+
+    return [
+        'docker run --rm',
+        '--network=none',
+        '--read-only',
+        '--user 65534:65534',
+        `-v ${shellEscape(sourcePath)}:/workspace/source:ro`,
+        `-v ${shellEscape(outputDir)}:/workspace/output:rw`,
+        shellEscape(syftImage),
+        '/workspace/source',
+        '-o',
+        `json=/workspace/output/${outputFile}`
+    ].join(' ');
+}
+
+export function normalizeGithubRepository(repoInput: string): { owner: string; repo: string; cloneUrl: string } {
+    const raw = (repoInput || '').trim();
+    if (!raw) {
+        throw { code: 'invalid_input', message: 'Repository is required' };
+    }
+
+    if (/^https?:\/\//i.test(raw) || raw.includes('github.com/')) {
+        throw {
+            code: 'invalid_input',
+            message: 'Repository must use owner/repo format'
+        };
+    }
+
+    const ownerRepoMatch = raw.match(/^([^/\s]+)\/([^/\s]+)$/);
+    if (!ownerRepoMatch) {
+        throw {
+            code: 'invalid_input',
+            message: 'Repository must match owner/repo format'
+        };
+    }
+
+    const owner = ownerRepoMatch[1];
+    const repo = ownerRepoMatch[2];
+    if (!GITHUB_OWNER_PATTERN.test(owner) || owner.endsWith('-')) {
+        throw {
+            code: 'invalid_input',
+            message: 'Invalid repository owner. Use GitHub owner format.'
+        };
+    }
+
+    if (!GITHUB_REPO_PATTERN.test(repo) || repo.endsWith('.')) {
+        throw {
+            code: 'invalid_input',
+            message: 'Invalid repository name. Use GitHub repository format.'
+        };
+    }
+
+    return { owner, repo, cloneUrl: `https://github.com/${owner}/${repo}.git` };
+}
 
 /**
  * Component structure
@@ -42,8 +178,60 @@ export interface InputAdapterResult {
  */
 export interface CycloneDXValidationResult {
     valid: boolean;
-    errors: string[];
+    errors: Array<{ field: string; message: string }>;
     specVersion?: string;
+}
+
+function formatAjvErrors(errors?: ErrorObject[] | null): Array<{ field: string; message: string }> {
+    if (!errors || errors.length === 0) {
+        return [];
+    }
+
+    return errors.map((error) => ({
+        field: error.instancePath || 'document',
+        message: error.message || 'Invalid value'
+    }));
+}
+
+export function validateGithubRef(refInput: string): { valid: boolean; error?: string } {
+    const ref = (refInput || '').trim();
+    if (!ref) {
+        return { valid: false, error: 'Reference is required' };
+    }
+
+    if (ref === 'HEAD') {
+        return { valid: true };
+    }
+
+    if (ref.length > 255) {
+        return { valid: false, error: 'Reference must be 255 characters or fewer' };
+    }
+
+    if (/^[0-9a-f]{7,40}$/i.test(ref)) {
+        return { valid: true };
+    }
+
+    if (/\s/.test(ref) || /[\x00-\x1f\x7f]/.test(ref)) {
+        return { valid: false, error: 'Reference must not contain whitespace or control characters' };
+    }
+
+    if (ref.includes('..') || ref.includes('@{') || ref.includes('//')) {
+        return { valid: false, error: 'Reference contains invalid git ref sequences' };
+    }
+
+    if (/[~^:?*[\]\\]/.test(ref)) {
+        return { valid: false, error: 'Reference contains invalid git ref characters' };
+    }
+
+    if (ref.startsWith('/') || ref.endsWith('/') || ref.endsWith('.') || ref.endsWith('.lock')) {
+        return { valid: false, error: 'Reference has an invalid prefix or suffix' };
+    }
+
+    if (ref.startsWith('.')) {
+        return { valid: false, error: 'Reference must not start with a dot' };
+    }
+
+    return { valid: true };
 }
 
 /**
@@ -52,14 +240,20 @@ export interface CycloneDXValidationResult {
 export class InputAdapterService {
     private s3Client: any;
     private tempDir: string;
+    private readonly syftImage: string;
+    private readonly commandRunner: (command: string) => Promise<{ stdout: string; stderr: string }>;
 
-    constructor() {
-        this.s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
-        this.tempDir = '/tmp/vibescan';
-        // Use the imported fs functions
-        try {
-            readFileSync(this.tempDir, 'utf8');
-        } catch {
+    constructor(deps: {
+        s3Client?: any;
+        tempDir?: string;
+        syftImage?: string;
+        commandRunner?: (command: string) => Promise<{ stdout: string; stderr: string }>;
+    } = {}) {
+        this.s3Client = deps.s3Client || new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
+        this.tempDir = deps.tempDir || process.env.VIBESCAN_INPUT_ADAPTER_TMP_DIR || join(process.cwd(), '.runtime', 'source-processing');
+        this.syftImage = deps.syftImage || DEFAULT_SYFT_IMAGE;
+        this.commandRunner = deps.commandRunner || execAsync;
+        if (!existsSync(this.tempDir)) {
             mkdirSync(this.tempDir, { recursive: true });
         }
     }
@@ -70,39 +264,34 @@ export class InputAdapterService {
      * @returns Normalized components
      */
     async fromSourceZip(s3Key: string): Promise<InputAdapterResult> {
-        const zipPath = join(this.tempDir, `${generateUUID()}.zip`);
-        const extractDir = join(this.tempDir, generateUUID());
+        const workspaceDir = join(this.tempDir, generateUUID());
+        const zipPath = join(workspaceDir, 'source.zip');
+        const sbomDir = join(workspaceDir, 'output');
+        const sbomPath = join(sbomDir, 'sbom.json');
+        let processingError: any = null;
+
+        mkdirSync(sbomDir, { recursive: true });
 
         try {
-            // Download ZIP from S3
+            const metadata = await this.s3Client.send(new HeadObjectCommand({
+                Bucket: BUCKET_SOURCES,
+                Key: s3Key
+            }));
+            enforceSourceZipSizeLimit(metadata.ContentLength);
+
             const data = await this.s3Client.send(new GetObjectCommand({
                 Bucket: BUCKET_SOURCES,
                 Key: s3Key
             }));
 
-            // Save ZIP to temp location
-            const stream = require('fs').createWriteStream(zipPath);
+            const stream = createWriteStream(zipPath);
             await pipeline(data.Body as any, stream);
 
-            // Extract ZIP
-            mkdirSync(extractDir, { recursive: true });
-            await execAsync(`unzip -q "${zipPath}" -d "${extractDir}"`);
+            await this.generateSbomInIsolatedContainer(zipPath, sbomPath);
 
-            // Run Syft to generate SBOM
-            const sbomPath = join(this.tempDir, `${generateUUID()}-sbom.json`);
-            await execAsync(`syft "${extractDir}" -o json > "${sbomPath}"`);
-
-            // Read and parse SBOM
             const sbomRaw = JSON.parse(readFileSync(sbomPath, 'utf8'));
-
-            // Normalize components
             const components = this.normalizeComponents(sbomRaw);
 
-            // Clean up
-            unlinkSync(zipPath);
-            this.cleanupDirectory(extractDir);
-
-            // Upload SBOM to S3
             const sbomS3Key = `sboms/${generateUUID()}.json`;
             await uploadFile(BUCKET_SBOMS, sbomS3Key, JSON.stringify(sbomRaw), 'application/json');
 
@@ -112,18 +301,10 @@ export class InputAdapterService {
                 sbomS3Key
             };
         } catch (error: any) {
-            // Clean up on error
-            try {
-                if (require('fs').existsSync(zipPath)) {
-                    require('fs').unlinkSync(zipPath);
-                }
-                if (require('fs').existsSync(extractDir)) {
-                    this.cleanupDirectory(extractDir);
-                }
-            } catch (cleanupError: any) {
-                // Ignore cleanup errors
-            }
+            processingError = error;
             throw error;
+        } finally {
+            this.cleanupWorkspace(workspaceDir, processingError);
         }
     }
 
@@ -134,36 +315,25 @@ export class InputAdapterService {
      * @returns Normalized components
      */
     async fromGithubUrl(repoUrl: string, ref: string = 'HEAD'): Promise<InputAdapterResult> {
-        const repoPath = join(this.tempDir, generateUUID());
+        const workspaceDir = join(this.tempDir, generateUUID());
+        const repoPath = join(workspaceDir, 'repo');
+        const sbomDir = join(workspaceDir, 'output');
+        const sbomPath = join(sbomDir, 'sbom.json');
+        let processingError: any = null;
+
+        mkdirSync(sbomDir, { recursive: true });
 
         try {
-            // Parse repo URL
-            const repoMatch = repoUrl.match(/github\.com[:/]([^/]+)\/([^\.]+)(?:\.git)?/);
-            if (!repoMatch) {
-                throw { code: 'invalid_input', message: 'Invalid GitHub URL format' };
-            }
+            const { cloneUrl } = normalizeGithubRepository(repoUrl);
 
-            const owner = repoMatch[1];
-            const repo = repoMatch[2];
-            const cloneUrl = `https://github.com/${owner}/${repo}.git`;
+            await this.commandRunner(
+                `git clone --depth=1 --branch ${shellEscape(ref)} ${shellEscape(cloneUrl)} ${shellEscape(repoPath)}`
+            );
+            await this.generateSbomInIsolatedContainer(repoPath, sbomPath);
 
-            // Clone with --depth=1 for single commit
-            await execAsync(`git clone --depth=1 --branch "${ref}" "${cloneUrl}" "${repoPath}"`);
-
-            // Run Syft to generate SBOM
-            const sbomPath = join(this.tempDir, `${generateUUID()}-sbom.json`);
-            await execAsync(`syft "${repoPath}" -o json > "${sbomPath}"`);
-
-            // Read and parse SBOM
             const sbomRaw = JSON.parse(readFileSync(sbomPath, 'utf8'));
-
-            // Normalize components
             const components = this.normalizeComponents(sbomRaw);
 
-            // Clean up local copy immediately
-            this.cleanupDirectory(repoPath);
-
-            // Upload SBOM to S3
             const sbomS3Key = `sboms/${generateUUID()}.json`;
             await uploadFile(BUCKET_SBOMS, sbomS3Key, JSON.stringify(sbomRaw), 'application/json');
 
@@ -173,15 +343,28 @@ export class InputAdapterService {
                 sbomS3Key
             };
         } catch (error: any) {
-            // Clean up on error
-            try {
-                if (require('fs').existsSync(repoPath)) {
-                    this.cleanupDirectory(repoPath);
-                }
-            } catch (cleanupError: any) {
-                // Ignore cleanup errors
-            }
+            processingError = error;
             throw error;
+        } finally {
+            this.cleanupWorkspace(workspaceDir, processingError);
+        }
+    }
+
+    private async generateSbomInIsolatedContainer(sourcePath: string, outputPath: string): Promise<void> {
+        const command = buildIsolatedSyftCommand({
+            sourcePath,
+            outputPath,
+            syftImage: this.syftImage
+        });
+
+        try {
+            await this.commandRunner(command);
+        } catch (error: any) {
+            throw {
+                code: 'runtime_isolation_error',
+                message: 'Failed to generate SBOM in isolated container runtime',
+                details: error?.message || String(error)
+            };
         }
     }
 
@@ -222,33 +405,40 @@ export class InputAdapterService {
      * @returns Validation result
      */
     validateCycloneDX(document: any): CycloneDXValidationResult {
-        const errors: string[] = [];
-
-        // Check required fields
-        if (!document.specVersion) {
-            errors.push('Missing specVersion');
+        if (!document || typeof document !== 'object') {
+            return {
+                valid: false,
+                errors: [{ field: 'document', message: 'SBOM document must be an object' }],
+                specVersion: 'unknown'
+            };
         }
 
-        if (!document.components || !Array.isArray(document.components)) {
-            errors.push('Missing or invalid components array');
-        } else {
-            // Validate each component
-            for (let i = 0; i < document.components.length; i++) {
-                const component = document.components[i];
-                if (!component.name) {
-                    errors.push(`Component ${i}: missing name`);
-                }
-                if (!component.version) {
-                    errors.push(`Component ${i}: missing version`);
-                }
-            }
-        }
-
-        // Determine spec version
         const specVersion = document.specVersion || 'unknown';
+        if (!SUPPORTED_CYCLONEDX_VERSIONS.includes(specVersion)) {
+            return {
+                valid: false,
+                errors: [{
+                    field: '/specVersion',
+                    message: `Unsupported CycloneDX specVersion "${specVersion}". Supported versions: ${SUPPORTED_CYCLONEDX_VERSIONS.join(', ')}`
+                }],
+                specVersion
+            };
+        }
+
+        const validator = cycloneDxValidators.get(specVersion);
+        if (!validator) {
+            return {
+                valid: false,
+                errors: [{ field: '/specVersion', message: `No validator available for ${specVersion}` }],
+                specVersion
+            };
+        }
+
+        const valid = validator(document);
+        const errors = valid ? [] : formatAjvErrors(validator.errors);
 
         return {
-            valid: errors.length === 0,
+            valid: Boolean(valid),
             errors,
             specVersion
         };
@@ -376,22 +566,55 @@ export class InputAdapterService {
      * Recursively delete directory
      */
     private cleanupDirectory(dir: string): void {
-        if (!require('fs').existsSync(dir)) return;
+        if (!existsSync(dir)) return;
 
-        const entries = require('fs').readdirSync(dir);
+        const entries = readdirSync(dir);
 
         for (const entry of entries) {
             const path = join(dir, entry);
-            const stats = require('fs').statSync(path);
+            // Use lstat to handle broken symlinks in cloned repositories.
+            let stats;
+            try {
+                stats = lstatSync(path);
+            } catch (error: any) {
+                if (error?.code === 'ENOENT') {
+                    continue;
+                }
+                throw error;
+            }
 
-            if (stats.isDirectory()) {
+            if (stats.isDirectory() && !stats.isSymbolicLink()) {
                 this.cleanupDirectory(path);
             } else {
-                require('fs').unlinkSync(path);
+                unlinkSync(path);
             }
         }
 
-        require('fs').rmdirSync(dir);
+        rmdirSync(dir);
+    }
+
+    private cleanupWorkspace(workspaceDir: string, processingError: any): void {
+        if (!existsSync(workspaceDir)) {
+            return;
+        }
+
+        try {
+            this.cleanupDirectory(workspaceDir);
+        } catch (cleanupError: any) {
+            const cleanupMessage = cleanupError?.message || String(cleanupError);
+            if (processingError) {
+                throw {
+                    ...processingError,
+                    cleanup_error: cleanupMessage
+                };
+            }
+
+            throw {
+                code: 'runtime_cleanup_error',
+                message: 'Failed to destroy temporary source workspace',
+                details: cleanupMessage
+            };
+        }
     }
 }
 

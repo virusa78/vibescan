@@ -13,13 +13,12 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcrypt';
 import { getPool } from '../src/database/client.js';
 import config from '../src/config/index.js';
-import crypto from 'crypto';
+import { computeDelta } from '../src/services/diffEngine.js';
 
 // Constants
 const BCRYPT_ROUNDS = 10;
-const NUM_MONTHS = 6;
-const SCANS_PER_MONTH_MIN = 10;
-const SCANS_PER_MONTH_MAX = 100;
+const NUM_MONTHS = Number(process.env.DEMO_MONTHS || 6);
+const RESET_DEMO_DATA = (process.env.RESET_DEMO_DATA || 'true') === 'true';
 const CVE_PER_SCAN_MIN = 5;
 const CVE_PER_SCAN_MAX = 20;
 
@@ -30,21 +29,24 @@ const DEMO_USERS = [
     password: 'vs_demo_pro_2026',
     name: 'Arjun Mehta',
     plan: 'pro',
-    region: 'OTHER'
+    region: 'OTHER',
+    scansPerMonth: { min: 50, max: 100 }
   },
   {
     email: 'priya.sharma@devcraft.in',
     password: 'vs_demo_starter_2026',
     name: 'Priya Sharma',
     plan: 'starter',
-    region: 'IN'
+    region: 'IN',
+    scansPerMonth: { min: 10, max: 30 }
   },
   {
     email: 'rafael.torres@securecorp.com',
     password: 'vs_demo_ent_2026',
     name: 'Rafael Torres',
     plan: 'enterprise',
-    region: 'US'
+    region: 'OTHER',
+    scansPerMonth: { min: 30, max: 60 }
   }
 ];
 
@@ -149,7 +151,7 @@ async function main() {
 
   const pool = getPool();
 
-  // Create users if they don't exist
+  // Create or update demo users
   for (const userData of DEMO_USERS) {
     const userId = uuidv4();
     const passwordHash = await bcrypt.hash(userData.password, BCRYPT_ROUNDS);
@@ -158,11 +160,14 @@ async function main() {
       await pool.query(
         `INSERT INTO users (id, email, password_hash, plan, region, stripe_customer_id_encrypted)
          VALUES ($1, $2, $3, $4, $5, pgp_sym_encrypt($6, $7))
-         ON CONFLICT (email) DO NOTHING
+         ON CONFLICT (email) DO UPDATE SET
+         password_hash = EXCLUDED.password_hash,
+         plan = EXCLUDED.plan,
+         region = EXCLUDED.region
          RETURNING id`,
         [userId, userData.email, passwordHash, userData.plan, userData.region, `cus_${uuidv4().substring(0, 24)}`, config.ENCRYPTION_KEY]
       );
-      console.log(`✓ Created user: ${userData.email} (${userData.plan})`);
+      console.log(`✓ Upserted user: ${userData.email} (${userData.plan})`);
     } catch (error) {
       console.error(`✗ Failed to create user ${userData.email}:`, error);
     }
@@ -174,6 +179,15 @@ async function main() {
   );
   const users = usersResult.rows;
 
+  if (RESET_DEMO_DATA) {
+    const userIds = users.map((u: { id: string }) => u.id);
+    if (userIds.length > 0) {
+      await pool.query('DELETE FROM scans WHERE user_id = ANY($1::uuid[])', [userIds]);
+      await pool.query('DELETE FROM quota_ledger WHERE user_id = ANY($1::uuid[])', [userIds]);
+      console.log('✓ Existing demo scan/quota data deleted before reseed');
+    }
+  }
+
   // Generate mock data for each user
   const now = new Date();
   const sixMonthsAgo = new Date(now.getTime() - NUM_MONTHS * 30 * 24 * 60 * 60 * 1000);
@@ -181,20 +195,9 @@ async function main() {
   for (const user of users) {
     console.log(`\nGenerating data for ${user.email} (${user.plan})...`);
 
-    // Calculate scans per month based on plan
-    let minScans = SCANS_PER_MONTH_MIN;
-    let maxScans = SCANS_PER_MONTH_MAX;
-
-    if (user.plan === 'starter') {
-      minScans = 10;
-      maxScans = 30;
-    } else if (user.plan === 'pro') {
-      minScans = 50;
-      maxScans = 100;
-    } else if (user.plan === 'enterprise') {
-      minScans = 30;
-      maxScans = 60;
-    }
+    const userProfile = DEMO_USERS.find((profile) => profile.email === user.email);
+    const minScans = userProfile?.scansPerMonth.min ?? 10;
+    const maxScans = userProfile?.scansPerMonth.max ?? 30;
 
     for (let month = 0; month < NUM_MONTHS; month++) {
       const monthDate = new Date(sixMonthsAgo);
@@ -252,12 +255,6 @@ async function main() {
         // Generate vulnerabilities
         const vulns = generateVulnerabilities(numVulns);
 
-        // Calculate severity counts
-        const severityCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-        vulns.forEach(v => {
-          severityCounts[v.severity as keyof typeof severityCounts]++;
-        });
-
         // Insert free scanner result
         await pool.query(
           `INSERT INTO scan_results (scan_id, source, raw_output, vulnerabilities, scanner_version, cve_db_timestamp, duration_ms)
@@ -297,12 +294,6 @@ async function main() {
           });
         }
 
-        // Calculate enterprise severity counts
-        const enterpriseSeverityCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-        enterpriseVulns.forEach(v => {
-          enterpriseSeverityCounts[v.severity as keyof typeof enterpriseSeverityCounts]++;
-        });
-
         await pool.query(
           `INSERT INTO scan_results (scan_id, source, raw_output, vulnerabilities, scanner_version, cve_db_timestamp, duration_ms)
            VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7)`,
@@ -317,14 +308,8 @@ async function main() {
           ]
         );
 
-        // Insert delta record
-        const deltaCount = numEnterpriseOnly;
-        const deltaBySeverity = {
-          CRITICAL: enterpriseSeverityCounts.CRITICAL - severityCounts.CRITICAL,
-          HIGH: enterpriseSeverityCounts.HIGH - severityCounts.HIGH,
-          MEDIUM: enterpriseSeverityCounts.MEDIUM - severityCounts.MEDIUM,
-          LOW: enterpriseSeverityCounts.LOW - severityCounts.LOW
-        };
+        // Insert delta record using the shared diff engine
+        const delta = computeDelta(vulns, enterpriseVulns);
 
         // Lock enterprise-only findings for starter plan
         const isLocked = user.plan === 'starter' || user.plan === 'free_trial';
@@ -334,10 +319,10 @@ async function main() {
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             scanId,
-            numVulns,
-            numVulns + numEnterpriseOnly,
-            deltaCount,
-            JSON.stringify(deltaBySeverity),
+            delta.totalFreeCount,
+            delta.totalEnterpriseCount,
+            delta.deltaCount,
+            JSON.stringify(delta.deltaBySeverity),
             isLocked
           ]
         );
@@ -361,9 +346,9 @@ async function main() {
   console.log(`  - ${NUM_MONTHS} months of data`);
   console.log(`  - ${DEMO_USERS.length} demo users`);
   console.log(`  - Total scans: ~${DEMO_USERS.reduce((acc, user) => {
-    const min = user.plan === 'starter' ? 10 : user.plan === 'pro' ? 50 : 30;
-    const max = user.plan === 'starter' ? 30 : user.plan === 'pro' ? 100 : 60;
-    return acc + (min + max) / 2 * NUM_MONTHS;
+    const min = user.scansPerMonth.min;
+    const max = user.scansPerMonth.max;
+    return acc + ((min + max) / 2) * NUM_MONTHS;
   }, 0).toFixed(0)}`);
 }
 

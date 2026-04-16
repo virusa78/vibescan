@@ -104,6 +104,12 @@ export class BillingService {
         return !!this.stripeSecretKey;
     }
 
+    private async getStripeClient(): Promise<any> {
+        const stripeModule = await import('stripe');
+        const StripeCtor = (stripeModule as any).default;
+        return new StripeCtor(this.stripeSecretKey);
+    }
+
     /**
      * Get regional discount for a user's region
      * @param region - User's region (IN, PK, or OTHER)
@@ -179,8 +185,7 @@ export class BillingService {
         const pricing = this.calculateRegionalPricing(basePrice, region);
 
         // Create Stripe checkout session
-        const stripe = await import('stripe');
-        const stripeClient = new stripe.default(this.stripeSecretKey);
+        const stripeClient = await this.getStripeClient();
 
         const session = await stripeClient.checkout.sessions.create({
             payment_method_types: ['card'],
@@ -244,8 +249,7 @@ export class BillingService {
             return 'skipped';
         }
 
-        const stripe = await import('stripe');
-        const stripeClient = new stripe.default(this.stripeSecretKey);
+        const stripeClient = await this.getStripeClient();
 
         let event: any;
 
@@ -611,8 +615,7 @@ export class BillingService {
             return;
         }
 
-        const stripe = await import('stripe');
-        const stripeClient = new stripe.default(this.stripeSecretKey);
+        const stripeClient = await this.getStripeClient();
 
         try {
             // Decrypt subscription ID

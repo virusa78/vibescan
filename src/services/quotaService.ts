@@ -145,7 +145,15 @@ export class QuotaService {
         percentage: number;
     }> {
         const usage = await this.getUsage(userId);
-        const ledger = await this.getCurrentMonthLedger(userId);
+        const ledgerResult = await this.pool.query(
+            `SELECT scans_limit, reset_at
+             FROM quota_ledger
+             WHERE user_id = $1
+             ORDER BY created_at DESC
+             LIMIT 1`,
+            [userId],
+        );
+        const ledger = ledgerResult.rows[0] || null;
 
         if (!ledger) {
             return {
@@ -157,13 +165,14 @@ export class QuotaService {
             };
         }
 
-        const limit = parseInt(ledger.scans_limit);
-        const remaining = Math.max(0, limit - usage);
-        const percentage = (usage / limit) * 100;
+        const limit = Number.parseInt(String(ledger.scans_limit ?? ledger.scansLimit ?? 0), 10);
+        const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 0;
+        const remaining = Math.max(0, safeLimit - usage);
+        const percentage = safeLimit > 0 ? (usage / safeLimit) * 100 : 0;
 
         return {
             used: usage,
-            limit,
+            limit: safeLimit,
             remaining,
             resetAt: ledger.reset_at,
             percentage

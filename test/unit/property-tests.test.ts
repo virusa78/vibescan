@@ -1,34 +1,72 @@
-/**
- * Property-Based Tests for VibeScan
- *
- * Tests for all 20 properties specified in Task 8.1:
- * 1. Scan submission decrements quota atomically
- * 2. Quota refund on cancellation
- * 3. Plan snapshot immutability
- * 4. Delta paywall enforcement
- * 5. Free scanner isolation
- * 6. API key hash-only storage
- * 7. Ownership verification
- * 8. Webhook HMAC signing
- * 9. Exponential backoff retry
- * 10. Enterprise scanner concurrency limit
- * 11. Source code TTL cleanup
- * 12. Regional pricing discount
- * 13. Input validation rejection
- * 14. Scan result aggregation
- * 15. Error handling with partial results
- * 16. CVE database freshness
- * 17. GitHub App authorization
- * 18. Report format consistency
- * 19. Quota ledger accuracy
- * 20. Webhook payload plan consistency
- */
-
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { merge, computeDelta, computeSeverityBreakdown, rankVulnerabilities } from '@services/diffEngine';
-import { generateUUID } from '@utils/index';
+import { readFileSync } from 'fs';
 
-// Mock data for testing
+const mockPool: any = { query: jest.fn() };
+const mockRedisClient: any = { incr: jest.fn(), decr: jest.fn(), get: jest.fn() };
+
+jest.mock('../../src/database/client.js', () => ({
+    getPool: jest.fn(() => mockPool),
+}));
+
+jest.mock('../../src/redis/quota.js', () => ({
+    checkAndConsumeQuota: jest.fn(),
+    refundQuota: jest.fn(),
+    getQuotaUsage: jest.fn(),
+    resetMonthlyQuota: jest.fn(),
+    getQuotaLimitsForPlan: jest.fn(() => 50),
+}));
+
+jest.mock('../../src/redis/sessions.js', () => ({
+    storeSession: jest.fn(),
+    deleteSession: jest.fn(),
+    getSession: jest.fn(),
+}));
+
+jest.mock('../../src/queues/config.js', () => ({
+    addWebhookDeliveryJob: jest.fn(),
+    addFreeScanJob: jest.fn(),
+    addEnterpriseScanJob: jest.fn(),
+    getFreeScanQueue: jest.fn(),
+    getEnterpriseScanQueue: jest.fn(),
+    PRIORITY_WEIGHTS: {
+        high: 1,
+        medium: 2,
+        low: 3
+    },
+    getPriorityTierForPlan: jest.fn((plan: string) => {
+        if (plan === 'enterprise') return 'high';
+        if (plan === 'pro') return 'medium';
+        return 'low';
+    }),
+    getPriorityForPlan: jest.fn((plan: string) => {
+        if (plan === 'enterprise') return 1;
+        if (plan === 'pro') return 2;
+        return 3;
+    }),
+}));
+
+jest.mock('../../src/redis/client.js', () => ({
+    getRedisClient: jest.fn(() => mockRedisClient),
+}));
+
+jest.mock('../../src/redis/pubsub.js', () => ({
+    publishScanStatus: jest.fn(),
+}));
+
+jest.mock('../../src/utils/index.js', () => ({
+    generateSecureString: jest.fn(() => 'A'.repeat(32)),
+    generateHMAC: jest.fn((payload: string, secret: string, algo: string) => `sig:${algo}:${secret}:${payload.length}`),
+    generateUUID: jest.fn(() => 'delivery-id-1'),
+}));
+
+import {
+    checkAndConsumeQuota,
+    refundQuota,
+    getQuotaUsage
+} from '../../src/redis/quota.js';
+import { generateHMAC } from '../../src/utils/index.js';
+
 const mockFreeVulns = [
     { cve_id: 'CVE-2024-0001', severity: 'HIGH', cvss_score: 7.5, package_name: 'lodash', is_exploitable: false },
     { cve_id: 'CVE-2024-0002', severity: 'CRITICAL', cvss_score: 9.8, package_name: 'express', is_exploitable: true },
@@ -38,235 +76,412 @@ const mockFreeVulns = [
 const mockEnterpriseVulns = [
     { cve_id: 'CVE-2024-0001', severity: 'HIGH', cvss_score: 7.5, package_name: 'lodash', is_exploitable: false, fixed_version: '4.17.21' },
     { cve_id: 'CVE-2024-0002', severity: 'CRITICAL', cvss_score: 9.8, package_name: 'express', is_exploitable: true, fixed_version: '4.18.2' },
-    { cve_id: 'CVE-2024-0004', severity: 'CRITICAL', cvss_score: 10.0, package_name: 'moment', is_exploitable: true, fixed_version: '2.30.1' }, // Enterprise only
+    { cve_id: 'CVE-2024-0004', severity: 'CRITICAL', cvss_score: 10.0, package_name: 'moment', is_exploitable: true, fixed_version: '2.30.1' },
 ];
 
+beforeEach(() => {
+    (mockPool.query as any).mockReset();
+    (checkAndConsumeQuota as any).mockReset();
+    (refundQuota as any).mockReset();
+    (getQuotaUsage as any).mockReset();
+    (generateHMAC as any).mockClear();
+});
+
 describe('Property 1: Scan submission decrements quota atomically', () => {
-    it('should handle concurrent quota decrements correctly', async () => {
-        // This is a conceptual test - in production, this would test the Redis INCR atomicity
-        // The actual implementation uses Redis INCR which is atomic
-        expect(true).toBe(true);
+    it('calls quota consumption with increment=1', async () => {
+        const { QuotaService } = require('../../src/services/quotaService');
+        (checkAndConsumeQuota as any).mockResolvedValue({ allowed: true, remaining: 49, resetAt: new Date() });
+        const service = new QuotaService();
+        await service.consumeQuota('scan-1', 'user-1');
+        expect(checkAndConsumeQuota).toHaveBeenCalledWith('user-1', 1);
     });
 });
 
 describe('Property 2: Quota refund on cancellation', () => {
-    it('should refund quota when scan is cancelled before execution', async () => {
-        // This tests the refundQuota function in redis/quota.ts
-        // The implementation properly decrements the Redis counter
-        expect(true).toBe(true);
+    it('refunds one quota unit', async () => {
+        const { QuotaService } = require('../../src/services/quotaService');
+        const service = new QuotaService();
+        await service.refundQuota('scan-1', 'user-1');
+        expect(refundQuota).toHaveBeenCalledWith('user-1', 1);
     });
 });
 
 describe('Property 3: Plan snapshot immutability', () => {
-    it('should capture plan at submission time and not update', () => {
-        // The scan record stores plan_at_submission which is immutable
-        const submissionPlan = 'starter';
-        expect(submissionPlan).toBe('starter');
+    it('preserves plan_at_submission in locked view', () => {
+        const { ReportService } = require('../../src/services/reportService');
+        const service = new ReportService();
+        const scan = { id: 's1', status: 'done', plan_at_submission: 'starter', created_at: '2026-01-01' };
+        const delta = { delta_count: 1, delta_by_severity: { CRITICAL: 1 }, total_free_count: 1, total_enterprise_count: 2 };
+        const report = service.buildLockedView(scan, delta, [{ source: 'free', vulnerabilities: [] }], 'json');
+        expect(report.plan).toBe('starter');
+        expect(scan.plan_at_submission).toBe('starter');
     });
 });
 
-describe('Property 4: Delta paywall enforcement', () => {
-    it('should not expose delta vulnerabilities to starter plan', () => {
-        const delta = computeDelta(mockFreeVulns, mockEnterpriseVulns);
-
-        // Starter plan should only see counts, not details
-        expect(delta.deltaCount).toBe(1); // CVE-2024-0004 is enterprise-only
-        expect(delta.deltaVulnerabilities.length).toBe(1);
-    });
-
-    it('should return null delta details for locked view', () => {
-        const isStarter = true;
-        if (isStarter) {
-            // buildLockedView returns only counts
-            expect(true).toBe(true);
-        }
+describe('Property 4: Delta paywall enforcement for starter', () => {
+    it('hides delta details for starter in locked report view', () => {
+        const { ReportService } = require('../../src/services/reportService');
+        const service = new ReportService();
+        const scan = { id: 's1', status: 'done', plan_at_submission: 'starter', created_at: '2026-01-01' };
+        const delta = {
+            delta_count: 2,
+            delta_by_severity: { CRITICAL: 1, HIGH: 1 },
+            total_free_count: 5,
+            total_enterprise_count: 7,
+            delta_vulnerabilities: [{ cve_id: 'CVE-1' }]
+        };
+        const report = service.buildLockedView(scan, delta, [{ source: 'free', vulnerabilities: [{ cve_id: 'CVE-free' }] }], 'json');
+        expect(report.locked).toBe(true);
+        expect(report.deltaVulnerabilities).toBeNull();
+        expect(report.enterpriseVulnerabilities).toBeNull();
+        expect(report.freeVulnerabilities).toEqual([{ cve_id: 'CVE-free' }]);
+        expect(report.deltaCount).toBe(2);
     });
 });
 
 describe('Property 5: Free scanner isolation', () => {
-    it('should ensure source code never leaves isolated container', () => {
-        // The freeScannerWorker.ts uses Docker with --network=none, --read-only, --user=nobody
-        // This is verified by the container configuration
-        expect(true).toBe(true);
+    it('documents isolation flags in worker implementation', () => {
+        const source = readFileSync('/home/virus/vibescan/src/workers/freeScannerWorker.ts', 'utf-8');
+        expect(source).toContain('--network=none');
+        expect(source).toContain('--read-only');
+        expect(source).toContain('--user=nobody');
     });
 });
 
 describe('Property 6: API key hash-only storage', () => {
-    it('should store only bcrypt hash, never raw key', () => {
-        // The AuthService stores key_hash with bcrypt, returns raw key once
-        // The verifyApiKey function compares raw key against hash
-        expect(true).toBe(true);
+    it('enforces vs_ prefix and bcrypt hash storage in service implementation', async () => {
+        const source = readFileSync('/home/virus/vibescan/src/services/authService.ts', 'utf-8');
+        expect(source).toContain('const rawKey = `vs_${generateSecureString(32)}`');
+        expect(source).toContain('bcrypt.hash(rawKey');
+        expect(source).toContain('INSERT INTO api_keys');
+        expect(source).toContain('key_hash');
     });
 });
 
 describe('Property 7: Ownership verification', () => {
-    it('should verify user owns resource before access', () => {
-        // The ownershipVerificationMiddleware checks user_id matches
-        // Scan endpoints verify scan.user_id matches authenticated user
-        expect(true).toBe(true);
+    it('returns not_found when scan is not owned/found', async () => {
+        const { ReportService } = require('../../src/services/reportService');
+        (mockPool.query as any).mockResolvedValueOnce({ rows: [] });
+        const service = new ReportService();
+        await expect(service.buildReportView('scan-1', 'user-1')).rejects.toMatchObject({ code: 'not_found' });
+    });
+
+    it('returns 404 for canceling someone else scan (anti-enumeration)', async () => {
+        const { cancelScanHandler } = require('../../src/handlers/scanHandlers');
+        (mockPool.query as any).mockResolvedValueOnce({
+            rows: [{ id: 'scan-1', user_id: 'user-2', status: 'pending' }]
+        });
+        const request: any = { apiKey: { user_id: 'user-1' }, user: null, params: { id: 'scan-1' } };
+        const reply: any = {
+            statusCode: 200,
+            payload: null,
+            code(n: number) { this.statusCode = n; return this; },
+            send(p: any) { this.payload = p; return this; }
+        };
+        await cancelScanHandler(request, reply);
+        expect(reply.statusCode).toBe(404);
+        expect(reply.payload.error).toBe('not_found');
+    });
+
+    it('uses not_found semantics for non-owned API key revoke path', async () => {
+        const source = readFileSync('/home/virus/vibescan/src/handlers/apiKeyHandlers.ts', 'utf-8');
+        expect(source).toContain("if (result.rows[0].user_id !== userId)");
+        expect(source).toContain("reply.code(404).send({");
+        expect(source).toContain("message: 'API key not found'");
     });
 });
 
 describe('Property 8: Webhook HMAC signing', () => {
-    it('should sign payloads with HMAC-SHA256', () => {
-        // The WebhookService.signPayload uses generateHMAC
-        // The signature is sent in X-VibeScan-Signature header
-        expect(true).toBe(true);
+    it('uses HMAC-SHA256 signing helper', () => {
+        const { WebhookService } = require('../../src/services/webhookService');
+        const service = new WebhookService();
+        const signature = service.signPayload('{"scan":"1"}', 'secret');
+        expect(generateHMAC).toHaveBeenCalledWith('{"scan":"1"}', 'secret', 'sha256');
+        expect(signature).toContain('sig:sha256:secret');
     });
 });
 
 describe('Property 9: Exponential backoff retry', () => {
-    it('should implement exponential backoff for webhook deliveries', () => {
-        // The retryDelays array in webhookService.ts implements:
-        // 1 min, 5 min, 30 min, 2 hours, 24 hours
-        const retryDelays = [60000, 300000, 1800000, 7200000, 86400000];
-        expect(retryDelays.length).toBe(5);
-        expect(retryDelays[0]).toBe(60000); // 1 minute
-        expect(retryDelays[1]).toBe(300000); // 5 minutes
-        expect(retryDelays[2]).toBe(1800000); // 30 minutes
-        expect(retryDelays[3]).toBe(7200000); // 2 hours
-        expect(retryDelays[4]).toBe(86400000); // 24 hours
+    it('schedules next attempt with failed status', async () => {
+        const { WebhookService } = require('../../src/services/webhookService');
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn(async () => { throw new Error('network down'); }) as any;
+
+        (mockPool.query as any)
+            .mockResolvedValueOnce({ rows: [{ id: 'd1', attempt_number: 1, signing_secret: 'secret' }] })
+            .mockResolvedValueOnce({ rows: [] });
+
+        const service = new WebhookService();
+        await service.deliver('d1', { ok: true }, 'https://webhook.example');
+
+        const updateCall = mockPool.query.mock.calls.find((c: any[]) => String(c[0]).includes('attempt_number'));
+        expect(updateCall).toBeDefined();
+        expect(updateCall[1][0]).toBe(2);
+        global.fetch = originalFetch;
     });
 });
 
 describe('Property 10: Enterprise scanner concurrency limit', () => {
-    it('should limit to max 3 concurrent enterprise scans', () => {
-        // The RedisEnterpriseLockManager in redis/lock.ts enforces this
-        // Uses Redis INCR to track current count
-        const maxConcurrent = 3;
-        expect(maxConcurrent).toBe(3);
+    it('rejects slot acquisition when above max concurrent', async () => {
+        const { EnterpriseLockManager } = require('../../src/redis/lock');
+        (mockRedisClient.incr as any).mockResolvedValueOnce(4);
+        (mockRedisClient.decr as any).mockResolvedValueOnce(3);
+        const manager = new EnterpriseLockManager();
+        const acquired = await manager.acquireSlot();
+        expect(acquired).toBe(false);
+        expect(mockRedisClient.decr).toHaveBeenCalled();
     });
 });
 
 describe('Property 11: Source code TTL cleanup', () => {
-    it('should clean up source archives after 24 hours', () => {
-        // S3 bucket lifecycle policy configured for 24-hour TTL
-        // SBOM documents: 90-day TTL
-        // PDF reports: 30-day TTL
-        expect(true).toBe(true);
+    it('tracks 24h source archive TTL requirement in docs/spec', () => {
+        const requirements = readFileSync('/home/virus/vibescan/.kiro/specs/vibescan/requirements.md', 'utf-8');
+        expect(requirements).toContain('24 hours');
+        expect(requirements).toContain('TTL');
     });
 });
 
 describe('Property 12: Regional pricing discount', () => {
-    it('should apply 50% discount for IN and PK regions', () => {
-        const REGIONAL_DISCOUNTS: Record<string, number> = {
-            IN: 0.50,
-            PK: 0.50,
-            OTHER: 0.00,
-        };
-
-        expect(REGIONAL_DISCOUNTS.IN).toBe(0.50);
-        expect(REGIONAL_DISCOUNTS.PK).toBe(0.50);
-        expect(REGIONAL_DISCOUNTS.OTHER).toBe(0.00);
+    it('applies 50% discount for IN and PK', () => {
+        const source = readFileSync('/home/virus/vibescan/src/services/billingService.ts', 'utf-8');
+        expect(source).toContain('IN: 0.50');
+        expect(source).toContain('PK: 0.50');
+        expect(source).toContain('OTHER: 0.00');
     });
 });
 
 describe('Property 13: Input validation rejection', () => {
-    it('should reject invalid input types and plans', () => {
-        const validInputTypes = ['sbom_upload', 'source_zip', 'github_app', 'ci_plugin'];
-        const validPlans = ['free_trial', 'starter', 'pro', 'enterprise'];
-        const validRegions = ['IN', 'PK', 'OTHER'];
+    it('rejects invalid input type in scan submission handler', async () => {
+        const { submitScanHandler } = require('../../src/handlers/scanHandlers');
+        const request: any = { apiKey: { user_id: 'u1' }, user: null, body: { inputType: 'invalid_type' } };
+        const reply: any = {
+            statusCode: 200,
+            payload: null,
+            code(n: number) { this.statusCode = n; return this; },
+            send(p: any) { this.payload = p; return this; }
+        };
+        await submitScanHandler(request, reply);
+        expect(reply.statusCode).toBe(400);
+        expect(reply.payload.error).toBe('validation_error');
+    });
 
-        expect(validInputTypes.includes('invalid_type')).toBe(false);
-        expect(validPlans.includes('invalid_plan')).toBe(false);
-        expect(validRegions.includes('INVALID')).toBe(false);
+    it('rejects invalid fromDate in scan list handler', async () => {
+        const { listScansHandler } = require('../../src/handlers/scanHandlers');
+        const request: any = { apiKey: { user_id: 'u1' }, user: null, query: { fromDate: 'bad-date' } };
+        const reply: any = {
+            statusCode: 200,
+            payload: null,
+            code(n: number) { this.statusCode = n; return this; },
+            send(p: any) { this.payload = p; return this; }
+        };
+        await listScansHandler(request, reply);
+        expect(reply.statusCode).toBe(400);
+        expect(reply.payload.error).toBe('validation_error');
+    });
+
+    it('applies from_date alias filter in scan list query', async () => {
+        const { listScansHandler } = require('../../src/handlers/scanHandlers');
+        (mockPool.query as any).mockResolvedValueOnce({ rows: [] });
+        const request: any = {
+            apiKey: { user_id: 'u1' },
+            user: null,
+            query: { from_date: '2026-01-01T00:00:00.000Z', limit: '20' }
+        };
+        const reply: any = {
+            statusCode: 200,
+            payload: null,
+            code(n: number) { this.statusCode = n; return this; },
+            send(p: any) { this.payload = p; return this; }
+        };
+        await listScansHandler(request, reply);
+        expect(reply.statusCode).toBe(200);
+        expect(mockPool.query).toHaveBeenCalled();
+        const [queryText, params] = (mockPool.query as any).mock.calls[(mockPool.query as any).mock.calls.length - 1];
+        expect(String(queryText)).toContain('s.created_at >=');
+        expect(Array.isArray(params)).toBe(true);
     });
 });
 
 describe('Property 14: Scan result aggregation', () => {
-    it('should merge free and enterprise results correctly', () => {
+    it('merges free and enterprise and prefers enterprise data', () => {
         const merged = merge(mockFreeVulns, mockEnterpriseVulns);
-
-        // Should have 4 unique vulnerabilities (3 from free, 1 enterprise-only)
         expect(merged.length).toBe(4);
+        const lodash = merged.find((v: any) => v.package_name === 'lodash');
+        expect(lodash?.fixed_version).toBe('4.17.21');
+    });
 
-        // Enterprise version should be preferred when CVE exists in both
-        const lodashVuln = merged.find((v: any) => v.package_name === 'lodash');
-        expect(lodashVuln?.fixed_version).toBe('4.17.21'); // Enterprise has more data
+    it('persists scan result payloads as jsonb arrays/objects', () => {
+        const source = readFileSync('/home/virus/vibescan/src/services/scanOrchestrator.ts', 'utf-8');
+        expect(source).toContain('VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7)');
+        expect(source).toContain('JSON.stringify(canonicalVulnerabilities)');
     });
 });
 
 describe('Property 15: Error handling with partial results', () => {
-    it('should handle enterprise scanner failure gracefully', () => {
-        // If enterprise fails but free succeeds, buildFullView returns partial data
-        // The scan status becomes 'done' with free results only
-        expect(true).toBe(true);
+    it('finalizes scan when one scanner failed and other succeeded', async () => {
+        const { ScanOrchestrator } = require('../../src/services/scanOrchestrator');
+        const orchestrator = new ScanOrchestrator();
+        const finalizeSpy = jest.spyOn(orchestrator as any, 'finalizeScan').mockResolvedValue(undefined);
+        (mockPool.query as any).mockResolvedValueOnce({ rows: [{ id: 'ok' }] });
+        await orchestrator.handleWorkerError('scan-1', 'free', { message: 'free failed' });
+        expect(finalizeSpy).toHaveBeenCalledWith('scan-1', 'free');
+    });
+
+    it('routes free scanner execution failures through orchestrator error handling', () => {
+        const source = readFileSync('/home/virus/vibescan/src/workers/freeScannerWorker.ts', 'utf-8');
+        expect(source).toContain('await scanOrchestrator.handleWorkerError(scanId, \'free\', error)');
+        expect(source).not.toContain('remote_scanner_unavailable');
+        expect(source).not.toContain('local_grype_unavailable');
+    });
+
+    it('recovers to partial finalize when one worker result arrives after scan was marked error', async () => {
+        const { ScanOrchestrator } = require('../../src/services/scanOrchestrator');
+        const orchestrator = new ScanOrchestrator();
+        const finalizeSpy = jest.spyOn(orchestrator as any, 'finalizeScan').mockResolvedValue(undefined);
+        (mockPool.query as any)
+            .mockResolvedValueOnce({ rows: [] }) // insert scan_result
+            .mockResolvedValueOnce({ rows: [{ count: '1' }] }) // count results
+            .mockResolvedValueOnce({ rows: [{ status: 'error' }] }); // scan status
+
+        await orchestrator.handleWorkerResult('scan-1', 'free', {
+            rawOutput: {},
+            vulnerabilities: [],
+            scannerVersion: 'grype-fallback',
+            cveDbTimestamp: new Date().toISOString(),
+            durationMs: 1
+        });
+
+        expect(finalizeSpy).toHaveBeenCalledWith('scan-1', 'enterprise');
+    });
+
+    it('clears error_message when finalizing scan as done', () => {
+        const source = readFileSync('/home/virus/vibescan/src/services/scanOrchestrator.ts', 'utf-8');
+        expect(source).toContain("status = 'done', error_message = NULL, completed_at = NOW()");
+    });
+});
+
+describe('Property 15.1: Tier priority scheduling', () => {
+    it('passes tier-based priority to enterprise queue', async () => {
+        const { ScanOrchestrator } = require('../../src/services/scanOrchestrator');
+        const { addFreeScanJob, addEnterpriseScanJob } = require('../../src/queues/config.js');
+        (checkAndConsumeQuota as any).mockResolvedValue({ allowed: true, remaining: 49, resetAt: new Date() });
+        (addFreeScanJob as any).mockResolvedValue('free-job-1');
+        (addEnterpriseScanJob as any).mockResolvedValue('ent-job-1');
+        (mockPool.query as any)
+            .mockResolvedValueOnce({ rows: [{ plan: 'enterprise' }] })
+            .mockResolvedValueOnce({
+                rows: [{
+                    id: 'scan-1',
+                    user_id: 'user-1',
+                    org_id: null,
+                    input_type: 'sbom_upload',
+                    input_ref: '',
+                    status: 'pending',
+                    plan_at_submission: 'enterprise',
+                    created_at: '2026-01-01'
+                }]
+            })
+            .mockResolvedValueOnce({ rows: [] });
+
+        const orchestrator = new ScanOrchestrator();
+        await orchestrator.submitScan('user-1', 'sbom_upload', { components: [] });
+
+        expect(addFreeScanJob).toHaveBeenCalledWith(expect.any(String), [], expect.objectContaining({ priority: 1 }));
+        expect(addEnterpriseScanJob).toHaveBeenCalledWith(expect.any(String), [], { priority: 1 });
     });
 });
 
 describe('Property 16: CVE database freshness', () => {
-    it('should update CVE database every 6 hours', () => {
-        // The freeScannerWorker.ts calls updateCveDatabase every 6 hours
-        const updateIntervalHours = 6;
-        expect(updateIntervalHours).toBe(6);
+    it('keeps CVE update scheduler at 6-hour cadence in worker source', () => {
+        const source = readFileSync('/home/virus/vibescan/src/workers/freeScannerWorker.ts', 'utf-8');
+        expect(source).toContain('cveUpdateInterval');
+        expect(source).toContain('* 60 * 60 * 1000');
     });
 });
 
 describe('Property 17: GitHub App authorization', () => {
-    it('should verify GitHub installation authorization', () => {
-        // The githubIntegrationService verifies installation exists
-        // And checks repo authorization before scanning
-        expect(true).toBe(true);
+    it('has authorization check criteria in requirements', () => {
+        const requirements = readFileSync('/home/virus/vibescan/.kiro/specs/vibescan/requirements.md', 'utf-8');
+        expect(requirements).toContain('installation is not authorized');
+        expect(requirements).toContain('403 Forbidden');
     });
 });
 
 describe('Property 18: Report format consistency', () => {
-    it('should maintain consistent report structure', () => {
-        // ReportService.buildReportView returns consistent structure
-        // buildLockedView and buildFullView both return scan_id, status, plan, etc.
-        expect(true).toBe(true);
+    it('returns stable key shape for full and locked views', () => {
+        const { ReportService } = require('../../src/services/reportService');
+        const service = new ReportService();
+        const scanStarter = { id: 's1', status: 'done', plan_at_submission: 'starter', created_at: '2026-01-01' };
+        const delta = { delta_count: 1, delta_by_severity: { CRITICAL: 1 }, total_free_count: 1, total_enterprise_count: 2, delta_vulnerabilities: [{ cve_id: 'CVE-x' }] };
+        const results = [{ source: 'free', vulnerabilities: [] }, { source: 'enterprise', vulnerabilities: [] }];
+        const locked = service.buildLockedView(scanStarter, delta, results, 'json');
+        expect(locked).toEqual(expect.objectContaining({ scanId: 's1', status: 'done', plan: 'starter', locked: true }));
+        const summary = service.buildLockedView(scanStarter, delta, results, 'summary');
+        expect(summary).toEqual(expect.objectContaining({ scanId: 's1', status: 'done', plan: 'starter', locked: true }));
+    });
+});
+
+describe('Property 18.1: CI threshold enforcement', () => {
+    it('respects requested threshold severity', async () => {
+        const { ReportService } = require('../../src/services/reportService');
+        (mockPool.query as any)
+            .mockResolvedValueOnce({
+                rows: [{ id: 's1', user_id: 'u1', plan_at_submission: 'starter', status: 'done', created_at: '2026-01-01' }]
+            })
+            .mockResolvedValueOnce({
+                rows: [{ delta_count: 0, delta_by_severity: {}, delta_vulnerabilities: [], total_free_count: 1, total_enterprise_count: 1 }]
+            })
+            .mockResolvedValueOnce({
+                rows: [
+                    { source: 'free', vulnerabilities: [{ cve_id: 'CVE-1', severity: 'HIGH', cvss_score: 7.0 }] },
+                    { source: 'enterprise', vulnerabilities: [{ cve_id: 'CVE-1', severity: 'HIGH', cvss_score: 7.0 }] }
+                ]
+            });
+
+        const service = new ReportService();
+        const decision = await service.getCiDecision('s1', 'u1', 'CRITICAL');
+        expect(decision.pass).toBe(true);
     });
 });
 
 describe('Property 19: Quota ledger accuracy', () => {
-    it('should maintain accurate quota ledger in database', () => {
-        // Redis is used for fast reads, PostgreSQL is source of truth
-        // syncQuotaWithDatabase recovers from Redis restarts
-        expect(true).toBe(true);
+    it('computes usage, remaining and percentage from ledger', async () => {
+        const { QuotaService } = require('../../src/services/quotaService');
+        (getQuotaUsage as any).mockResolvedValue(20);
+        (mockPool.query as any).mockResolvedValueOnce({
+            rows: [{ scans_limit: '50', reset_at: new Date('2026-12-01T00:00:00Z') }]
+        });
+        const service = new QuotaService();
+        const status = await service.getQuotaStatus('user-1');
+        expect(status.used).toBe(20);
+        expect(status.limit).toBe(50);
+        expect(status.remaining).toBe(30);
+        expect(status.percentage).toBe(40);
     });
 });
 
 describe('Property 20: Webhook payload plan consistency', () => {
-    it('should not include delta details in starter plan webhook', () => {
-        // The WebhookService.buildPayload checks plan_at_submission
-        // For starter, deltaVulnerabilities is set to null
-        const plan = 'starter';
-        const isStarter = plan === 'starter';
-        expect(isStarter).toBe(true);
+    it('excludes delta vulnerability details for starter payload', () => {
+        const { WebhookService } = require('../../src/services/webhookService');
+        const service = new WebhookService();
+        const payload = service.buildPayload(
+            { id: 'scan-1', status: 'done', plan_at_submission: 'starter', created_at: '2026-01-01' },
+            {
+                total_free_count: 2,
+                total_enterprise_count: 3,
+                delta_count: 1,
+                delta_by_severity: { CRITICAL: 1 },
+                delta_vulnerabilities: [{ cve_id: 'CVE-secret' }]
+            }
+        );
+        expect(payload.deltaVulnerabilities).toEqual([]);
+        expect(payload.enterpriseVulnerabilities).toEqual([]);
     });
 });
 
-// Additional DiffEngine unit tests
 describe('DiffEngine', () => {
-    describe('merge', () => {
-        it('should merge vulnerabilities and prefer enterprise over free for same CVE', () => {
-            const free = [
-                { cve_id: 'CVE-2024-001', severity: 'HIGH', cvss_score: 7.0, package_name: 'pkg1' }
-            ];
-            const enterprise = [
-                { cve_id: 'CVE-2024-001', severity: 'HIGH', cvss_score: 7.0, package_name: 'pkg1', fixed_version: '1.0.0' }
-            ];
-
-            const result = merge(free, enterprise);
-            expect(result.length).toBe(1);
-            expect(result[0].fixed_version).toBe('1.0.0');
-        });
-
-        it('should include free-only vulnerabilities', () => {
-            const free = [
-                { cve_id: 'CVE-2024-001', severity: 'HIGH', cvss_score: 7.0, package_name: 'pkg1' }
-            ];
-            const enterprise = [
-                { cve_id: 'CVE-2024-002', severity: 'MEDIUM', cvss_score: 5.0, package_name: 'pkg2' }
-            ];
-
-            const result = merge(free, enterprise);
-            expect(result.length).toBe(2);
-        });
-    });
-
     describe('computeDelta', () => {
-        it('should return only enterprise-only vulnerabilities', () => {
+        it('returns only enterprise-only vulnerabilities', () => {
             const free = [
                 { cve_id: 'CVE-2024-001', severity: 'HIGH', cvss_score: 7.0 },
                 { cve_id: 'CVE-2024-002', severity: 'MEDIUM', cvss_score: 5.0 },
@@ -276,51 +491,39 @@ describe('DiffEngine', () => {
                 { cve_id: 'CVE-2024-002', severity: 'MEDIUM', cvss_score: 5.0 },
                 { cve_id: 'CVE-2024-003', severity: 'CRITICAL', cvss_score: 9.0 },
             ];
-
             const delta = computeDelta(free, enterprise);
             expect(delta.deltaCount).toBe(1);
-            expect(delta.deltaVulnerabilities.length).toBe(1);
             expect(delta.deltaVulnerabilities[0].cve_id).toBe('CVE-2024-003');
         });
     });
 
     describe('computeSeverityBreakdown', () => {
-        it('should correctly count vulnerabilities by severity', () => {
-            const vulns = [
-                { cve_id: 'CVE-2024-001', severity: 'CRITICAL' },
-                { cve_id: 'CVE-2024-002', severity: 'CRITICAL' },
-                { cve_id: 'CVE-2024-003', severity: 'HIGH' },
-                { cve_id: 'CVE-2024-004', severity: 'MEDIUM' },
-                { cve_id: 'CVE-2024-005', severity: 'LOW' },
-            ];
-
-            const breakdown = computeSeverityBreakdown(vulns);
-            expect(breakdown.CRITICAL).toBe(2);
-            expect(breakdown.HIGH).toBe(1);
-            expect(breakdown.MEDIUM).toBe(1);
-            expect(breakdown.LOW).toBe(1);
+        it('counts vulnerabilities by severity', () => {
+            const breakdown = computeSeverityBreakdown([
+                { severity: 'CRITICAL' },
+                { severity: 'CRITICAL' },
+                { severity: 'HIGH' },
+                { severity: 'MEDIUM' },
+                { severity: 'LOW' },
+            ]);
+            expect(breakdown).toEqual({ CRITICAL: 2, HIGH: 1, MEDIUM: 1, LOW: 1 });
         });
     });
 
     describe('rankVulnerabilities', () => {
-        it('should sort by severity, then CVSS score, then exploitability', () => {
-            const vulns = [
+        it('sorts by severity, CVSS and exploitability', () => {
+            const ranked = rankVulnerabilities([
                 { cve_id: 'CVE-2024-001', severity: 'HIGH', cvss_score: 7.0, is_exploitable: false },
                 { cve_id: 'CVE-2024-002', severity: 'CRITICAL', cvss_score: 9.0, is_exploitable: false },
                 { cve_id: 'CVE-2024-003', severity: 'CRITICAL', cvss_score: 9.5, is_exploitable: true },
                 { cve_id: 'CVE-2024-004', severity: 'HIGH', cvss_score: 8.0, is_exploitable: true },
-            ];
-
-            const ranked = rankVulnerabilities(vulns);
-
-            // First should be CRITICAL with highest CVSS and exploitable
-            expect(ranked[0].cve_id).toBe('CVE-2024-003');
-            // Second should be CRITICAL with high CVSS but not exploitable
-            expect(ranked[1].cve_id).toBe('CVE-2024-002');
-            // Third should be HIGH with exploitable
-            expect(ranked[2].cve_id).toBe('CVE-2024-004');
-            // Fourth should be HIGH with lower CVSS
-            expect(ranked[3].cve_id).toBe('CVE-2024-001');
+            ]);
+            expect(ranked.map((v: any) => v.cve_id)).toEqual([
+                'CVE-2024-003',
+                'CVE-2024-002',
+                'CVE-2024-004',
+                'CVE-2024-001',
+            ]);
         });
     });
 });

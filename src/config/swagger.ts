@@ -5,13 +5,16 @@
 
 import { FastifyInstance } from 'fastify';
 
-// Only import Swagger in development
 let fastifySwagger: any;
+let fastifySwaggerUi: any;
 
 async function loadSwaggerModules() {
-    // Fastify-swagger v4 has compatibility issues with Fastify v4
-    // Skip loading Swagger for now
-    console.log('Swagger disabled due to Fastify v4 compatibility issues');
+    try {
+        fastifySwagger = await import('@fastify/swagger');
+        fastifySwaggerUi = await import('@fastify/swagger-ui');
+    } catch (error) {
+        console.log('Swagger modules not available - skipping docs registration');
+    }
 }
 
 // Initialize Swagger modules
@@ -21,8 +24,7 @@ loadSwaggerModules();
  * Swagger options
  */
 export const swaggerOptions = {
-    exposeRoute: true,
-    swagger: {
+    openapi: {
         info: {
             title: 'VibeScan API',
             description: 'Dual-scanner vulnerability scanning platform API',
@@ -30,8 +32,8 @@ export const swaggerOptions = {
         },
         servers: [
             {
-                url: 'http://localhost:3000',
-                description: 'Development server',
+                url: 'http://localhost:3001',
+                description: 'Development backend server',
             },
         ],
         components: {
@@ -58,25 +60,32 @@ export const swaggerOptions = {
             { name: 'Billing', description: 'Payment and subscription management' },
         ],
     },
+};
+
+export const swaggerUiOptions = {
+    routePrefix: '/docs',
     uiConfig: {
         deepLinking: true,
         displayRequestDuration: true,
         docExpansion: 'full',
         maxDisplayedTags: 10,
     },
+    staticCSP: true,
+    transformSpecificationClone: true,
 };
 
 /**
  * Register Swagger routes
  */
 export async function registerSwagger(app: FastifyInstance): Promise<void> {
-    if (!fastifySwagger) {
+    if (!fastifySwagger || !fastifySwaggerUi) {
         console.log('Swagger not available - skipping');
         return;
     }
 
     try {
-        await app.register(fastifySwagger.default, swaggerOptions);
+        await app.register(fastifySwagger.default || fastifySwagger, swaggerOptions);
+        await app.register(fastifySwaggerUi.default || fastifySwaggerUi, swaggerUiOptions);
         console.log('Swagger documentation registered at /docs');
     } catch (error) {
         console.error('Failed to register Swagger:', error);

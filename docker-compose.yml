@@ -71,9 +71,9 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-only-key-change-in-production}
       - JWT_SECRET=${JWT_SECRET:-dev-only-secret-change-in-production}
       - NODE_ENV=development
-      - PORT=3000
+      - PORT=3001
     ports:
-      - "3000:3000"
+      - "3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
