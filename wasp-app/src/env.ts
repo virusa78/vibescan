@@ -2,6 +2,7 @@ import { defineEnvValidationSchema } from 'wasp/env'
 
 import { authEnvSchema } from './auth/env'
 import { stripeEnvSchema } from './payment/stripe/env'
+import { webhookEnvSchema } from './server/operations/webhooks/env'
 
 // Wasp merges this schema with its built-in env var validations and uses it
 // to validate `process.env` at server startup. Access the validated env vars
@@ -10,4 +11,5 @@ import { stripeEnvSchema } from './payment/stripe/env'
 export const serverEnvValidationSchema = defineEnvValidationSchema(
   authEnvSchema
     .merge(stripeEnvSchema)
+    .merge(webhookEnvSchema)
 )

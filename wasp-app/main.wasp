@@ -88,10 +88,10 @@ app OpenSaaS {
   },
 
   emailSender: {
-    provider: SMTP,
+    provider: SendGrid,
     defaultFrom: {
       name: "VibeScan",
-      // When using a real provider, e.g. SendGrid, you must use the same email address that you configured your account to send out emails with!
+      // When using SendGrid, you must use the same email address that you configured your account to send out emails with!
       email: "noreply@vibescan.app"
     },
   },
