@@ -293,110 +293,23 @@ api getQuotaStatusApi {
 }
 
 // Dashboard Wasp queries (for frontend integration)
-// query getDashboardMetrics {
-//   fn: import { getDashboardMetrics } from "@src/server/operations/dashboard",
-//   entities: [User, Scan, Finding]
-// }
-
-// query getQuotaStatus {
-//   fn: import { getQuotaStatus } from "@src/server/operations/dashboard",
-//   entities: [User, Scan]
-// }
-
-// query getRecentScansQuery {
-//   fn: import { getRecentScans } from "@src/server/operations/dashboard",
-//   entities: [User, Scan, Finding]
-// }
-
-// query getSeverityBreakdownQuery {
-//   fn: import { getSeverityBreakdown } from "@src/server/operations/dashboard",
-//   entities: [User, Finding]
-// }
+// Dashboard & Analytics operations
+// Use HTTP API instead (/api/v1/dashboard/metrics, etc.)
+// These are available via REST endpoints, not Wasp queries
 //#endregion Dashboard & Analytics
 //#endregion
 
 //#region Reports & Analysis
 
-// getReport - Get full vulnerability report for a scan
-// GET /api/v1/reports/{scanId}
-// Plan visibility: starter sees free vulnerabilities only, pro/enterprise see all.
-// Returns: { scan_id, status, vulnerabilities, delta, stats, generated_at }
-// query getReport {
-//   fn: import { getReport } from "@src/server/operations/reports",
-//   entities: [User, Scan, ScanResult, ScanDelta, Finding]
-// }
-
-// getReportSummary - Get aggregated summary of a scan report
-// GET /api/v1/reports/{scanId}/summary
-// Plan-based visibility: starter sees counts only, details for pro/enterprise.
-// Returns: { scan_id, critical_count, high_count, medium_count, low_count, delta_counts, locked }
-// query getReportSummary {
-//   fn: import { getReportSummary } from "@src/server/operations/reports",
-//   entities: [User, Scan, ScanDelta, Finding]
-// }
-
-// generateReportPDF - Generate and store PDF report for a scan
-// POST /api/v1/reports/{scanId}/pdf
-// Renders report template to PDF, stores in S3, returns pre-signed URL.
-// Request: { format: 'pdf' | 'html' }
-// Returns: { url, expires_at, file_size, format }
-// action generateReportPDF {
-//   fn: import { generateReportPDF } from "@src/server/operations/reports",
-//   entities: [User, Scan, ScanDelta, Finding]
-// }
-
-// getCIDecision - Evaluate scan against CI policy (pass/fail gate)
-// GET /api/v1/reports/{scanId}/ci-decision
-// Query parameters: security_level, max_severity, max_critical_count, max_high_count
-// Returns: { decision, message, blocking_vulns, policy_applied }
-// query getCIDecision {
-//   fn: import { getCIDecision } from "@src/server/operations/reports",
-//   entities: [User, Scan, Finding]
-// }
+// Reports & Analysis operations
+// Use HTTP API instead (/api/v1/reports/*, etc.)
+// These are available via REST endpoints, not Wasp queries
 //#endregion
 
 //#region Webhooks & Notifications
-// createWebhook - Create a webhook for scan notifications
-// POST /api/v1/webhooks
-// Input: { url, events }
-// Output: { id, url, created_at, events, secret_preview }
-// action createWebhook {
-//   fn: import { createWebhook } from "@src/server/operations/webhooks",
-//   entities: [User, Webhook]
-// }
-
-// listWebhooks - Get all webhooks for authenticated user
-// GET /api/v1/webhooks
-// Output: { webhooks[] }
-// query listWebhooks {
-//   fn: import { listWebhooks } from "@src/server/operations/webhooks",
-//   entities: [User, Webhook]
-// }
-
-// getWebhook - Get detailed webhook info including delivery stats
-// GET /api/v1/webhooks/{webhookId}
-// Output: { webhook, delivery_stats, last_5_deliveries }
-// query getWebhook {
-//   fn: import { getWebhook } from "@src/server/operations/webhooks",
-//   entities: [User, Webhook, WebhookDelivery]
-// }
-
-// updateWebhook - Update webhook configuration
-// PATCH /api/v1/webhooks/{webhookId}
-// Input: { url?, events?, active? }
-// Output: { id, url, events, active, updated_at }
-// action updateWebhook {
-//   fn: import { updateWebhook } from "@src/server/operations/webhooks",
-//   entities: [User, Webhook]
-// }
-
-// deleteWebhook - Delete a webhook
-// DELETE /api/v1/webhooks/{webhookId}
-// Output: { success, message }
-// action deleteWebhook {
-//   fn: import { deleteWebhook } from "@src/server/operations/webhooks",
-//   entities: [User, Webhook, WebhookDelivery]
-// }
+// Webhooks & Notifications operations
+// Use HTTP API instead (/api/v1/webhooks/*, etc.)
+// These are available via REST endpoints, not Wasp queries
 //#endregion
 
 //#region Billing & Payment
