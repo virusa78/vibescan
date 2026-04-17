@@ -4,98 +4,131 @@ This file provides instructions for AI agents and automated tools working on the
 
 ## Project Overview
 
-VibeScan is a dual-scanner SaaS vulnerability platform: Grype (free) + Codescoring/BlackDuck (enterprise). All 9 development phases are complete. Current focus: Wasp OpenSaaS migration and Node.js 24 compatibility.
+VibeScan is a dual-scanner SaaS vulnerability platform: Grype (free) + Codescoring/BlackDuck (enterprise). **Currently migrating to Wasp full-stack framework**. All 9 development phases complete. Frontend is now Wasp React; legacy Next.js moved to `backup/` folder.
 
 ## Structure & Key Paths
 
 ```
-src/                    # Backend API, workers, services
-├── index.ts           # Main server entry point  
-├── handlers/          # HTTP request handlers (auth, scans, reports, billing)
-├── services/          # Business logic (orchestrator, quota, diff, report, webhook)
-├── workers/           # Async job processors (free/enterprise scanners)
-├── queues/            # BullMQ config (free/enterprise/webhook/reporting)
-├── middleware/        # Auth, rate limiting, validation
-├── database/          # PostgreSQL client, migrations (14 files)
-├── redis/             # Locks, quota, sessions, pubsub
-└── types/             # TypeScript interfaces
+wasp-app/                  # Primary Wasp application (NEW)
+├── main.wasp              # Wasp configuration (routes, pages, auth, DB schema)
+├── src/
+│   ├── client/            # Frontend React + Vite
+│   │   ├── App.tsx        # Root with Sidebar
+│   │   ├── components/    # Reusable components (Sidebar, etc.)
+│   │   └── ...
+│   ├── dashboard/         # Dashboard pages
+│   ├── auth/              # Auth forms and utilities
+│   └── server/            # Backend operations (queries/actions)
+├── prisma/                # Prisma schema and migrations
+└── migrations/            # Wasp-specific migrations
+
+src/                       # Legacy backend (Fastify) - being phased out
+├── index.ts              # Main server entry
+├── handlers/             # HTTP handlers
+├── services/             # Business logic
+├── workers/              # Scanner workers
+└── database/             # PostgreSQL client
 
 test/
-├── unit/              # Isolated component tests
-├── integration/       # Full workflow tests (scan flow, billing, GitHub)
-├── e2e/               # End-to-end tests
-└── helpers/           # DB/S3/queue/auth test utilities
+├── e2e/                  # Playwright E2E tests
+├── integration/          # Full workflow tests
+└── unit/                 # Isolated tests
 
-wasp-app/              # OpenSaaS Wasp migration (main.wasp, src/, migrations/)
-vibescan-ui/           # Legacy Next.js frontend (deprecated post-Wasp)
-deploy/kubernetes/     # K8s manifests
-.github/workflows/     # CI/CD pipelines
+backup/                   # Archived legacy components (NOT in git)
+├── wasp-app/src/         # Old Next.js UI components, hooks, etc.
+└── ...
+
+deploy/                   # Kubernetes manifests
+.github/                  # CI/CD workflows
 ```
 
-## Core Runtime Flows
+## Core Runtime Flows (Wasp-First)
 
-**1. Scan Submission**
-- User submits via `POST /scans` → handlers validate → `ScanOrchestrator.submitScan()` → quota consumed up-front → jobs enqueued (free/enterprise) → status returned
+**1. Startup** (`PORT=3555 wasp start`)
+- Wasp compiles TypeScript, generates SDK, bundles frontend & backend
+- Frontend (Vite) on port 3000
+- Backend (Node.js) on port 3555
+- Wasp manages Prisma migrations automatically
 
-**2. Worker Processing**
-- `FreeScannerWorker` (20 parallel) runs Grype in isolated container
-- `EnterpriseScannerWorker` (3 parallel, distributed lock) runs Codescoring/BlackDuck
-- Results stored in `scan_results` → orchestrator triggered
+**2. Authentication** (Wasp built-in)
+- Email signup → `wasp/client/auth` form → `/auth/email/signup` endpoint
+- Wasp creates User, Auth, AuthIdentity, Session records
+- Sessions stored in database; refresh tokens via Wasp
 
-**3. Delta & Report Generation**
-- `DiffEngine` computes delta (merge, severity breakdown, ranking)
-- `ReportService` enforces plan visibility (locked view = counts only, full view = details)
-- PDF/CI endpoints serve tailored output
+**3. Protected Pages**
+- Routes marked `authRequired: true` in main.wasp
+- Frontend checks auth via `useAuth()` hook
+- Redirect to `/login` if not authenticated
 
-**4. Webhook Delivery**
-- User triggers via `POST /webhooks` → HMAC-SHA256 signed payload → retry queue (exponential backoff)
+**4. Operations** (Queries & Actions)
+- Queries: read-only, cached, called like functions
+- Actions: mutations, side effects, transaction support
+- Backend enforces user ownership via context
 
-**5. Billing & Regional**
-- `BillingService` → Stripe checkout → webhook handling → regional pricing (50% IN/PK discount)
+**5. Database** (PostgreSQL + Prisma)
+- Schema in `prisma/schema.prisma`
+- Wasp auto-manages auth tables
+- Migrations via `wasp db migrate-dev`
 
-## Build & Test Commands
+## Build & Test Commands (Wasp-Focused)
 
-**Wasp (preferred):**
+**Development**:
 ```bash
-npm run wasp:up          # Start managed dev (docker, postgres, redis, minio, wasp)
-npm run wasp:down        # Stop and free ports
-npm run wasp:dev         # Foreground Wasp start
-bash ./scripts/wasp-dev.sh status  # Check Wasp/frontend status
+cd wasp-app
+PORT=3555 wasp start              # Full-stack dev (frontend + backend + DB)
+PORT=3555 wasp start db           # Database only (Docker optional)
+wasp db migrate-dev               # Apply pending migrations
+wasp db studio                    # Prisma GUI
 ```
 
-**Legacy:**
+**Testing**:
 ```bash
-npm run dev              # Root backend dev server
-npm run build            # Production build
-npm run lint             # ESLint
-npm run lint:fix         # Auto-fix
-npm test                 # Jest (all tests)
-npm run test:coverage    # With coverage report
-npm run test:coverage:gate        # Baseline gate
-npm run test:coverage:strict      # Targets 70/70 (lines/branches)
-cd vibescan-ui && npm run dev     # Next.js frontend
+cd /home/virus/vibescan
+npm test                          # Jest unit/integration
+npx playwright test test/e2e/     # Playwright E2E
+npx playwright show-report        # View report
 ```
 
-## Code Style & Invariants
+**Building & Deploying**:
+```bash
+wasp build                        # Generate production bundle
+wasp deploy railway               # Deploy to Railway
+wasp deploy fly                   # Deploy to Fly.io
+```
 
-**TypeScript & Imports**
-- ESM modules (`"type": "module"` in package.json), `tsx` for dev
-- Local TS imports use `.js` extensions (NodeNext pattern)
-- Path aliases (see CLAUDE.md) except `@redis/*` can conflict — use explicit `import('redis')` from node_modules
+## Code Style & Invariants (Wasp Era)
 
-**Naming**
-- Variables/functions: `camelCase` (e.g., `submitScan`, `quotaService`)
-- Types/classes: `PascalCase` (e.g., `ScanOrchestrator`, `QuotaService`)
-- Modules: descriptive kebab (e.g., `scan-orchestrator.ts`)
+**Frontend (React + Wasp)**
+- Components in TypeScript (.tsx)
+- Use `useAuth()` for authenticated user context
+- Use `wasp/client/operations` for backend calls
+- Import routes: `import { routes } from 'wasp/client/router'`
 
-**Business Logic Invariants** (enforce always)
-1. Quota decrements on submission (not completion); refund on cancellation
-2. Source code isolated in Docker containers (never leaves; `--network=none`, `--read-only`, `--user=nobody`)
-3. Starter plan never sees enterprise details (`buildLockedView` returns counts only)
-4. API keys stored as bcrypt hashes; raw key returned once on generation, never persisted
-5. Max 3 parallel enterprise scans via distributed Redis lock
-6. PostgreSQL is source of truth; Redis used for fast caching/locks only
-7. Webhook payloads HMAC-SHA256 signed using user's API key
+**Backend (Node.js operations)**
+- Operations in TypeScript (.ts)
+- Receive `context` (includes `user`, `entities`)
+- Declare in main.wasp with `entities: [Model]`
+- Use Prisma for DB access: `context.entities.Model.findUnique(...)`
+
+**Database**
+- Schema in `prisma/schema.prisma`
+- Migrations auto-created: `wasp db migrate-dev`
+- Wasp manages auth schema (don't modify manually)
+
+**Naming Conventions**
+- Components: PascalCase (`Sidebar.tsx`, `DashboardPage.tsx`)
+- Functions: camelCase (`useAuth`, `getScan`)
+- Routes: PascalCase + "Route" suffix (`DashboardRoute`, `LoginRoute`)
+- Wasp DSL: camelCase (queries, actions, pages, routes)
+
+**Critical Invariants** (Enforce always)
+1. **PORT 3555**: Backend hardcoded; `.env.server` defines it
+2. **API URL**: Frontend must know (`NEXT_PUBLIC_API_URL`)
+3. **Auth context**: Access via `useAuth()` (Wasp provides)
+4. **Ownership**: Enforce in operations via `context.user`
+5. **Migrations**: Always use `wasp db migrate-dev` (not `prisma migrate`)
+6. **ESM imports**: Use `.js` extensions in imports (despite `.ts` files)
+7. **No direct auth queries**: Let Wasp handle User/Auth/Session tables
 
 ## Testing Approach
 
