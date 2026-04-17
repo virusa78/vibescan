@@ -1,0 +1,91 @@
+name: Automatic Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Calculate changes
+        id: changes
+        run: |
+          # Get number of lines changed
+          CHANGES=$(git diff origin/main..HEAD --stat | tail -1 | grep -oE '[0-9]+ insertions|changed' | head -1 | grep -oE '[0-9]+' || echo "0")
+          echo "lines=$CHANGES" >> $GITHUB_OUTPUT
+          echo "Changes: $CHANGES lines"
+      
+      - name: Check review threshold
+        id: check
+        run: |
+          LINES=${{ steps.changes.outputs.lines }}
+          MIN_LINES=200
+          MAX_LINES=300
+          
+          if [ "$LINES" -lt "$MIN_LINES" ]; then
+            echo "status=skip" >> $GITHUB_OUTPUT
+            echo "Skip: Changes below threshold ($LINES < $MIN_LINES)"
+          elif [ "$LINES" -gt "$MAX_LINES" ]; then
+            echo "status=warn" >> $GITHUB_OUTPUT
+            echo "Warn: Changes exceed recommended size ($LINES > $MAX_LINES)"
+          else
+            echo "status=review" >> $GITHUB_OUTPUT
+            echo "Review: Changes in ideal range ($MIN_LINES ≤ $LINES ≤ $MAX_LINES)"
+          fi
+      
+      - name: Run code quality checks
+        if: steps.check.outputs.status != 'skip'
+        run: |
+          echo "Running code quality checks..."
+          
+          # Check for secrets
+          if git diff origin/main..HEAD | grep -qE "(password|secret|token|apiKey)" 2>/dev/null; then
+            echo "⚠️  Potential secrets detected" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # TypeScript lint
+          if [ -f "package.json" ]; then
+            npm run lint 2>/dev/null || echo "⚠️  Lint issues detected" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Post review comment
+        if: steps.check.outputs.status != 'skip'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lines = ${{ steps.changes.outputs.lines }};
+            const status = '${{ steps.check.outputs.status }}';
+            
+            let message = '## 🤖 Automatic Code Review\n\n';
+            message += `**Changes:** ${lines} lines\n`;
+            
+            if (status === 'warn') {
+              message += '\n⚠️ **Warning:** Changes exceed recommended review size (max 300 lines)\n';
+              message += 'Consider splitting into smaller PRs for better review quality.\n';
+            } else {
+              message += '\n✅ **Status:** Changes in ideal review range (200-300 lines)\n';
+            }
+            
+            message += '\n### Pre-Review Checks\n';
+            message += '- [ ] Linting passed\n';
+            message += '- [ ] Types checked\n';
+            message += '- [ ] Tests included\n';
+            message += '- [ ] Documentation updated\n';
+            message += '- [ ] No secrets exposed\n';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
