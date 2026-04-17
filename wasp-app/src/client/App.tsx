@@ -1,9 +1,11 @@
 import { useEffect, useMemo } from "react";
 import { Outlet, useLocation } from "react-router";
 import { routes } from "wasp/client/router";
+import { useAuth } from "wasp/client/auth";
 import { Toaster } from "../client/components/ui/toaster";
 import "./Main.css";
 import NavBar from "./components/NavBar/NavBar";
+import Sidebar from "./components/Sidebar/Sidebar";
 import {
   appNavigationItems,
   marketingNavigationItems,
@@ -16,6 +18,8 @@ import CookieConsentBanner from "./components/cookie-consent/Banner";
  */
 export default function App() {
   const location = useLocation();
+  const { data: user } = useAuth();
+
   const isMarketingPage = useMemo(() => {
     return (
       location.pathname.startsWith("/landing") ||
@@ -33,6 +37,15 @@ export default function App() {
       location.pathname !== routes.SignupRoute.build()
     );
   }, [location]);
+
+  const shouldDisplaySidebar = useMemo(() => {
+    return (
+      user &&
+      !isMarketingPage &&
+      location.pathname !== routes.LoginRoute.build() &&
+      location.pathname !== routes.SignupRoute.build()
+    );
+  }, [location, user, isMarketingPage]);
 
   const isAdminDashboard = useMemo(() => {
     return location.pathname.startsWith("/admin");
@@ -62,9 +75,10 @@ export default function App() {
             {shouldDisplayAppNavBar && (
               <NavBar navigationItems={navigationItems} />
             )}
-            <div className="mx-auto max-w-(--breakpoint-2xl)">
+            {shouldDisplaySidebar && <Sidebar />}
+            <main className={shouldDisplaySidebar ? "ml-56" : ""}>
               <Outlet />
-            </div>
+            </main>
           </>
         )}
       </div>
