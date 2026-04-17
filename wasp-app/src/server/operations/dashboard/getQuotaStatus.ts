@@ -49,7 +49,7 @@ export async function getQuotaStatus(rawArgs: any, context: any): Promise<QuotaS
   if (user.scans && user.scans.length > 0) {
     // Sort scans by date
     const sortedScans = user.scans.sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
 
     // Split into first half and second half of week

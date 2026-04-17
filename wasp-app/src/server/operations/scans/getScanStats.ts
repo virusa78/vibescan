@@ -70,7 +70,7 @@ export async function getScanStats(rawArgs: any, context: any): Promise<ScanStat
     cancelled: 0,
   };
 
-  scans.forEach(scan => {
+  scans.forEach((scan: any) => {
     if (scan.status in byStatus) {
       byStatus[scan.status as keyof typeof byStatus]++;
     }
@@ -78,7 +78,7 @@ export async function getScanStats(rawArgs: any, context: any): Promise<ScanStat
 
   const findings = await context.entities.Finding.findMany({
     where: {
-      scanId: { in: scans.map(s => s.id) },
+      scanId: { in: scans.map((s: any) => s.id) },
       status: 'active',
     },
     select: {
@@ -94,7 +94,7 @@ export async function getScanStats(rawArgs: any, context: any): Promise<ScanStat
     info: 0,
   };
 
-  findings.forEach(finding => {
+  findings.forEach((finding: any) => {
     const severity = finding.severity.toLowerCase();
     if (severity in bySeverity) {
       bySeverity[severity as keyof typeof bySeverity]++;

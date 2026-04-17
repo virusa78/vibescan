@@ -48,7 +48,7 @@ export async function getRecentScans(rawArgs: any, context: any): Promise<Recent
   });
 
   // Map scans and count vulnerabilities
-  const recentScans: RecentScan[] = scans.map(scan => {
+  const recentScans: RecentScan[] = scans.map((scan: any) => {
     let vulnerabilityCount = 0;
     
     // Count vulnerabilities from all scan results

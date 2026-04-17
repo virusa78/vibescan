@@ -55,8 +55,8 @@ export async function getScan(rawArgs: any, context: any): Promise<ScanDetailRes
     where: { scanId: scan.id },
   });
 
-  const freeResult = scanResults.find(r => r.source === 'free');
-  const enterpriseResult = scanResults.find(r => r.source === 'enterprise');
+  const freeResult = scanResults.find((r: any) => r.source === 'free');
+  const enterpriseResult = scanResults.find((r: any) => r.source === 'enterprise');
 
   const freeCount = freeResult ? (freeResult.vulnerabilities as any[]).length || 0 : 0;
   const enterpriseCount = enterpriseResult ? (enterpriseResult.vulnerabilities as any[]).length || 0 : 0;

@@ -79,7 +79,7 @@ export async function listScans(rawArgs: any, context: any): Promise<ScanListRes
   });
 
   return {
-    scans: scans.map(s => ({
+    scans: scans.map((s: any) => ({
       id: s.id,
       status: s.status,
       inputType: s.inputType,

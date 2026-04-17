@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router";
 import { routes } from "wasp/client/router";
 import { useAuth } from "wasp/client/auth";
 import { Toaster } from "../client/components/ui/toaster";
+import "./theme-init";
 import "./Main.css";
 import NavBar from "./components/NavBar/NavBar";
 import Sidebar from "./components/Sidebar/Sidebar";
@@ -50,6 +51,20 @@ export default function App() {
   const isAdminDashboard = useMemo(() => {
     return location.pathname.startsWith("/admin");
   }, [location]);
+
+  useEffect(() => {
+    // Initialize theme
+    const root = document.documentElement;
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const stored = localStorage.getItem("theme");
+    const isDark = stored ? stored === "dark" : prefersDark;
+    
+    if (isDark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+  }, []);
 
   useEffect(() => {
     if (location.hash) {
