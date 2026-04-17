@@ -69,6 +69,10 @@ const swaggerOptions = {
         name: 'Webhooks',
         description: 'Configure and manage webhooks',
       },
+      {
+        name: 'Dashboard',
+        description: 'Dashboard analytics and metrics',
+      },
     ],
   },
   apis: [
@@ -76,6 +80,7 @@ const swaggerOptions = {
     './src/apiKeys/**/*.ts',
     './src/scans/**/*.ts',
     './src/payment/**/*.ts',
+    './src/server/operations/dashboard/**/*.ts',
   ],
 };
 

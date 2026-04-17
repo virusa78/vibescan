@@ -1,5 +1,6 @@
 import swaggerJsdoc from 'swagger-jsdoc';
 import type { PaymentsWebhook } from 'wasp/server/api';
+import { schemas } from './swagger/schemas';
 
 /**
  * Swagger/OpenAPI handlers for VibeScan API documentation
@@ -43,6 +44,7 @@ const swaggerOptions = {
           description: 'API Key (format: vsk_xxxxx) generated from /api-keys',
         },
       },
+      schemas,
     },
     security: [
       { bearerAuth: [] },
@@ -75,6 +77,7 @@ const swaggerOptions = {
     './src/auth/**/*.ts',
     './src/apiKeys/**/*.ts',
     './src/scans/**/*.ts',
+    './src/server/operations/**/*.ts',
     './src/payment/**/*.ts',
   ],
 };

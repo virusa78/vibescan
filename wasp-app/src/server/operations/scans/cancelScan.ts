@@ -1,0 +1,71 @@
+import type { Scan } from 'wasp/entities';
+import { HttpError } from 'wasp/server';
+import * as z from 'zod';
+import { ensureArgsSchemaOrThrowHttpError } from '../../validation';
+
+const cancelScanInputSchema = z.object({
+  scan_id: z.string().uuid(),
+});
+
+export type CancelScanInput = z.infer<typeof cancelScanInputSchema>;
+
+export interface ActionResponse {
+  success: boolean;
+  message: string;
+  quota_refunded?: number;
+}
+
+export async function cancelScan(rawArgs: any, context: any): Promise<ActionResponse> {
+  if (!context.user) {
+    throw new HttpError(401, 'User not authenticated');
+  }
+
+  const args = ensureArgsSchemaOrThrowHttpError(cancelScanInputSchema, rawArgs);
+
+  const scan = await context.entities.Scan.findFirst({
+    where: {
+      id: args.scan_id,
+      userId: context.user.id,
+    },
+  });
+
+  if (!scan) {
+    throw new HttpError(404, 'Scan not found or unauthorized');
+  }
+
+  const cancellableStates = ['pending', 'scanning'];
+  if (!cancellableStates.includes(scan.status)) {
+    throw new HttpError(400, `Cannot cancel scan in '${scan.status}' state`, {
+      error: 'invalid_scan_state',
+      current_state: scan.status,
+      allowed_states: cancellableStates,
+    });
+  }
+
+  await context.entities.Scan.update({
+    where: { id: scan.id },
+    data: {
+      status: 'cancelled',
+      completedAt: new Date(),
+    },
+  });
+
+  const user = await context.entities.User.findUnique({
+    where: { id: context.user.id },
+  });
+
+  if (user && user.monthlyQuotaUsed > 0) {
+    await context.entities.User.update({
+      where: { id: context.user.id },
+      data: {
+        monthlyQuotaUsed: Math.max(0, user.monthlyQuotaUsed - 1),
+      },
+    });
+  }
+
+  return {
+    success: true,
+    message: `Scan ${scan.id} cancelled successfully`,
+    quota_refunded: 1,
+  };
+}

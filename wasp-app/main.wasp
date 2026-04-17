@@ -155,6 +155,18 @@ page ApiKeysPage {
   component: import ApiKeysPage from "@src/apiKeys/ApiKeysPage"
 }
 
+route ReportsRoute { path: "/reports/:scanId", to: ReportsPage }
+page ReportsPage {
+  authRequired: true,
+  component: import ReportsPage from "@src/reports/ReportsPage"
+}
+
+route WebhooksRoute { path: "/webhooks", to: WebhooksPage }
+page WebhooksPage {
+  authRequired: true,
+  component: import WebhooksPage from "@src/webhooks/WebhooksPage"
+}
+
 query getPaginatedUsers {
   fn: import { getPaginatedUsers } from "@src/user/operations",
   entities: [User]
@@ -214,6 +226,177 @@ action submitScan {
   fn: import { submitScan } from "@src/scans/operations",
   entities: [User, Scan, Finding, FindingHistory, ScanDelta]
 }
+
+// Phase 2: Wasp-only HTTP API routes for scan operations
+// POST /api/v1/scans - Submit a new scan
+api submitScanApi {
+  fn: import { submitScanApiHandler } from "@src/server/operations/scans/handlers",
+  entities: [User, Scan, ScanDelta],
+  httpRoute: (POST, "/api/v1/scans")
+}
+
+// GET /api/v1/scans - List user's scans with pagination
+api listScansApi {
+  fn: import { listScansApiHandler } from "@src/server/operations/scans/handlers",
+  entities: [User, Scan],
+  httpRoute: (GET, "/api/v1/scans")
+}
+
+// GET /api/v1/scans/:scanId - Get scan details
+api getScanApi {
+  fn: import { getScanApiHandler } from "@src/server/operations/scans/handlers",
+  entities: [User, Scan, ScanResult, ScanDelta, Finding],
+  httpRoute: (GET, "/api/v1/scans/:scanId")
+}
+
+// DELETE /api/v1/scans/:scanId - Cancel a scan
+api cancelScanApi {
+  fn: import { cancelScanApiHandler } from "@src/server/operations/scans/handlers",
+  entities: [User, Scan],
+  httpRoute: (DELETE, "/api/v1/scans/:scanId")
+}
+
+// GET /api/v1/scans/stats - Get scan statistics
+api getScanStatsApi {
+  fn: import { getScanStatsApiHandler } from "@src/server/operations/scans/handlers",
+  entities: [User, Scan, Finding],
+  httpRoute: (GET, "/api/v1/scans/stats")
+}
+
+//#region Dashboard & Analytics
+// GET /api/v1/dashboard/metrics - Get dashboard metrics
+api getDashboardMetricsApi {
+  fn: import { getDashboardMetricsApiHandler } from "@src/server/operations/dashboard/handlers",
+  entities: [User, Scan, Finding],
+  httpRoute: (GET, "/api/v1/dashboard/metrics")
+}
+
+// GET /api/v1/dashboard/recent-scans - Get recent scans
+api getRecentScansApi {
+  fn: import { getRecentScansApiHandler } from "@src/server/operations/dashboard/handlers",
+  entities: [User, Scan, ScanResult],
+  httpRoute: (GET, "/api/v1/dashboard/recent-scans")
+}
+
+// GET /api/v1/dashboard/severity-breakdown - Get severity breakdown
+api getSeverityBreakdownApi {
+  fn: import { getSeverityBreakdownApiHandler } from "@src/server/operations/dashboard/handlers",
+  entities: [User, Finding],
+  httpRoute: (GET, "/api/v1/dashboard/severity-breakdown")
+}
+
+// GET /api/v1/dashboard/quota - Get quota status
+api getQuotaStatusApi {
+  fn: import { getQuotaStatusApiHandler } from "@src/server/operations/dashboard/handlers",
+  entities: [User, Scan],
+  httpRoute: (GET, "/api/v1/dashboard/quota")
+}
+
+// Dashboard Wasp queries (for frontend integration)
+query getDashboardMetrics {
+  fn: import { getDashboardMetrics } from "@src/server/operations/dashboard",
+  entities: [User, Scan, Finding]
+}
+
+query getQuotaStatus {
+  fn: import { getQuotaStatus } from "@src/server/operations/dashboard",
+  entities: [User, Scan]
+}
+
+query getRecentScansQuery {
+  fn: import { getRecentScans } from "@src/server/operations/dashboard",
+  entities: [User, Scan, Finding]
+}
+
+query getSeverityBreakdownQuery {
+  fn: import { getSeverityBreakdown } from "@src/server/operations/dashboard",
+  entities: [User, Finding]
+}
+//#endregion Dashboard & Analytics
+//#endregion
+
+//#region Reports & Analysis
+
+// getReport - Get full vulnerability report for a scan
+// GET /api/v1/reports/{scanId}
+// Plan visibility: starter sees free vulnerabilities only, pro/enterprise see all.
+// Returns: { scan_id, status, vulnerabilities, delta, stats, generated_at }
+query getReport {
+  fn: import { getReport } from "@src/server/operations/reports",
+  entities: [User, Scan, ScanResult, ScanDelta, Finding]
+}
+
+// getReportSummary - Get aggregated summary of a scan report
+// GET /api/v1/reports/{scanId}/summary
+// Plan-based visibility: starter sees counts only, details for pro/enterprise.
+// Returns: { scan_id, critical_count, high_count, medium_count, low_count, delta_counts, locked }
+query getReportSummary {
+  fn: import { getReportSummary } from "@src/server/operations/reports",
+  entities: [User, Scan, ScanDelta, Finding]
+}
+
+// generateReportPDF - Generate and store PDF report for a scan
+// POST /api/v1/reports/{scanId}/pdf
+// Renders report template to PDF, stores in S3, returns pre-signed URL.
+// Request: { format: 'pdf' | 'html' }
+// Returns: { url, expires_at, file_size, format }
+action generateReportPDF {
+  fn: import { generateReportPDF } from "@src/server/operations/reports",
+  entities: [User, Scan, ScanDelta, Finding]
+}
+
+// getCIDecision - Evaluate scan against CI policy (pass/fail gate)
+// GET /api/v1/reports/{scanId}/ci-decision
+// Query parameters: security_level, max_severity, max_critical_count, max_high_count
+// Returns: { decision, message, blocking_vulns, policy_applied }
+query getCIDecision {
+  fn: import { getCIDecision } from "@src/server/operations/reports",
+  entities: [User, Scan, Finding]
+}
+//#endregion
+
+//#region Webhooks & Notifications
+// createWebhook - Create a webhook for scan notifications
+// POST /api/v1/webhooks
+// Input: { url, events }
+// Output: { id, url, created_at, events, secret_preview }
+action createWebhook {
+  fn: import { createWebhook } from "@src/server/operations/webhooks",
+  entities: [User, Webhook]
+}
+
+// listWebhooks - Get all webhooks for authenticated user
+// GET /api/v1/webhooks
+// Output: { webhooks[] }
+query listWebhooks {
+  fn: import { listWebhooks } from "@src/server/operations/webhooks",
+  entities: [User, Webhook]
+}
+
+// getWebhook - Get detailed webhook info including delivery stats
+// GET /api/v1/webhooks/{webhookId}
+// Output: { webhook, delivery_stats, last_5_deliveries }
+query getWebhook {
+  fn: import { getWebhook } from "@src/server/operations/webhooks",
+  entities: [User, Webhook, WebhookDelivery]
+}
+
+// updateWebhook - Update webhook configuration
+// PATCH /api/v1/webhooks/{webhookId}
+// Input: { url?, events?, active? }
+// Output: { id, url, events, active, updated_at }
+action updateWebhook {
+  fn: import { updateWebhook } from "@src/server/operations/webhooks",
+  entities: [User, Webhook]
+}
+
+// deleteWebhook - Delete a webhook
+// DELETE /api/v1/webhooks/{webhookId}
+// Output: { success, message }
+action deleteWebhook {
+  fn: import { deleteWebhook } from "@src/server/operations/webhooks",
+  entities: [User, Webhook, WebhookDelivery]
+}
 //#endregion
 
 //#region Billing & Payment
@@ -244,6 +427,66 @@ api paymentsWebhook {
   middlewareConfigFn: import { paymentsMiddlewareConfigFn } from "@src/payment/webhook",
   httpRoute: (POST, "/payments-webhook")
 }
+
+//#region API Keys
+// POST /api/v1/api-keys - Generate a new API key
+api generateAPIKeyApi {
+  fn: import { generateAPIKeyApiHandler } from "@src/server/operations/apikeys/handlers",
+  entities: [User, ApiKey],
+  httpRoute: (POST, "/api/v1/api-keys")
+}
+
+// GET /api/v1/api-keys - List all API keys
+api listAPIKeysApi {
+  fn: import { listAPIKeysApiHandler } from "@src/server/operations/apikeys/handlers",
+  entities: [User, ApiKey],
+  httpRoute: (GET, "/api/v1/api-keys")
+}
+
+// GET /api/v1/api-keys/:keyId - Get API key details
+api getAPIKeyDetailsApi {
+  fn: import { getAPIKeyDetailsApiHandler } from "@src/server/operations/apikeys/handlers",
+  entities: [User, ApiKey],
+  httpRoute: (GET, "/api/v1/api-keys/:keyId")
+}
+
+// DELETE /api/v1/api-keys/:keyId - Revoke an API key
+api revokeAPIKeyApi {
+  fn: import { revokeAPIKeyApiHandler } from "@src/server/operations/apikeys/handlers",
+  entities: [User, ApiKey],
+  httpRoute: (DELETE, "/api/v1/api-keys/:keyId")
+}
+//#endregion API Keys
+
+//#region Settings
+// GET /api/v1/settings/profile - Get user profile settings
+api getProfileSettingsApi {
+  fn: import { getProfileSettingsApiHandler } from "@src/server/operations/settings/handlers",
+  entities: [User, Organization],
+  httpRoute: (GET, "/api/v1/settings/profile")
+}
+
+// POST /api/v1/settings/profile - Update user profile settings
+api updateProfileSettingsApi {
+  fn: import { updateProfileSettingsApiHandler } from "@src/server/operations/settings/handlers",
+  entities: [User, Organization],
+  httpRoute: (POST, "/api/v1/settings/profile")
+}
+
+// GET /api/v1/settings/notifications - Get user notification settings
+api getNotificationSettingsApi {
+  fn: import { getNotificationSettingsApiHandler } from "@src/server/operations/settings/handlers",
+  entities: [User],
+  httpRoute: (GET, "/api/v1/settings/notifications")
+}
+
+// POST /api/v1/settings/notifications - Update user notification settings
+api updateNotificationSettingsApi {
+  fn: import { updateNotificationSettingsApiHandler } from "@src/server/operations/settings/handlers",
+  entities: [User],
+  httpRoute: (POST, "/api/v1/settings/notifications")
+}
+//#endregion Settings
 
 api swaggerSpec {
   fn: import { getSwaggerJson } from "@src/server/swaggerHandlers",
