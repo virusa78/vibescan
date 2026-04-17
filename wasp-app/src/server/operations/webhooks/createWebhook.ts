@@ -1,8 +1,8 @@
 import { HttpError } from 'wasp/server';
 import * as crypto from 'crypto';
 import * as z from 'zod';
-import { ensureArgsSchemaOrThrowHttpError } from '@src/server/validation';
-import { encryptWebhookSecret } from '@src/server/utils/webhookEncryption';
+import { ensureArgsSchemaOrThrowHttpError } from '../../validation.js';
+import { encryptWebhookSecret } from '../../utils/webhookEncryption.js';
 
 /**
  * Check if a hostname is a private IP address or reserved endpoint

@@ -1,7 +1,7 @@
 import type { Webhook } from 'wasp/entities';
 import { HttpError } from 'wasp/server';
 import * as z from 'zod';
-import { ensureArgsSchemaOrThrowHttpError } from '@src/server/validation';
+import { ensureArgsSchemaOrThrowHttpError } from '../../validation.js';
 
 const deleteWebhookInputSchema = z.object({
   webhookId: z.string().uuid('Invalid webhook ID'),

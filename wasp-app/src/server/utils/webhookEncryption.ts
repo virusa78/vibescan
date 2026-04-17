@@ -23,10 +23,10 @@ export function decryptWebhookSecret(encryptedBuffer: Buffer): string {
   decipher.setAuthTag(authTag);
 
   // Decrypt
-  let decrypted = decipher.update(ciphertext, 'binary', 'utf8');
-  decrypted += decipher.final('utf8');
-
-  return decrypted;
+  const decrypted = decipher.update(ciphertext);
+  const finalPart = decipher.final();
+  
+  return Buffer.concat([decrypted, finalPart]).toString('utf8');
 }
 
 /**
@@ -49,8 +49,9 @@ export function encryptWebhookSecret(signingSecret: string): Buffer {
   const cipher = crypto.createCipheriv('aes-256-gcm', keyBuffer, iv);
 
   // Encrypt the signing secret
-  let encrypted = cipher.update(signingSecret, 'utf8', 'binary');
-  encrypted += cipher.final('binary');
+  const encrypted = cipher.update(signingSecret, 'utf8');
+  const finalPart = cipher.final();
+  const ciphertext = Buffer.concat([encrypted, finalPart]);
 
   // Get auth tag
   const authTag = cipher.getAuthTag();
@@ -59,6 +60,6 @@ export function encryptWebhookSecret(signingSecret: string): Buffer {
   return Buffer.concat([
     iv,
     authTag,
-    Buffer.from(encrypted, 'binary'),
+    ciphertext,
   ]);
 }
