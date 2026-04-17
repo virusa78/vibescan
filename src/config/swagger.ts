@@ -5,21 +5,6 @@
 
 import { FastifyInstance } from 'fastify';
 
-let fastifySwagger: any;
-let fastifySwaggerUi: any;
-
-async function loadSwaggerModules() {
-    try {
-        fastifySwagger = await import('@fastify/swagger');
-        fastifySwaggerUi = await import('@fastify/swagger-ui');
-    } catch (error) {
-        console.log('Swagger modules not available - skipping docs registration');
-    }
-}
-
-// Initialize Swagger modules
-loadSwaggerModules();
-
 /**
  * Swagger options
  */
@@ -78,16 +63,22 @@ export const swaggerUiOptions = {
  * Register Swagger routes
  */
 export async function registerSwagger(app: FastifyInstance): Promise<void> {
-    if (!fastifySwagger || !fastifySwaggerUi) {
-        console.log('Swagger not available - skipping');
-        return;
-    }
-
     try {
+        console.log('Loading Swagger modules...');
+        const fastifySwagger = await import('@fastify/swagger');
+        const fastifySwaggerUi = await import('@fastify/swagger-ui');
+        console.log('✓ Swagger modules loaded');
+        
+        console.log('Registering fastifySwagger...');
         await app.register(fastifySwagger.default || fastifySwagger, swaggerOptions);
+        console.log('✓ fastifySwagger registered');
+        
+        console.log('Registering fastifySwaggerUi...');
         await app.register(fastifySwaggerUi.default || fastifySwaggerUi, swaggerUiOptions);
-        console.log('Swagger documentation registered at /docs');
+        console.log('✓ fastifySwaggerUi registered');
+        
+        console.log('✓ Swagger documentation registered at /docs');
     } catch (error) {
-        console.error('Failed to register Swagger:', error);
+        console.error('✗ Failed to register Swagger:', (error as Error).message);
     }
 }

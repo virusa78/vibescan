@@ -170,7 +170,7 @@ prepare_frontend_env() {
   local server_ip
   server_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
   [[ -n "${server_ip:-}" ]] || server_ip="127.0.0.1"
-  cat > "$ROOT_DIR/vibescan-ui/.env.local" <<EOF
+  cat > "$ROOT_DIR/wasp-app/.env.local" <<EOF
 NEXT_PUBLIC_API_URL=http://${server_ip}:${BACKEND_PORT}
 EOF
 }
@@ -186,10 +186,10 @@ start_backend() {
 
 start_frontend() {
   : > "$FRONTEND_LOG"
-  info "Starting frontend on ${HOST}:${FRONTEND_PORT}"
+  info "Starting frontend (Wasp) on ${HOST}:${FRONTEND_PORT}"
   (
-    cd "$ROOT_DIR/vibescan-ui"
-    PORT="$FRONTEND_PORT" HOSTNAME="$HOST" npm run dev
+    cd "$ROOT_DIR/wasp-app"
+    WASP_PORT="$FRONTEND_PORT" wasp start
   ) >"$FRONTEND_LOG" 2>&1 &
   echo $! > "$FRONTEND_PID_FILE"
   wait_http "http://127.0.0.1:${FRONTEND_PORT}" 120 || die "Frontend failed to start. See $FRONTEND_LOG"

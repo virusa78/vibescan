@@ -322,11 +322,6 @@ app.get('/v1/security/risk-acceptance/:scanId', securityScoreHandlers.listRiskAc
 app.post('/v1/security/risk-acceptance/:scanId', securityScoreHandlers.acceptRiskHandler);
 app.delete('/v1/security/risk-acceptance/:scanId/:vulnerabilityId', securityScoreHandlers.revokeRiskHandler);
 
-// Swagger documentation (development only)
-if (config.NODE_ENV !== 'production') {
-    await registerSwagger(app);
-}
-
 // Error handling
 app.addHook('onError', (request, reply, error, done) => {
     middleware.errorHandlingMiddleware(error, request, reply, done);
@@ -369,6 +364,14 @@ async function start() {
         const workerConfigs = getWorkerConfigs();
         for (const config of workerConfigs) {
             createWorker(config).catch(console.error);
+        }
+
+        // Register Swagger documentation (development only) - AFTER all routes are registered
+        if (config.NODE_ENV !== 'production') {
+            await registerSwagger(app);
+            console.log('\n===== ROUTES BEFORE LISTEN =====');
+            console.log(app.printRoutes());
+            console.log('==================================\n');
         }
 
         // Start server
