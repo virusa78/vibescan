@@ -6,6 +6,7 @@
 import { execSync, spawn } from 'child_process';
 import { writeFileSync, unlinkSync, existsSync } from 'fs';
 import { resolve } from 'path';
+import { tmpdir } from 'os';
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
 
 export interface GrypeFinding {
@@ -136,8 +137,8 @@ export async function scanWithGrype(
     // Generate SBOM
     const sbomContent = generateCycloneDxSbom(components);
 
-    // Write SBOM to temp file
-    sbomPath = resolve(`/home/virus/vibescan/sbom-${scanId}.json`);
+    // Write SBOM to temp file (use OS tmpdir instead of hardcoded path)
+    sbomPath = resolve(tmpdir(), `sbom-${scanId}.json`);
     writeFileSync(sbomPath, sbomContent);
 
     console.log(`[Grype] Generated SBOM at ${sbomPath}`);
