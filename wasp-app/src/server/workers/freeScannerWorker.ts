@@ -141,17 +141,23 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
 
     console.log(`[Free Scanner] Created ${normalizedFindings.length} findings for scan ${scanId}`);
 
-    // Update scan with completion timestamp (unless already done by enterprise worker)
+    // Update scan with completion timestamp based on plan
     const currentScan = await prisma.scan.findUnique({
       where: { id: scanId },
       include: { scanResults: true },
     });
 
     if (currentScan && currentScan.status === 'scanning') {
-      // Check if enterprise worker has also completed
-      const enterpriseResult = currentScan.scanResults.some((r) => r.source === 'enterprise');
-      if (enterpriseResult) {
-        // Both completed, mark as done
+      // Determine expected scanners based on plan at submission
+      const isEnterprisePlan = currentScan.planAtSubmission === 'enterprise';
+      const expectedScanners = isEnterprisePlan ? ['free', 'enterprise'] : ['free'];
+      
+      // Check which scanners have completed
+      const completedScanners = currentScan.scanResults.map((r) => r.source);
+      const allExpectedComplete = expectedScanners.every((scanner) => completedScanners.includes(scanner));
+      
+      if (allExpectedComplete) {
+        // All expected scanners completed, mark as done
         await prisma.scan.update({
           where: { id: scanId },
           data: {
@@ -170,26 +176,40 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
   } catch (error) {
     console.error(`[Free Scanner] Error in scan ${scanId}:`, error);
 
-    // Mark scan as error (allow partial-complete if enterprise succeeded)
+    // Mark scan as error (allow partial-complete if enterprise succeeded for enterprise plan)
     const existingScan = await prisma.scan.findUnique({
       where: { id: scanId },
       include: { scanResults: true },
     });
 
     if (existingScan && existingScan.status === 'scanning') {
-      const enterpriseResult = existingScan.scanResults.some((r) => r.source === 'enterprise');
-      if (enterpriseResult) {
-        // Enterprise completed, mark as partial
-        await prisma.scan.update({
-          where: { id: scanId },
-          data: {
-            status: 'done', // Partial completion
-            completedAt: new Date(),
-            errorMessage: `Free scanner failed: ${error instanceof Error ? error.message : String(error)}`,
-          },
-        });
+      const isEnterprisePlan = existingScan.planAtSubmission === 'enterprise';
+      
+      // For enterprise plans, check if enterprise succeeded
+      if (isEnterprisePlan) {
+        const enterpriseResult = existingScan.scanResults.some((r) => r.source === 'enterprise');
+        if (enterpriseResult) {
+          // Enterprise completed, mark as partial
+          await prisma.scan.update({
+            where: { id: scanId },
+            data: {
+              status: 'done', // Partial completion
+              completedAt: new Date(),
+              errorMessage: `Free scanner failed: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          });
+        } else {
+          // Both failed (enterprise plan)
+          await prisma.scan.update({
+            where: { id: scanId },
+            data: {
+              status: 'error',
+              errorMessage: `Free scanner failed: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          });
+        }
       } else {
-        // Both failed
+        // For non-enterprise plans, only free scanner expected, so this is an error
         await prisma.scan.update({
           where: { id: scanId },
           data: {

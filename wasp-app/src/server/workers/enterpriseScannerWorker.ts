@@ -141,11 +141,23 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
       include: { scanResults: true },
     });
 
+    // Update scan with completion timestamp based on plan
+    const currentScan = await prisma.scan.findUnique({
+      where: { id: scanId },
+      include: { scanResults: true },
+    });
+
     if (currentScan && currentScan.status === 'scanning') {
-      // Check if free worker has also completed
-      const freeResult = currentScan.scanResults.some((r) => r.source === 'free');
-      if (freeResult) {
-        // Both completed, mark as done
+      // Determine expected scanners based on plan at submission
+      const isEnterprisePlan = currentScan.planAtSubmission === 'enterprise';
+      const expectedScanners = isEnterprisePlan ? ['free', 'enterprise'] : ['free'];
+      
+      // Check which scanners have completed
+      const completedScanners = currentScan.scanResults.map((r) => r.source);
+      const allExpectedComplete = expectedScanners.every((scanner) => completedScanners.includes(scanner));
+      
+      if (allExpectedComplete) {
+        // All expected scanners completed, mark as done
         await prisma.scan.update({
           where: { id: scanId },
           data: {
@@ -164,33 +176,53 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
   } catch (error) {
     console.error(`[Enterprise Scanner] Error in scan ${scanId}:`, error);
 
-    // Mark scan as error (allow partial-complete if free succeeded)
+    // Mark scan as error (allow partial-complete if free succeeded for enterprise plan)
     const existingScan = await prisma.scan.findUnique({
       where: { id: scanId },
       include: { scanResults: true },
     });
 
     if (existingScan && existingScan.status === 'scanning') {
-      const freeResult = existingScan.scanResults.some((r) => r.source === 'free');
-      if (freeResult) {
-        // Free completed, mark as partial
-        await prisma.scan.update({
-          where: { id: scanId },
-          data: {
-            status: 'done', // Partial completion
-            completedAt: new Date(),
-            errorMessage: `Enterprise scanner failed: ${error instanceof Error ? error.message : String(error)}`,
-          },
-        });
+      const isEnterprisePlan = existingScan.planAtSubmission === 'enterprise';
+      
+      // For enterprise plans, check if free succeeded
+      if (isEnterprisePlan) {
+        const freeResult = existingScan.scanResults.some((r) => r.source === 'free');
+        if (freeResult) {
+          // Free completed, mark as partial
+          await prisma.scan.update({
+            where: { id: scanId },
+            data: {
+              status: 'done', // Partial completion
+              completedAt: new Date(),
+              errorMessage: `Enterprise scanner failed: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          });
+        } else {
+          // Both failed
+          await prisma.scan.update({
+            where: { id: scanId },
+            data: {
+              status: 'error',
+              errorMessage: `Enterprise scanner failed: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          });
+        }
       } else {
-        // Both failed
-        await prisma.scan.update({
-          where: { id: scanId },
-          data: {
-            status: 'error',
-            errorMessage: `Enterprise scanner failed: ${error instanceof Error ? error.message : String(error)}`,
-          },
-        });
+        // Enterprise scanner running on non-enterprise plan is unexpected
+        // Mark error but don't override done if free succeeded
+        const freeResult = existingScan.scanResults.some((r) => r.source === 'free');
+        if (!freeResult) {
+          await prisma.scan.update({
+            where: { id: scanId },
+            data: {
+              status: 'error',
+              errorMessage: `Enterprise scanner failed: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          });
+        }
+      }
+    }
       }
     }
 
