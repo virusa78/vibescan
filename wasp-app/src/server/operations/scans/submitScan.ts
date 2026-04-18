@@ -4,11 +4,17 @@ import { ensureArgsSchemaOrThrowHttpError } from '../../validation';
 import { quotaService } from '../../services/quotaService.js';
 import { orchestrateScan } from './orchestrator.js';
 import { emitWebhookEvent, buildWebhookPayload } from '../../services/webhookEventEmitter.js';
+import {
+  validateAndExtractSBOM,
+  validateGitHubUrl,
+  normalizeComponents,
+} from '../../services/inputAdapterService.js';
 
 const submitScanInputSchema = z.object({
   inputRef: z.string(),
   inputType: z.enum(['github', 'sbom', 'source_zip']),
   plan_tier: z.string().optional(),
+  sbomContent: z.string().optional(), // For SBOM upload, pass raw JSON content
 });
 
 export type SubmitScanInput = z.infer<typeof submitScanInputSchema>;
@@ -26,6 +32,31 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
   }
 
   const args = ensureArgsSchemaOrThrowHttpError(submitScanInputSchema, rawArgs);
+
+  // Process input and extract components based on input type
+  let components: any[] = [];
+  let sbomRaw: any = null;
+
+  if (args.inputType === 'sbom' && args.sbomContent) {
+    // Validate and extract SBOM
+    const sbomResult = validateAndExtractSBOM(args.sbomContent);
+    components = sbomResult.components;
+    sbomRaw = JSON.parse(args.sbomContent);
+  } else if (args.inputType === 'github') {
+    // Validate GitHub URL format (actual scanning happens in worker)
+    validateGitHubUrl(args.inputRef);
+  } else if (args.inputType === 'source_zip') {
+    // ZIP extraction and scanning happens in worker
+    // For now, we just validate that inputRef is provided
+    if (!args.inputRef) {
+      throw new HttpError(422, 'Invalid source_zip', { detail: 'File reference required' });
+    }
+  }
+
+  // Normalize components
+  if (components.length > 0) {
+    components = await normalizeComponents(components);
+  }
 
   // Wrap entire quota check, scan creation, and quota consumption in a transaction
   // to prevent race conditions where concurrent requests bypass quota limits
@@ -56,7 +87,8 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
         inputRef: args.inputRef,
         status: 'pending',
         planAtSubmission: args.plan_tier || user.plan,
-        components: [],
+        components: components,
+        sbomRaw: sbomRaw,
       },
     });
 

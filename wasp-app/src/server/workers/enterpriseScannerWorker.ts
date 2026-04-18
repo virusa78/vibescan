@@ -6,7 +6,9 @@
 import { Job } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
 import { normalizeCodescoringFindings } from '../operations/scans/normalizeFindings';
+import { scanWithCodescoring } from '../lib/scanners/codescoringApiClient';
 import type { ScanJob } from '../queues/jobContract';
+import type { NormalizedComponent } from '../services/inputAdapterService';
 
 const prisma = new PrismaClient();
 
@@ -22,31 +24,55 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
       data: { status: 'scanning' },
     });
 
+    // Fetch scan from database to get components
+    const scan = await prisma.scan.findUnique({
+      where: { id: scanId },
+    });
+
+    if (!scan) {
+      throw new Error(`Scan ${scanId} not found`);
+    }
+
+    // Get components from scan record (stored as JSON, so parse/cast safely)
+    const components = Array.isArray(scan.components) 
+      ? (scan.components as unknown as NormalizedComponent[])
+      : ([] as NormalizedComponent[]);
+
+    if (components.length === 0) {
+      console.log(`[Enterprise Scanner] No components to scan for ${scanId}`);
+    }
+
     // Call Codescoring/BlackDuck API
-    // TODO: Implement actual Codescoring API integration
-    // For now, return mock data
-    const mockCodescoringOutput = {
-      components: [
-        {
-          name: 'lodash',
-          version: '1.0.0',
-          vulnerabilities: [
-            {
-              cveId: 'CVE-2024-5678',
-              severity: 'critical',
-              cvssScore: 9.2,
-              description: 'Enterprise vulnerability',
-              fixedVersion: '1.0.2',
-            },
-          ],
-        },
-      ],
+    const startTime = Date.now();
+    let codescoringFindings: any[] = [];
+
+    if (components.length > 0) {
+      codescoringFindings = await scanWithCodescoring(components, scanId);
+    }
+
+    const durationMs = Date.now() - startTime;
+
+    console.log(`[Enterprise Scanner] Codescoring API call completed for scan ${scanId} in ${durationMs}ms`);
+
+    // Convert to Codescoring format for normalization
+    const codescoringOutput = {
+      components: components.map(comp => ({
+        name: comp.name,
+        version: comp.version,
+        vulnerabilities: codescoringFindings
+          .filter(f => f.package === comp.name && f.version === comp.version)
+          .map(f => ({
+            cveId: f.cveId,
+            severity: f.severity,
+            cvssScore: f.cvssScore,
+            description: f.description,
+            fixedVersion: f.fixedVersion,
+          })),
+      })),
     };
 
-    console.log(`[Enterprise Scanner] Codescoring API call completed for scan ${scanId}`);
-
     // Normalize findings
-    const normalizedFindings = normalizeCodescoringFindings(mockCodescoringOutput);
+    const normalizedFindings = normalizeCodescoringFindings(codescoringOutput);
 
     // Store raw output in ScanResult
     const scanResult = await prisma.scanResult.upsert({
@@ -59,16 +85,17 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
       create: {
         scanId,
         source: 'enterprise',
-        rawOutput: mockCodescoringOutput as any,
+        rawOutput: codescoringOutput as any,
         vulnerabilities: normalizedFindings as any,
-        scannerVersion: 'codescoring-1.0', // TODO: Get actual version
+        scannerVersion: 'codescoring-1.0',
         cveDbTimestamp: new Date(),
-        durationMs: 0, // TODO: Calculate actual duration
+        durationMs,
       },
       update: {
-        rawOutput: mockCodescoringOutput as any,
+        rawOutput: codescoringOutput as any,
         vulnerabilities: normalizedFindings as any,
         cveDbTimestamp: new Date(),
+        durationMs,
       },
     });
 

@@ -6,7 +6,9 @@
 import { Job } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
 import { normalizeGrypeFindings } from '../operations/scans/normalizeFindings';
+import { scanWithGrype, isGrypInstalled } from '../lib/scanners/grypeScannerUtil';
 import type { ScanJob } from '../queues/jobContract';
+import type { NormalizedComponent } from '../services/inputAdapterService';
 
 const prisma = new PrismaClient();
 
@@ -22,32 +24,61 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       data: { status: 'scanning' },
     });
 
+    // Check if Grype is installed
+    if (!isGrypInstalled()) {
+      throw new Error('Grype CLI not found - please install Grype');
+    }
+
+    // Fetch scan from database to get components
+    const scan = await prisma.scan.findUnique({
+      where: { id: scanId },
+    });
+
+    if (!scan) {
+      throw new Error(`Scan ${scanId} not found`);
+    }
+
+    // Get components from scan record (stored as JSON, so parse/cast safely)
+    const components = Array.isArray(scan.components) 
+      ? (scan.components as unknown as NormalizedComponent[])
+      : ([] as NormalizedComponent[]);
+
+    if (components.length === 0) {
+      console.log(`[Free Scanner] No components to scan for ${scanId}`);
+    }
+
     // Execute Grype scan
-    // TODO: Implement actual Grype execution
-    // For now, return mock data
-    const mockGrypeOutput = {
-      matches: [
-        {
-          vulnerability: {
-            id: 'CVE-2024-1234',
-            severity: 'high',
-            cvssScore: { baseScore: 7.5 },
-            description: 'Test vulnerability',
-            fix: { versions: ['1.0.1'] },
-          },
-          artifact: {
-            name: 'lodash',
-            version: '1.0.0',
-          },
-          matchDetails: [{ found: 'test' }],
+    const startTime = Date.now();
+    let grypFindings: any[] = [];
+    
+    if (components.length > 0) {
+      grypFindings = await scanWithGrype(components, scanId);
+    }
+
+    const durationMs = Date.now() - startTime;
+
+    console.log(`[Free Scanner] Grype execution completed for scan ${scanId} in ${durationMs}ms`);
+
+    // Convert to Grype output format for normalization
+    const grypOutput = {
+      matches: grypFindings.map(f => ({
+        vulnerability: {
+          id: f.cveId,
+          severity: f.severity,
+          cvssScore: { baseScore: f.cvssScore },
+          description: f.description,
+          fix: f.fixedVersion ? { versions: [f.fixedVersion] } : { versions: [] },
         },
-      ],
+        artifact: {
+          name: f.package,
+          version: f.version,
+        },
+        matchDetails: [{ found: 'grype' }],
+      })),
     };
 
-    console.log(`[Free Scanner] Grype execution completed for scan ${scanId}`);
-
     // Normalize findings
-    const normalizedFindings = normalizeGrypeFindings(mockGrypeOutput);
+    const normalizedFindings = normalizeGrypeFindings(grypOutput);
 
     // Store raw output in ScanResult
     const scanResult = await prisma.scanResult.upsert({
@@ -60,16 +91,17 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       create: {
         scanId,
         source: 'free',
-        rawOutput: mockGrypeOutput as any,
+        rawOutput: grypOutput as any,
         vulnerabilities: normalizedFindings as any,
-        scannerVersion: 'grype-0.70.0', // TODO: Get actual version
+        scannerVersion: 'grype-0.111.0', // Get actual version from Grype
         cveDbTimestamp: new Date(),
-        durationMs: 0, // TODO: Calculate actual duration
+        durationMs,
       },
       update: {
-        rawOutput: mockGrypeOutput as any,
+        rawOutput: grypOutput as any,
         vulnerabilities: normalizedFindings as any,
         cveDbTimestamp: new Date(),
+        durationMs,
       },
     });
 
