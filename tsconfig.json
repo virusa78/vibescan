@@ -4,11 +4,11 @@
     "module": "NodeNext",
     "lib": ["ES2022"],
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "./wasp-app/src",
     "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "noEmit": false,
+    "noEmit": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
@@ -19,16 +19,6 @@
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "types": ["node"],
-    "paths": {
-      "@/*": ["src/*"],
-      "@services/*": ["src/services/*"],
-      "@db/*": ["src/database/*"],
-      "@redis/*": ["src/redis/*"],
-      "@queues/*": ["src/queues/*"],
-      "@s3/*": ["src/s3/*"],
-      "@types/*": ["src/types/*"],
-      "@utils/*": ["src/utils/*"]
-    },
     "noImplicitAny": false,
     "noImplicitThis": false,
     "noUnusedLocals": false,
@@ -36,6 +26,6 @@
     "noFallthroughCasesInSwitch": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+  "include": ["wasp-app/src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts", ".wasp"]
 }

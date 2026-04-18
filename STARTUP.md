@@ -8,17 +8,17 @@
 
 This is the **ONLY** way to start the project. It handles:
 1. ✅ Docker services (PostgreSQL, Redis, MinIO)
-2. ✅ Backend (Fastify API on port 3001)
-3. ✅ Frontend (Wasp on port 3000)
+2. ✅ Wasp backend (Node.js on port 3555)
+3. ✅ Frontend (React on port 3000)
 
 ## 📋 Available Startup Options
 
 ### Primary: `./run.sh`
 ```bash
-# Start everything (Docker + backend + Wasp frontend)
+# Start everything (Docker + Wasp full-stack)
 ./run.sh
 
-# Stop all processes started by run.sh
+# Stop all services
 ./run.sh --stop
 
 # Show help
@@ -38,14 +38,15 @@ This is the **ONLY** way to start the project. It handles:
 # Start only Docker services
 docker-compose up -d
 
-# Start backend in watch mode (separate terminal)
-npm run dev
+# Start Wasp backend in watch mode (separate terminal)
+cd wasp-app
+PORT=3555 wasp start
 ```
 
 ## 📍 Service Ports
 
-- **Frontend (Wasp):** http://localhost:3000
-- **Backend API:** http://localhost:3001
+- **Frontend (Wasp React):** http://localhost:3000
+- **Backend API (Wasp Node.js):** http://localhost:3555
 - **PostgreSQL:** localhost:5432
 - **Redis:** localhost:6379
 - **MinIO Console:** http://localhost:9001
@@ -55,12 +56,6 @@ npm run dev
 ```bash
 # Run all tests
 npm test
-
-# Run backend tests only
-npm test
-
-# Run Wasp tests only
-cd wasp-app && npm test
 
 # Run specific test file
 npm test -- test/unit/property-tests.test.ts
@@ -82,20 +77,17 @@ npm run test:coverage
 ./scripts/simulate-blackduck-sbom-scan.sh <sbom_path> [output_path]
 ```
 
-## ⚠️ IMPORTANT - DO NOT USE THESE (DELETED)
+## ⚠️ IMPORTANT - Fastify Removed (P0.2)
 
-These scripts were removed and should NOT be used:
-- ❌ `install-deps.sh` - Use `npm install` instead
-- ❌ `scripts/cleanup.sh` - Cleanup now handled by run.sh
-- ❌ `scripts/start.sh` - Replaced by `run.sh`
-- ❌ `scripts/wasp-dev.sh` - Replaced by `run-wasp.sh`
+The legacy Fastify backend (/src/) has been completely removed.
+All API routes are now served by Wasp only (port 3555).
 
 ## 🐛 Troubleshooting
 
-### "Address already in use" on ports 3000/3001
+### "Address already in use" on ports 3000/3555
 ```bash
 ./run.sh --stop
-# or manually: kill $(lsof -t -i :3000) $(lsof -t -i :3001)
+# or manually: kill $(lsof -t -i :3000) $(lsof -t -i :3555)
 ```
 
 ### Docker services not responding
@@ -107,8 +99,8 @@ docker-compose up -d
 
 ### Database migration issues
 ```bash
-npm run migrate
-npm run migrate:rollback
+cd wasp-app
+wasp db migrate-dev
 ```
 
 ### Clear all caches
@@ -121,11 +113,11 @@ cd wasp-app && npm install
 ## 📊 Health Check
 
 ```bash
-# Verify all services running
-curl http://localhost:3001/health
+# Verify backend is running
+curl http://localhost:3555/health
 
 # Expected response:
-# {"status":"healthy","services":{"database":"ok","redis":"ok","s3":"ok",...}}
+# OK or {status:"ok",...}
 ```
 
 ## 🚀 Deployment

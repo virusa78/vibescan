@@ -1,5 +1,5 @@
 /**
- * Jest configuration for VibeScan
+ * Jest configuration for VibeScan (Wasp-only)
  * Uses CommonJS format for Jest config
  */
 
@@ -16,13 +16,11 @@ const config = {
     testPathIgnorePatterns: [
         '/node_modules/',
         '/dist/',
-        '/test/e2e/',
-        '/test/e2e-wasp/',
+        '/.wasp/',
         '/\\.tmp-wasp/',
-        '/e2e-tests/',
-        '/vibescan-ui/e2e/',
-        '/wasp-app/'  // Wasp tests run separately
     ],
+    // For Wasp projects, run tests via wasp test command
+    // This config is kept for reference but not actively used
     transform: {
         '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.test.json', useESM: false }]
     },
@@ -31,35 +29,7 @@ const config = {
     moduleNameMapper: {
         '^(\\.{1,2}/.*)\\.js$': '$1',
         '^.+\\.(css|less|scss|sass)$': 'identity-obj-proxy',
-        '^@/(.*)$': '<rootDir>/src/$1',
-        '^@services/(.*)$': '<rootDir>/src/services/$1',
-        '^@db/(.*)$': '<rootDir>/src/database/$1',
-        '^@redis/(.*)$': '<rootDir>/src/redis/$1',
-        '^@queues/(.*)$': '<rootDir>/src/queues/$1',
-        '^@s3/(.*)$': '<rootDir>/src/s3/$1',
-        '^@types/(.*)$': '<rootDir>/src/types/$1',
-        '^@utils/(.*)$': '<rootDir>/src/utils/$1',
     },
-    collectCoverageFrom: [
-        'src/**/*.ts',
-        '!src/**/*.d.ts',
-        '!src/database/migrations/**',
-        // Temporarily excluded until ts-jest/ESM coverage support is fixed.
-        '!src/index.ts',
-        '!src/database/migrate.ts',
-        '!src/services/authService.ts',
-        '!src/services/billingService.ts'
-    ],
-    coverageDirectory: 'coverage',
-    coverageReporters: ['text', 'lcov', 'html', 'json-summary'],
-    ...(coverageGateMode !== 'off' ? {
-        coverageThreshold: {
-            global: {
-                lines: selectedCoverageGate.lines,
-                branches: selectedCoverageGate.branches,
-            }
-        }
-    } : {}),
     verbose: true,
     testTimeout: 30000,
 };
