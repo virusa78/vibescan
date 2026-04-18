@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "wasp/client/router";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
 import { BarChart3, Bug, TrendingUp, Zap } from "lucide-react";
 
@@ -11,6 +12,7 @@ function getStatusBadge(status: string) {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<{
@@ -260,7 +262,11 @@ export default function DashboardPage() {
                   {recentScans.map((scan) => {
                     const statusBadge = getStatusBadge(scan.status);
                     return (
-                      <tr key={scan.id} className="border-b border-border/20 hover:bg-accent/5 transition-colors">
+                      <tr 
+                        key={scan.id} 
+                        className="border-b border-border/20 hover:bg-accent/5 transition-colors cursor-pointer"
+                        onClick={() => navigate(`/scans/${scan.id}`)}
+                      >
                         <td className="py-3 px-4 text-foreground font-medium">{scan.inputRef || "Unknown scan"}</td>
                         <td className="py-3 px-4">
                           <span className="text-xs px-2 py-1 border border-primary/50 text-primary rounded">

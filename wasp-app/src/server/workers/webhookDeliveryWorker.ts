@@ -96,15 +96,25 @@ export async function webhookDeliveryWorker(job: any): Promise<any> {
       responseBody = error instanceof Error ? error.message : String(error);
     }
 
-    // Update WebhookDelivery record
-    const status = httpStatus >= 200 && httpStatus < 300 ? 'delivered' : 'failed';
-
-    await prisma.webhookDelivery.updateMany({
+    // Update WebhookDelivery record with targeted update (not updateMany)
+    // This ensures atomicity and prevents accidental bulk updates
+    const deliveryRecord = await prisma.webhookDelivery.findFirst({
       where: {
         webhookId,
         scanId,
         payloadHash,
       },
+    });
+
+    if (!deliveryRecord) {
+      console.warn(`[WebhookWorker] Delivery record not found for ${webhookId}/${scanId}`);
+      throw new Error('Delivery record not found');
+    }
+
+    const status = httpStatus >= 200 && httpStatus < 300 ? 'delivered' : 'failed';
+
+    await prisma.webhookDelivery.update({
+      where: { id: deliveryRecord.id },
       data: {
         httpStatus,
         responseBody,
@@ -120,12 +130,9 @@ export async function webhookDeliveryWorker(job: any): Promise<any> {
       return { success: true, status: httpStatus };
     } else if (attemptNumber >= MAX_RETRIES) {
       console.error(`[WebhookWorker] ❌ Max retries exceeded for ${targetUrl}`);
-      await prisma.webhookDelivery.updateMany({
-        where: {
-          webhookId,
-          scanId,
-          payloadHash,
-        },
+      // Mark as exhausted with targeted update
+      await prisma.webhookDelivery.update({
+        where: { id: deliveryRecord.id },
         data: {
           status: 'exhausted',
         },

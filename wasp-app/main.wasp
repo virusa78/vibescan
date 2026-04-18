@@ -161,6 +161,12 @@ page ReportsPage {
   component: import ReportsPage from "@src/reports/ReportsPage"
 }
 
+route ScanDetailsRoute { path: "/scans/:scanId", to: ScanDetailsPage }
+page ScanDetailsPage {
+  authRequired: true,
+  component: import { ScanDetailsPage } from "@src/dashboard/ScanDetailsPage"
+}
+
 route WebhooksRoute { path: "/webhooks", to: WebhooksPage }
 page WebhooksPage {
   authRequired: true,

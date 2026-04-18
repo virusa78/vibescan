@@ -1,13 +1,16 @@
 import type { Webhook } from 'wasp/entities';
 import { HttpError } from 'wasp/server';
 import * as z from 'zod';
+import * as crypto from 'crypto';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation.js';
+import { encryptWebhookSecret } from '../../utils/webhookEncryption.js';
 
 const updateWebhookInputSchema = z.object({
   webhookId: z.string().uuid('Invalid webhook ID'),
   url: z.string().url('Invalid webhook URL').optional(),
   events: z.array(z.enum(['scan_complete', 'report_ready', 'scan_failed'])).optional(),
-  active: z.boolean().optional(),
+  enabled: z.boolean().optional(),
+  rotateSecret: z.boolean().optional().default(false),
 });
 
 export type UpdateWebhookInput = z.infer<typeof updateWebhookInputSchema>;
@@ -16,12 +19,13 @@ export interface WebhookResponse {
   id: string;
   url: string;
   events: string[];
-  active: boolean;
+  enabled: boolean;
   updated_at: Date;
 }
 
 /**
  * Update an existing webhook configuration
+ * Enforces strict ownership boundary and consistent data model
  */
 export async function updateWebhook(
   rawArgs: any,
@@ -34,7 +38,7 @@ export async function updateWebhook(
   const args = ensureArgsSchemaOrThrowHttpError(updateWebhookInputSchema, rawArgs);
 
   try {
-    // Verify ownership
+    // Verify ownership - read webhook directly
     const webhook = await context.entities.Webhook.findUnique({
       where: { id: args.webhookId },
     });
@@ -43,6 +47,7 @@ export async function updateWebhook(
       throw new HttpError(404, 'Webhook not found');
     }
 
+    // Strict ownership boundary: user can only update their own webhooks
     if (webhook.userId !== context.user.id) {
       throw new HttpError(403, 'You do not have permission to update this webhook');
     }
@@ -62,7 +67,15 @@ export async function updateWebhook(
     const updateData: any = {};
     if (args.url) updateData.url = args.url;
     if (args.events) updateData.events = args.events;
-    if (args.active !== undefined) updateData.enabled = args.active;
+    if (args.enabled !== undefined) updateData.enabled = args.enabled;
+
+    // Secret rotation: optional when URL changes or explicitly requested
+    if (args.rotateSecret && (args.url || args.rotateSecret)) {
+      const newSecret = crypto.randomBytes(32).toString('hex');
+      const newSecretEncrypted = encryptWebhookSecret(newSecret);
+      updateData.signingSecretEncrypted = newSecretEncrypted;
+      console.log(`[Webhook] Rotated signing secret for webhook ${args.webhookId}`);
+    }
 
     const updatedWebhook = await context.entities.Webhook.update({
       where: { id: args.webhookId },
@@ -73,7 +86,7 @@ export async function updateWebhook(
       id: updatedWebhook.id,
       url: updatedWebhook.url,
       events: updatedWebhook.events,
-      active: updatedWebhook.enabled,
+      enabled: updatedWebhook.enabled,
       updated_at: updatedWebhook.updatedAt || new Date(),
     };
   } catch (_err) {
