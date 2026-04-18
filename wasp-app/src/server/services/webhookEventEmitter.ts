@@ -83,14 +83,14 @@ export async function emitWebhookEvent(event: WebhookEvent): Promise<void> {
           continue;
         }
 
-        // Create WebhookDelivery record
+        // Create WebhookDelivery record (start with attempt 1)
         const delivery = await prisma.webhookDelivery.create({
           data: {
             webhookId: webhook.id,
             scanId: scanId,
             targetUrl: webhook.url,
             payloadHash: payloadHash,
-            attemptNumber: 1,
+            attemptNumber: 1, // Initial attempt
             status: 'pending',
           },
         });
@@ -104,7 +104,7 @@ export async function emitWebhookEvent(event: WebhookEvent): Promise<void> {
           payloadHash: payloadHash,
           targetUrl: webhook.url,
           signingSecretEncrypted: webhook.signingSecretEncrypted,
-          attemptNumber: 1,
+          attemptNumber: 1, // Will be updated on retry based on job.attemptsMade
         };
 
         await webhookDeliveryQueue.add(

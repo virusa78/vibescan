@@ -57,7 +57,10 @@ function httpRequest(url: string, options: any, data: string): Promise<{ status:
  */
 export async function webhookDeliveryWorker(job: any): Promise<any> {
   const data: DeliveryQueueJob = job.data;
-  const { webhookId, scanId, eventType, payload, payloadHash, targetUrl, signingSecretEncrypted, attemptNumber } = data;
+  const { webhookId, scanId, eventType, payload, payloadHash, targetUrl, signingSecretEncrypted } = data;
+  
+  // Use BullMQ's attemptsMade to get actual attempt number (0-based, so add 1)
+  const attemptNumber = (job.attemptsMade || 0) + 1;
 
   console.log(
     `[WebhookWorker] Processing delivery job: webhook=${webhookId}, scan=${scanId}, attempt=${attemptNumber}`
