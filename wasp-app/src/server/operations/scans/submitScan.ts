@@ -1,6 +1,8 @@
 import { HttpError, prisma } from 'wasp/server';
 import * as z from 'zod';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation';
+import { quotaService } from '../../services/quotaService.js';
+import { orchestrateScan } from './orchestrator.js';
 
 const submitScanInputSchema = z.object({
   inputRef: z.string(),
@@ -24,7 +26,7 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
 
   const args = ensureArgsSchemaOrThrowHttpError(submitScanInputSchema, rawArgs);
 
-  // Wrap entire quota check, scan creation, and quota increment in a transaction
+  // Wrap entire quota check, scan creation, and quota consumption in a transaction
   // to prevent race conditions where concurrent requests bypass quota limits
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({
@@ -33,30 +35,6 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
 
     if (!user) {
       throw new HttpError(404, 'User not found');
-    }
-
-    // Check if quota reset is needed
-    const now = new Date();
-    let currentUser = user;
-    if (user.quotaResetDate && user.quotaResetDate <= now) {
-      // Reset monthly quota if reset date has passed
-      const nextResetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      currentUser = await tx.user.update({
-        where: { id: context.user.id },
-        data: {
-          monthlyQuotaUsed: 0,
-          quotaResetDate: nextResetDate,
-        },
-      });
-    }
-
-    const quotaAvailable = currentUser.monthlyQuotaLimit - currentUser.monthlyQuotaUsed;
-    if (quotaAvailable <= 0) {
-      throw new HttpError(429, 'Monthly scan quota exceeded', {
-        error: 'quota_exceeded',
-        quota_limit: currentUser.monthlyQuotaLimit,
-        quota_used: currentUser.monthlyQuotaUsed,
-      });
     }
 
     // Map UI input type to internal scan type
@@ -69,6 +47,7 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
       internalInputType = 'sbom_upload';
     }
 
+    // Create scan first (before consuming quota)
     const scan = await tx.scan.create({
       data: {
         userId: context.user.id,
@@ -91,21 +70,33 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
       },
     });
 
-    // Increment quota within transaction
-    await tx.user.update({
-      where: { id: context.user.id },
-      data: {
-        monthlyQuotaUsed: currentUser.monthlyQuotaUsed + 1,
-      },
-    });
+    // Consume quota within transaction using the service
+    // This will throw HttpError(429) if quota exceeded
+    const quotaInfo = await quotaService.consumeQuota(context.user.id, scan.id, tx);
 
     return {
       id: scan.id,
       status: scan.status,
       created_at: scan.createdAt,
-      quota_remaining: quotaAvailable - 1,
+      quota_remaining: quotaInfo.remaining,
     };
   });
+
+  // After transaction completes, orchestrate the scan (enqueue workers)
+  // Do this outside the transaction to avoid holding transaction lock
+  try {
+    await orchestrateScan({
+      scanId: result.id,
+      userId: context.user.id,
+      inputType: args.inputType,
+      inputRef: args.inputRef,
+      planAtSubmission: result.status,
+    });
+  } catch (error) {
+    console.error(`[submitScan] Orchestration failed for scan ${result.id}:`, error);
+    // Don't fail the entire request - quota was already consumed
+    // Scan will remain in pending state for retry
+  }
 
   return result;
 }

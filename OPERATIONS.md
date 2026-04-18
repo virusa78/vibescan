@@ -450,6 +450,95 @@ const result = await submitScan({
 
 ---
 
+## Quota Management
+
+### Quota System Overview
+
+VibeScan implements a **plan-based monthly quota** system to control API usage. Quotas are enforced at **scan submission time** (not completion), and usage is tracked in an audit ledger for transparency and compliance.
+
+#### Plan-Based Monthly Limits
+
+| Plan | Monthly Scans | Reset | Notes |
+|------|---------------|-------|-------|
+| **free_trial** | 5 | 1st of month | Entry-level plan for testing |
+| **starter** | 50 | 1st of month | Basic production use |
+| **pro** | 500 | 1st of month | High-volume scanning |
+| **enterprise** | Unlimited | N/A | Custom integrations |
+
+#### How Quotas Work
+
+1. **Consumption**: When a scan is submitted, 1 quota unit is deducted immediately
+2. **Failure Refund**: If a scan fails or is cancelled, the quota is refunded automatically
+3. **Monthly Reset**: Quotas reset to 0 used / limit available on the 1st of each month
+4. **Audit Trail**: Every quota change is logged in `QuotaLedger` for audit purposes
+
+#### Quota Response Headers
+
+When `submitScan` is called, the response includes:
+
+```typescript
+{
+  scanId: string
+  status: 'queued'
+  quota_remaining: number      // Remaining quota this month
+  quota_limit: number          // Monthly limit for plan
+  quota_reset_date: Date       // When quota resets
+}
+```
+
+#### Error Handling
+
+**Quota Exceeded (HTTP 429)**:
+```json
+{
+  "error": "quota_exceeded",
+  "message": "Monthly scan quota exceeded",
+  "quota_limit": 50,
+  "quota_used": 50,
+  "quota_remaining": 0,
+  "quota_reset_date": "2024-05-01T00:00:00Z"
+}
+```
+
+#### Quota Ledger
+
+Every quota operation is recorded in the `QuotaLedger` table for audit purposes:
+
+```typescript
+{
+  id: string                // UUID
+  userId: string           // User who consumed quota
+  action: string           // 'scan_submitted' | 'scan_refunded' | 'monthly_reset'
+  amount: number           // +1 (submitted), -1 (refunded), 0 (reset)
+  reason: string?          // Optional reason (e.g., 'scan_failed')
+  balanceBefore: number    // Quota used before operation
+  balanceAfter: number     // Quota used after operation
+  relatedScanId: string?   // Link to related scan if applicable
+  createdAt: Date          // When operation occurred
+}
+```
+
+#### Quota Refund Policy
+
+Quota is refunded in these scenarios:
+- **Scan Failed**: Automatic refund when scan worker encounters error
+- **Scan Cancelled**: Automatic refund when user cancels queued scan
+- **Admin Action**: Manual refund by platform admin for billing disputes
+
+Quota is **NOT** refunded for:
+- Successful scans (considered consumed)
+- Scans still queued or running
+- Rate-limited requests (quota already consumed)
+
+#### Tips for Quota Management
+
+1. **Monitor Usage**: Use `quotaService.getQuota()` to check remaining quota before submitting
+2. **Batch Scans**: Group related scans to avoid exceeding limits
+3. **Upgrade Plan**: Upgrade to `pro` or `enterprise` for higher limits
+4. **Audit Trail**: Review `QuotaLedger` entries for detailed usage history
+
+---
+
 ## Reports Operations
 
 ### 10. getReport
@@ -1148,6 +1237,172 @@ curl -X GET http://localhost:3555/api/reports/ci-decision \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "X-Scan-ID: scan-123"
 ```
+
+---
+
+## Dual-Scanner Orchestration Architecture
+
+### Overview
+
+VibeScan implements a dual-scanner vulnerability scanning pipeline to provide both free and comprehensive enterprise scanning:
+
+- **Free Scanner (Grype)**: Lightweight, open-source SPDX-compliant scanner
+- **Enterprise Scanner (Codescoring/BlackDuck)**: Advanced commercial vulnerability database
+
+Both scanners run in parallel for enterprise plans, with findings merged into a unified report. Free plans receive only Grype results.
+
+### Queue Configuration
+
+**Free Scanner Queue** (`free_scan_queue`)
+- Concurrency: 20 concurrent jobs
+- Priority: Low
+- Timeout: 30 minutes per job
+- Retries: 3 attempts with exponential backoff
+
+**Enterprise Scanner Queue** (`enterprise_scan_queue`)
+- Concurrency: 3 concurrent jobs
+- Priority: High
+- Timeout: 30 minutes per job
+- Retries: 3 attempts with exponential backoff
+
+### Submission Flow
+
+1. **User submits scan** via `submitScan` operation
+2. **Quota check** performed (fails if limit exceeded)
+3. **Scan record created** in PostgreSQL with status `pending`
+4. **Orchestrator enqueues** both workers:
+   - Free scanner job → `free_scan_queue` (always)
+   - Enterprise scanner job → `enterprise_scan_queue` (enterprise plans only)
+5. **Scan status updated** to `queued`
+6. **Response returned** with scanId and queue positions
+
+### Processing Flow
+
+**Parallel Execution**:
+```
+User Submission
+      ↓
+  Quota Check ✓
+      ↓
+ Create Scan
+      ↓
+ Enqueue Jobs
+      /                    \
+Free Scanner          Enterprise Scanner
+(Grype Worker)        (Codescoring Worker)
+     ↓                      ↓
+Parse JSON            Call API
+     ↓                      ↓
+Normalize              Normalize
+     ↓                      ↓
+Store ScanResult      Store ScanResult
+     ↓                      ↓
+Create Findings       Create Findings
+     ↓                      ↓
+Update Scan Status    Update Scan Status
+     \                      /
+        Scan Complete ✓
+```
+
+### Finding Normalization
+
+Both scanners output normalized to a shared schema:
+
+```typescript
+interface NormalizedFinding {
+  cveId: string;                           // CVE identifier
+  severity: "critical" | "high" | "medium" | "low" | "info";
+  package: string;                         // Package/component name
+  version: string;                         // Installed version
+  fixedVersion?: string;                   // Available fix
+  description: string;                     // CVE description
+  cvssScore: number;                       // CVSS base score
+  source: "free" | "enterprise";           // Scanner source
+}
+```
+
+### Error Handling
+
+**Partial Completion**: If one scanner fails, the scan still completes with available results:
+- Free scanner fails → Scan marked `done` with enterprise results only
+- Enterprise scanner fails → Scan marked `done` with free results only
+- Both fail → Scan marked `error` with error message
+
+**Retries**: Failed jobs retry automatically with exponential backoff (2s, 4s, 8s)
+
+**Cancellation**: Pending jobs can be cancelled via `cancelScan` operation
+
+### Database Schema
+
+**Scan Table**:
+```typescript
+{
+  id: string;
+  userId: string;
+  inputType: 'source_zip' | 'sbom_upload' | 'github_app';
+  inputRef: string;
+  status: 'pending' | 'queued' | 'scanning' | 'done' | 'error' | 'cancelled';
+  planAtSubmission: 'free_trial' | 'starter' | 'pro' | 'enterprise';
+  errorMessage?: string;
+  createdAt: Date;
+  completedAt?: Date;
+}
+```
+
+**ScanResult Table** (per-scanner output):
+```typescript
+{
+  id: string;
+  scanId: string;
+  source: 'free' | 'enterprise';
+  rawOutput: Json;        // Original scanner output
+  vulnerabilities: Json;  // Normalized findings array
+  scannerVersion: string;
+  cveDbTimestamp: Date;
+  durationMs: number;
+}
+```
+
+**Finding Table** (normalized vulnerabilities):
+```typescript
+{
+  id: string;
+  scanId: string;
+  userId: string;
+  fingerprint: string;    // Dedup hash
+  cveId: string;
+  packageName: string;
+  installedVersion: string;
+  severity: string;
+  cvssScore: number;
+  fixedVersion?: string;
+  source: 'free' | 'enterprise';
+}
+```
+
+### Status Transitions
+
+```
+pending
+   ↓
+queued (after orchestration)
+   ↓
+scanning (worker starts processing)
+   ↓
+done (both or partial completion)
+   ↓
+error (if both fail)
+   
+cancelled (user cancellation)
+```
+
+### Important Invariants
+
+1. **Quota Deduction**: Consumed when scan submitted, not when completed
+2. **Isolation**: Scanners run in Docker containers with `--network=none`, `--read-only`
+3. **Fingerprinting**: Deduplication via fingerprint hash (cveId + package + version)
+4. **Idempotency**: Jobs safe to retry; upserts handle duplicate processing
+5. **Plan Visibility**: Starter plans get finding counts only (no details)
 
 ---
 
