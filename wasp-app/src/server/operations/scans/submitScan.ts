@@ -124,19 +124,6 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
       inputRef: args.inputRef,
       planAtSubmission: user.plan,
     });
-
-    // Emit webhook event for scan submission
-    await emitWebhookEvent({
-      scanId: result.id,
-      eventType: 'scan_complete',
-      userId: context.user.id,
-      payload: buildWebhookPayload('scan_complete', result.id, context.user.id, {
-        status: 'submitted',
-        inputType: args.inputType,
-        createdAt: result.created_at,
-      }),
-      timestamp: new Date(),
-    });
   } catch (error) {
     console.error(`[submitScan] Post-orchestration failed for scan ${result.id}:`, error);
     // Don't fail the entire request - quota was already consumed

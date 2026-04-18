@@ -7,6 +7,7 @@ import { Job } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
 import { normalizeGrypeFindings } from '../operations/scans/normalizeFindings.js';
 import { scanWithGrype, isGrypInstalled } from '../lib/scanners/grypeScannerUtil.js';
+import { emitWebhookEvent, buildWebhookPayload } from '../services/webhookEventEmitter.js';
 import type { ScanJob } from '../queues/jobContract.js';
 import type { NormalizedComponent } from '../services/inputAdapterService.js';
 
@@ -158,13 +159,31 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       
       if (allExpectedComplete) {
         // All expected scanners completed, mark as done
-        await prisma.scan.update({
+        const completedScan = await prisma.scan.update({
           where: { id: scanId },
           data: {
             status: 'done',
             completedAt: new Date(),
           },
         });
+
+        // Emit webhook event for scan completion
+        try {
+          await emitWebhookEvent({
+            scanId: scanId,
+            eventType: 'scan_complete',
+            userId: userId,
+            payload: buildWebhookPayload('scan_complete', scanId, userId, {
+              status: 'done',
+              completedAt: completedScan.completedAt,
+              findingsCount: normalizedFindings.length,
+            }),
+            timestamp: new Date(),
+          });
+        } catch (webhookError) {
+          console.error(`[Free Scanner] Failed to emit webhook for scan ${scanId}:`, webhookError);
+          // Don't fail the scan if webhook emission fails
+        }
       }
     }
 
@@ -182,6 +201,12 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       include: { scanResults: true },
     });
 
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    let statusUpdate: { status: string; completedAt?: Date; errorMessage: string } = {
+      status: 'error',
+      errorMessage: `Free scanner failed: ${errorMessage}`,
+    };
+
     if (existingScan && existingScan.status === 'scanning') {
       const isEnterprisePlan = existingScan.planAtSubmission === 'enterprise';
       
@@ -189,34 +214,51 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       if (isEnterprisePlan) {
         const enterpriseResult = existingScan.scanResults.some((r) => r.source === 'enterprise');
         if (enterpriseResult) {
-          // Enterprise completed, mark as partial
-          await prisma.scan.update({
-            where: { id: scanId },
-            data: {
-              status: 'done', // Partial completion
-              completedAt: new Date(),
-              errorMessage: `Free scanner failed: ${error instanceof Error ? error.message : String(error)}`,
-            },
-          });
+          // Enterprise completed, mark as partial (done)
+          statusUpdate = {
+            status: 'done',
+            completedAt: new Date(),
+            errorMessage: `Free scanner failed: ${errorMessage}`,
+          };
         } else {
           // Both failed (enterprise plan)
-          await prisma.scan.update({
-            where: { id: scanId },
-            data: {
-              status: 'error',
-              errorMessage: `Free scanner failed: ${error instanceof Error ? error.message : String(error)}`,
-            },
-          });
+          statusUpdate = {
+            status: 'error',
+            completedAt: new Date(),
+            errorMessage: `Free scanner failed: ${errorMessage}`,
+          };
         }
       } else {
         // For non-enterprise plans, only free scanner expected, so this is an error
-        await prisma.scan.update({
-          where: { id: scanId },
-          data: {
-            status: 'error',
-            errorMessage: `Free scanner failed: ${error instanceof Error ? error.message : String(error)}`,
-          },
+        statusUpdate = {
+          status: 'error',
+          completedAt: new Date(),
+          errorMessage: `Free scanner failed: ${errorMessage}`,
+        };
+      }
+
+      // Update scan status
+      const updatedScan = await prisma.scan.update({
+        where: { id: scanId },
+        data: statusUpdate,
+      });
+
+      // Emit webhook event for error or partial completion
+      try {
+        const eventType = statusUpdate.status === 'error' ? 'scan_failed' : 'scan_complete';
+        await emitWebhookEvent({
+          scanId: scanId,
+          eventType: eventType,
+          userId: userId,
+          payload: buildWebhookPayload(eventType, scanId, userId, {
+            status: updatedScan.status,
+            errorMessage: statusUpdate.errorMessage,
+          }),
+          timestamp: new Date(),
         });
+      } catch (webhookError) {
+        console.error(`[Free Scanner] Failed to emit webhook for scan ${scanId}:`, webhookError);
+        // Don't fail if webhook emission fails
       }
     }
 
