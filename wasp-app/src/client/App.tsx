@@ -20,10 +20,23 @@ import CookieConsentBanner from "./components/cookie-consent/Banner";
  */
 export default function App() {
   const location = useLocation();
-  const { data: user } = useAuth();
+  const { data: user, isLoading: isAuthLoading } = useAuth();
   
   // Initialize token refresh on mount
   useTokenRefresh();
+
+  // Redirect root path based on auth status
+  useEffect(() => {
+    if (!isAuthLoading && location.pathname === "/") {
+      if (user) {
+        // Authenticated: go to dashboard
+        window.location.href = "/dashboard";
+      } else {
+        // Anonymous: go to landing page
+        window.location.href = "/landing";
+      }
+    }
+  }, [location.pathname, user, isAuthLoading]);
 
   const isMarketingPage = useMemo(() => {
     return (

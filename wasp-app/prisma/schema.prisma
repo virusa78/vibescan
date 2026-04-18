@@ -1,0 +1,416 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Enums
+enum ScanStatus {
+  pending
+  scanning
+  done
+  error
+  cancelled
+}
+
+enum ScanSource {
+  free
+  enterprise
+}
+
+enum WebhookDeliveryStatus {
+  pending
+  delivered
+  failed
+  exhausted
+}
+
+enum VulnAcceptanceStatus {
+  accepted
+  revoked
+  expired
+}
+
+enum PlanTier {
+  free_trial
+  starter
+  pro
+  enterprise
+}
+
+// Core User model - VibeScan schema
+model User {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  // Auth fields
+  email                     String          @unique
+  username                  String?         @unique
+  passwordHash              String?         @map("password_hash")
+
+  // Profile fields
+  displayName               String?         @map("display_name")
+  isAdmin                   Boolean         @default(false)
+
+  // Billing fields
+  plan                      PlanTier        @default(free_trial)
+  stripeCustomerId          String?         @unique @map("stripe_customer_id")
+  stripeSubscriptionId      String?         @unique @map("stripe_subscription_id")
+  subscriptionStatus        String?         @map("subscription_status") // 'active', 'canceled', 'past_due'
+  
+  // Regional settings
+  region                    String          @default("OTHER") // IN, PK, OTHER
+  timezone                  String?
+  language                  String?         @default("en")
+
+  // Quota tracking
+  monthlyQuotaLimit         Int             @default(10) @map("monthly_quota_limit")
+  monthlyQuotaUsed          Int             @default(0) @map("monthly_quota_used")
+  quotaResetDate            DateTime        @default(now()) @map("quota_reset_date")
+
+  // Relations
+  apiKeys                   ApiKey[]
+  scans                     Scan[]
+  webhooks                  Webhook[]
+  vulnAcceptances           VulnAcceptance[]
+  aiFixPrompts              AiFixPrompt[]
+  findings                  Finding[]
+  organizations             Organization[]  @relation("members")
+  quotaLedger               QuotaLedger[]
+
+  @@map("users")
+}
+
+// Organizations for team/enterprise plans
+model Organization {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  
+  name                      String
+  ownerUserId               String          @map("owner_user_id") @db.Uuid
+  
+  members                   User[]          @relation("members")
+
+  @@map("organizations")
+}
+
+// API Keys for CI/CD integration
+model ApiKey {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  expiresAt                 DateTime?       @map("expires_at")
+  
+  userId                    String          @map("user_id") @db.Uuid
+  name                      String
+  keyHash                   String          @map("key_hash")
+  lastUsedAt                DateTime?       @map("last_used_at")
+  enabled                   Boolean         @default(true)
+
+  user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, keyHash])
+  @@map("api_keys")
+}
+
+// Scans - core entity
+model Scan {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  completedAt               DateTime?       @map("completed_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  userId                    String          @map("user_id") @db.Uuid
+  orgId                     String?         @map("org_id") @db.Uuid
+
+  // Input details
+  inputType                 String          @map("input_type") // 'source_zip', 'sbom_upload', 'github_app', 'ci_plugin'
+  inputRef                  String          @map("input_ref") // filename, SBOM URL, GitHub ref, etc.
+  
+  // SBOM and components
+  sbomRaw                   Json?           @map("sbom_raw")
+  components                Json            @default("[]")
+
+  // Scan status and plan at submission time
+  status                    ScanStatus      @default(pending)
+  planAtSubmission          String          @default("free_trial") @map("plan_at_submission") // free_trial, starter, pro, enterprise
+  errorMessage              String?         @map("error_message")
+
+  // Relations
+  user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scanResults               ScanResult[]
+  findings                  Finding[]
+  scanDeltas                ScanDelta[]
+  aiFixPrompts              AiFixPrompt[]
+  securityScores            SecurityScore[]
+  vulnAcceptances           VulnAcceptance[]
+  webhookDeliveries         WebhookDelivery[]
+
+  @@map("scans")
+}
+
+// Scanner output results (dual-scanner)
+model ScanResult {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+
+  scanId                    String          @map("scan_id") @db.Uuid
+  source                    ScanSource
+  
+  rawOutput                 Json            @map("raw_output")
+  vulnerabilities           Json
+  scannerVersion            String          @map("scanner_version")
+  cveDbTimestamp            DateTime        @map("cve_db_timestamp")
+  durationMs                Int             @map("duration_ms")
+
+  scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@unique([scanId, source], map: "idx_scan_results_unique")
+  @@map("scan_results")
+}
+
+// Individual vulnerability findings with fingerprint-based deduplication
+model Finding {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  scanId                    String          @map("scan_id") @db.Uuid
+  userId                    String          @map("user_id") @db.Uuid
+
+  // Fingerprint for deduplication across scans
+  fingerprint               String          // HASH(cve_id + package_name + installed_version + file_path)
+
+  // Finding details (immutable except severity/fixed_version which can update from CVE DB)
+  cveId                     String          @map("cve_id")
+  packageName               String          @map("package_name")
+  installedVersion          String          @map("installed_version")
+  filePath                  String?         @map("file_path")
+  
+  // Severity and fix info (can change if CVE DB updates)
+  severity                  String          // CRITICAL, HIGH, MEDIUM, LOW, INFO
+  cvssScore                 Decimal?        @map("cvss_score") @db.Decimal(3, 1)
+  fixedVersion              String?         @map("fixed_version")
+
+  // Status tracking
+  status                    String          @default("active") // active, mitigated
+  mitigatedAt               DateTime?       @map("mitigated_at")
+  mitigatedInScanId         String?         @map("mitigated_in_scan_id") @db.Uuid
+
+  // Source scanner
+  source                    ScanSource      // free or enterprise
+
+  // Description and details (updated at import time)
+  description               String?
+  detectedData              Json?           @map("detected_data")
+
+  // Relations
+  scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  history                   FindingHistory[]
+
+  @@index([fingerprint])
+  @@index([userId, status])
+  @@index([scanId])
+  @@index([cveId])
+  @@unique([scanId, fingerprint], map: "idx_finding_unique_per_scan")
+  @@map("findings")
+}
+
+// Audit trail for finding status changes
+model FindingHistory {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+
+  findingId                 String          @map("finding_id") @db.Uuid
+  
+  // Event type: severity_changed, auto_mitigated, manually_accepted, etc.
+  event                     String
+  
+  // Previous and new values for the event
+  prevValue                 String?         @map("prev_value")
+  newValue                  String?         @map("new_value")
+  
+  // Optional additional context
+  metadata                  Json?
+
+  // Relation
+  finding                   Finding         @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([findingId])
+  @@index([event])
+  @@map("finding_history")
+}
+
+// Delta comparison (enterprise vs free)
+model ScanDelta {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+
+  scanId                    String          @unique @map("scan_id") @db.Uuid
+
+  totalFreeCount            Int             @default(0) @map("total_free_count")
+  totalEnterpriseCount      Int             @default(0) @map("total_enterprise_count")
+  deltaCount                Int             @default(0) @map("delta_count")
+  deltaBySeverity           Json            @map("delta_by_severity")
+  deltaVulnerabilities      Json?           @map("delta_vulnerabilities")
+  isLocked                  Boolean         @default(false) @map("is_locked")
+
+  // Reimport summary from fingerprint-based deduplication
+  // { new_count, mitigated_count, updated_count, unchanged_count }
+  reimportSummary           Json?           @map("reimport_summary")
+
+  scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("scan_deltas")
+}
+
+// AI fix prompt suggestions
+model AiFixPrompt {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  scanId                    String          @map("scan_id") @db.Uuid
+  userId                    String          @map("user_id") @db.Uuid
+  vulnerabilityId           String          @map("vulnerability_id")
+  
+  promptText                String          @map("prompt_text")
+  modelName                 String?         @map("model_name")
+  responsePayload           Json?           @map("response_payload")
+  status                    String          @default("generated")
+
+  scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ai_fix_prompts")
+}
+
+// Security score for scans
+model SecurityScore {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+
+  scanId                    String          @unique @map("scan_id") @db.Uuid
+  score                     Decimal         @db.Decimal(5, 2)
+  grade                     String
+  breakdown                 Json
+
+  scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("security_scores")
+}
+
+// Vulnerability acceptance/waiver
+model VulnAcceptance {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  scanId                    String          @map("scan_id") @db.Uuid
+  userId                    String          @map("user_id") @db.Uuid
+  vulnerabilityId           String          @map("vulnerability_id")
+  
+  reason                    String?
+  status                    VulnAcceptanceStatus @default(accepted)
+  expiresAt                 DateTime?       @map("expires_at")
+
+  scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([scanId, userId, vulnerabilityId])
+  @@map("vuln_acceptances")
+}
+
+// GitHub app installations
+model GithubInstallation {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+
+  orgId                     String          @map("org_id") @db.Uuid
+  githubInstallationId      BigInt          @map("github_installation_id")
+  githubAppId               String          @map("github_app_id")
+  
+  reposScope                String[]        @default([]) @map("repos_scope")
+  triggerOnPush             Boolean         @default(true) @map("trigger_on_push")
+  triggerOnPr               Boolean         @default(true) @map("trigger_on_pr")
+  targetBranches            String[]        @default(["main", "develop"]) @map("target_branches")
+  failPrOnSeverity          String          @default("CRITICAL") @map("fail_pr_on_severity")
+
+  @@map("github_installations")
+}
+
+// Webhooks for scan notifications
+model Webhook {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  userId                    String          @map("user_id") @db.Uuid
+  url                       String
+  events                    String[]        @default(["scan_complete"]) // JSON array of event types
+  signingSecretEncrypted    Bytes           @map("signing_secret_encrypted")
+  enabled                   Boolean         @default(true)
+
+  user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries                WebhookDelivery[]
+
+  @@map("webhooks")
+}
+
+// Webhook delivery history
+model WebhookDelivery {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+
+  webhookId                 String          @map("webhook_id") @db.Uuid
+  scanId                    String          @map("scan_id") @db.Uuid
+  
+  targetUrl                 String          @map("target_url")
+  payloadHash               String          @map("payload_hash")
+  attemptNumber             Int             @default(1) @map("attempt_number")
+  httpStatus                Int?            @map("http_status")
+  responseBody              String?         @map("response_body")
+  deliveredAt               DateTime?       @map("delivered_at")
+  nextRetryAt               DateTime?       @map("next_retry_at")
+  status                    WebhookDeliveryStatus @default(pending)
+
+  webhook                   Webhook         @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("webhook_deliveries")
+}
+
+// Quota ledger for audit trail and tracking quota consumption
+model QuotaLedger {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt         DateTime        @default(now()) @map("created_at")
+  
+  userId            String          @map("user_id") @db.Uuid
+  
+  // Action type: scan_submitted, scan_refunded, monthly_reset
+  action            String
+  
+  // Amount of quota consumed/refunded
+  amount            Int
+  
+  // Reason for the action
+  reason            String?
+  
+  // Balance before and after for audit trail
+  balanceBefore     Int             @map("balance_before")
+  balanceAfter      Int             @map("balance_after")
+  
+  // Reference to related scan if applicable
+  relatedScanId     String?         @map("related_scan_id") @db.Uuid
+  
+  // Relations
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([createdAt])
+  @@map("quota_ledger")
+}
