@@ -51,7 +51,7 @@ After starting, you'll see output like:
 ```
 🌐 Access URLs:
    Frontend:  http://192.168.1.15:3000
-   Backend:   http://192.168.1.15:3001
+   Backend:   http://192.168.1.15:3555
    MinIO:     http://192.168.1.15:9001 (console)
 ```
 
@@ -69,30 +69,26 @@ After starting, you'll see output like:
 
 ```
 vibescan/
-├── src/                    # Backend source
-│   ├── config/            # Configuration
-│   ├── database/          # PostgreSQL migrations
-│   ├── handlers/          # API route handlers
-│   ├── middleware/        # Fastify middleware
-│   ├── services/          # Business logic
-│   ├── workers/           # Queue workers
-│   └── index.ts           # Entry point
-├── vibescan-ui/           # Frontend (Next.js 15)
-│   ├── src/app/           # App Router pages
-│   ├── src/components/    # React components
-│   └── src/lib/           # Utilities & API client
-├── scripts/               # Utility scripts
-│   ├── start.sh          # Start script
-│   └── fill-mock-data.ts # Mock data generator
-└── deploy/kubernetes/     # K8s manifests
+├── wasp-app/                # Wasp full-stack application
+│   ├── main.wasp            # Wasp DSL config
+│   ├── src/
+│   │   ├── client/          # Frontend (React + Vite)
+│   │   ├── server/          # Backend (Node.js + Express-like)
+│   │   │   └── operations/  # Wasp operations (queries/actions)
+│   │   └── auth/            # Auth forms & templates
+│   └── prisma/              # Database schema & migrations
+├── scripts/                 # Utility scripts
+│   ├── start.sh            # Start script
+│   └── fill-mock-data.ts   # Mock data generator
+└── deploy/kubernetes/       # K8s manifests
 ```
 
 ## Docker Services
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| vibescan-api | 3001 | Backend API |
-| vibescan-postgres | 5432 | PostgreSQL database |
+| vibescan-wasp | 3555 | Backend API + Frontend (Wasp framework)
+| vibescan-postgres | 5432 | PostgreSQL database
 | vibescan-redis | 6379 | Cache & queues |
 | vibescan-minio | 9000 | S3-compatible storage |
 | vibescan-minio | 9001 | MinIO console |
@@ -251,7 +247,7 @@ Authorization: Bearer <token>
 **Problem:** Frontend can't connect to backend API.
 
 **Solution:**
-1. Check backend is running: `curl http://localhost:3001/health`
+1. Check backend is running: `curl http://localhost:3555/health`
 2. Check `.env.local` has correct API URL: `cat vibescan-ui/.env.local`
 3. Restart frontend: Kill the process and run `./scripts/start.sh`
 
@@ -273,7 +269,7 @@ npm run dev
 **Solution:**
 ```bash
 # Find and kill processes using ports 3001, 3000, 5432, 6379, 9000
-lsof -ti :3001 | xargs kill -9
+lsof -ti :3555 | xargs kill -9
 lsof -ti :3000 | xargs kill -9
 lsof -ti :5432 | xargs kill -9
 lsof -ti :6379 | xargs kill -9
@@ -350,7 +346,7 @@ tail -f /tmp/vibescan-frontend.log
 ### Health Checks
 ```bash
 # Backend health
-curl http://localhost:3001/health | jq '.'
+curl http://localhost:3555/health | jq '.'
 
 # Expected response
 {

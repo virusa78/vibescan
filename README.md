@@ -29,7 +29,7 @@ Client Layer
     └── CI/CD Pipeline
          ↓
 API Gateway Layer
-    ├── API Gateway (Fastify)
+    ├── Wasp Framework (Full-stack)
     ├── AuthService (JWT)
     └── Rate Limiter (100 req/min)
          ↓
@@ -60,9 +60,9 @@ Data Layer
 ## Tech Stack
 
 ### Backend
-- **Runtime**: Node.js 24.14.1 LTS/TypeScript with ES modules
-- **Framework**: Fastify 4.28.1
-- **Database**: PostgreSQL 15 with pgcrypto extension
+- **Runtime**: Node.js 20+ LTS with TypeScript (ES modules)
+- **Framework**: Wasp 0.23+ (full-stack: Node.js + React)
+- **Database**: PostgreSQL 15 with Prisma ORM (pgcrypto extension)
 - **Cache/Queues**: Redis v4 with BullMQ 5.14.0
 - **Container**: Docker for isolated scanning
 - **Infrastructure**: Kubernetes, AWS S3/KMS
@@ -150,7 +150,7 @@ npm run dev
 **Step 5: Configure API URL for remote access**
 ```bash
 # Replace 192.168.1.15 with your server's IP
-echo "NEXT_PUBLIC_API_URL=http://192.168.1.15:3001" > .env.local
+echo "NEXT_PUBLIC_API_URL=http://192.168.1.15:3555" > .env.local
 ```
 
 Then access the frontend at the URL shown in your terminal.
@@ -159,14 +159,14 @@ Then access the frontend at the URL shown in your terminal.
    ```
 
 5. Access the API:
-   - API: http://localhost:3001
-   - Swagger UI: http://localhost:3001/docs (dev mode)
+   - API: http://localhost:3555
+   - Swagger UI: http://localhost:3555/docs (dev mode)
 
 ### Local Development
 
 **Dev port convention (fixed):**
 - Frontend: `http://localhost:3000`
-- Backend API: `http://localhost:3001`
+- Backend API: `http://localhost:3555`
 
 1. Install dependencies:
    ```bash
@@ -291,12 +291,12 @@ npm run lint:fix
 - tears down only services/processes started by the test setup
 
 Default endpoints (used when `API_URL`/`FRONTEND_URL` are not set):
-- API: `http://127.0.0.1:3001` (health endpoint)
+- API: `http://127.0.0.1:3555` (health endpoint)
 - Frontend: `http://127.0.0.1:3000` (login page)
 
 Override endpoints when needed:
 ```bash
-API_URL=http://localhost:3001 FRONTEND_URL=http://localhost:3000 npm run test:e2e
+API_URL=http://localhost:3555 FRONTEND_URL=http://localhost:3000 npm run test:e2e
 ```
 
 Disable auto-orchestration if you want manual control:

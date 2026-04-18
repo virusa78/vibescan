@@ -113,14 +113,14 @@ Mock BlackDuck scanner for testing
 ./run.sh
 # Access:
 # - Frontend: http://localhost:3000
-# - API: http://localhost:3001
-# - API Docs: http://localhost:3001/swagger
+# - API: http://localhost:3555
+# - API Docs: http://localhost:3555/swagger
 ```
 
 ### Backend Only
 ```bash
 npm run dev:up
-# Access: http://localhost:3001
+# Access: http://localhost:3555
 ```
 
 ### Wasp Development
