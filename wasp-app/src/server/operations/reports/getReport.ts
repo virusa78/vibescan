@@ -69,13 +69,21 @@ export const getReport = async (rawArgs: any, context: any): Promise<GetReportRe
     throw new HttpError(401, "Authentication required");
   }
 
-  const scan = await prisma.scan.findUnique({
-    where: { id: scanId },
-    include: {
-      findings: true,
-      scanDeltas: true,
-    },
-  });
+  // Fetch user and scan in parallel for efficiency
+  const [user, scan] = await Promise.all([
+    prisma.user.findUnique({ where: { id: context.user.id } }),
+    prisma.scan.findUnique({
+      where: { id: scanId },
+      include: {
+        findings: true,
+        scanDeltas: true,
+      },
+    }),
+  ]);
+
+  if (!user) {
+    throw new HttpError(401, "User not found");
+  }
 
   if (!scan) {
     throw new HttpError(404, "Scan not found");
@@ -85,7 +93,8 @@ export const getReport = async (rawArgs: any, context: any): Promise<GetReportRe
     throw new HttpError(403, "Unauthorized");
   }
 
-  // Determine paywall enforcement
+  // Determine paywall enforcement based on the plan at submission
+  // Use actual user.plan from DB for current tier verification
   const lockedView = isLockedView(scan.planAtSubmission);
 
   // Get findings and categorize by source

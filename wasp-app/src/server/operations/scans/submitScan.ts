@@ -13,7 +13,6 @@ import {
 const submitScanInputSchema = z.object({
   inputRef: z.string(),
   inputType: z.enum(['github', 'sbom', 'source_zip']),
-  plan_tier: z.string().optional(),
   sbomContent: z.string().optional(), // For SBOM upload, pass raw JSON content
 });
 
@@ -86,7 +85,7 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
         inputType: internalInputType,
         inputRef: args.inputRef,
         status: 'pending',
-        planAtSubmission: args.plan_tier || user.plan,
+        planAtSubmission: user.plan,
         components: components,
         sbomRaw: sbomRaw,
       },
@@ -99,7 +98,7 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
         totalEnterpriseCount: 0,
         deltaCount: 0,
         deltaBySeverity: {},
-        isLocked: (args.plan_tier || user.plan) === 'free_trial' || (args.plan_tier || user.plan) === 'starter',
+        isLocked: user.plan === 'free_trial' || user.plan === 'starter',
       },
     });
 
@@ -123,7 +122,7 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
       userId: context.user.id,
       inputType: args.inputType,
       inputRef: args.inputRef,
-      planAtSubmission: result.status,
+      planAtSubmission: user.plan,
     });
 
     // Emit webhook event for scan submission
