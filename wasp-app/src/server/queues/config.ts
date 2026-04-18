@@ -4,9 +4,9 @@
  */
 
 import { Queue, Worker, QueueEvents } from 'bullmq';
-import { freeScannerWorker } from '../workers/freeScannerWorker';
-import { enterpriseScannerWorker } from '../workers/enterpriseScannerWorker';
-import { webhookDeliveryWorker } from '../workers/webhookDeliveryWorker';
+import { freeScannerWorker } from '../workers/freeScannerWorker.js';
+import { enterpriseScannerWorker } from '../workers/enterpriseScannerWorker.js';
+import { webhookDeliveryWorker } from '../workers/webhookDeliveryWorker.js';
 
 // Redis connection config
 const redisConfig = {
