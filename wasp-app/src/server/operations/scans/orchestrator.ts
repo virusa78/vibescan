@@ -47,16 +47,9 @@ export async function orchestrateScan(input: OrchestratorInput): Promise<Orchest
       s3Bucket: `scans/${scanId}`,
     };
 
-    // Determine if user is enterprise
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new Error(`User ${userId} not found`);
-    }
-
-    const isEnterprise = planAtSubmission === 'enterprise' || user.plan === 'enterprise';
+    // Determine if user is enterprise based on plan at submission
+    // planAtSubmission is always set from user.plan in submitScan, so use that
+    const isEnterprise = planAtSubmission === 'enterprise';
     let freeJobId: string | undefined;
     let enterpriseJobId: string | undefined;
     let freeQueuePosition: number | undefined;
