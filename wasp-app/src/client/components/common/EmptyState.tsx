@@ -17,7 +17,7 @@ export function EmptyState({
   title = 'No scans yet',
   description = 'Submit your first scan to see results here',
   actionLabel = 'Create First Scan',
-  actionRoute = '/scans/new',
+  actionRoute = '/new-scan',
   icon,
 }: EmptyStateProps) {
   const navigate = useNavigate();

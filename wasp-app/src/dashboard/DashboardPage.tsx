@@ -308,7 +308,7 @@ export default function DashboardPage() {
           title="No scans yet"
           description="Submit your first vulnerability scan to see results here"
           actionLabel="Create First Scan"
-          actionRoute="/scans"
+          actionRoute="/new-scan"
         />
       ) : (
         <ScanTable

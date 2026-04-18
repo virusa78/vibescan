@@ -102,7 +102,7 @@ export function ScanTable({ scans, loading = false, onRefresh }: ScanTableProps)
           <div className="py-12 text-center">
             <p className="text-muted-foreground mb-4">No scans yet.</p>
             <button
-              onClick={() => navigate('/scans/new')}
+              onClick={() => navigate('/new-scan')}
               className="text-sm px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition"
             >
               Create First Scan
