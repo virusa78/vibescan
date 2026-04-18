@@ -185,6 +185,13 @@ action updateUserSettings {
   auth: true
 }
 
+// Refresh Token Action - Implements token rotation and new token pair generation
+action refreshToken {
+  fn: import { refreshToken } from "@src/server/operations/auth/refreshToken",
+  entities: [],
+  auth: false
+}
+
 // Auth compatibility for legacy email form endpoints used by current UI components.
 api emailSignupCompatApi {
   fn: import { emailSignupCompatApi } from "@src/server/authCompat",

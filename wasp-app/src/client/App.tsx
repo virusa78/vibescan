@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router";
 import { routes } from "wasp/client/router";
 import { useAuth } from "wasp/client/auth";
 import { Toaster } from "../client/components/ui/toaster";
+import { useTokenRefresh } from "./hooks/useTokenRefresh";
 import "./theme-init";
 import "./Main.css";
 import NavBar from "./components/NavBar/NavBar";
@@ -20,6 +21,9 @@ import CookieConsentBanner from "./components/cookie-consent/Banner";
 export default function App() {
   const location = useLocation();
   const { data: user } = useAuth();
+  
+  // Initialize token refresh on mount
+  useTokenRefresh();
 
   const isMarketingPage = useMemo(() => {
     return (

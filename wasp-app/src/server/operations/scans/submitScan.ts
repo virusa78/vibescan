@@ -3,6 +3,7 @@ import * as z from 'zod';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation';
 import { quotaService } from '../../services/quotaService.js';
 import { orchestrateScan } from './orchestrator.js';
+import { emitWebhookEvent, buildWebhookPayload } from '../../services/webhookEventEmitter.js';
 
 const submitScanInputSchema = z.object({
   inputRef: z.string(),
@@ -92,8 +93,21 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
       inputRef: args.inputRef,
       planAtSubmission: result.status,
     });
+
+    // Emit webhook event for scan submission
+    await emitWebhookEvent({
+      scanId: result.id,
+      eventType: 'scan_complete',
+      userId: context.user.id,
+      payload: buildWebhookPayload('scan_complete', result.id, context.user.id, {
+        status: 'submitted',
+        inputType: args.inputType,
+        createdAt: result.created_at,
+      }),
+      timestamp: new Date(),
+    });
   } catch (error) {
-    console.error(`[submitScan] Orchestration failed for scan ${result.id}:`, error);
+    console.error(`[submitScan] Post-orchestration failed for scan ${result.id}:`, error);
     // Don't fail the entire request - quota was already consumed
     // Scan will remain in pending state for retry
   }

@@ -6,6 +6,7 @@
 import { Queue, Worker, QueueEvents } from 'bullmq';
 import { freeScannerWorker } from '../workers/freeScannerWorker';
 import { enterpriseScannerWorker } from '../workers/enterpriseScannerWorker';
+import { webhookDeliveryWorker } from '../workers/webhookDeliveryWorker';
 
 // Redis connection config
 const redisConfig = {
@@ -17,6 +18,7 @@ const redisConfig = {
 export const QUEUE_NAMES = {
   FREE_SCAN: 'free_scan_queue',
   ENTERPRISE_SCAN: 'enterprise_scan_queue',
+  WEBHOOK_DELIVERY: 'webhook_delivery_queue',
 };
 
 // Create queue instances
@@ -46,9 +48,23 @@ export const enterpriseScanQueue = new Queue(QUEUE_NAMES.ENTERPRISE_SCAN, {
   },
 });
 
+export const webhookDeliveryQueue = new Queue(QUEUE_NAMES.WEBHOOK_DELIVERY, {
+  connection: redisConfig,
+  defaultJobOptions: {
+    attempts: 5,
+    backoff: {
+      type: 'exponential',
+      delay: 2000,
+    },
+    removeOnComplete: true,
+    removeOnFail: false,
+  },
+});
+
 // Worker registration with concurrency limits
 let freeWorker: Worker | null = null;
 let enterpriseWorker: Worker | null = null;
+let webhookWorker: Worker | null = null;
 
 export async function initializeWorkers() {
   try {
@@ -80,7 +96,21 @@ export async function initializeWorkers() {
       console.error(`[Enterprise Scanner] Job ${job?.id} failed:`, err.message);
     });
 
-    console.log('✅ Workers initialized: free_scan (20 concurrent), enterprise_scan (3 concurrent)');
+    // Webhook delivery worker: 10 concurrent jobs
+    webhookWorker = new Worker(QUEUE_NAMES.WEBHOOK_DELIVERY, webhookDeliveryWorker, {
+      connection: redisConfig,
+      concurrency: 10,
+    });
+
+    webhookWorker.on('completed', (job: any) => {
+      console.log(`[Webhook Delivery] Job ${job.id} completed`);
+    });
+
+    webhookWorker.on('failed', (job: any, err: any) => {
+      console.error(`[Webhook Delivery] Job ${job?.id} failed:`, err.message);
+    });
+
+    console.log('✅ Workers initialized: free_scan (20 concurrent), enterprise_scan (3 concurrent), webhook_delivery (10 concurrent)');
   } catch (error) {
     console.error('❌ Failed to initialize workers:', error);
     throw error;
@@ -94,6 +124,9 @@ export async function closeWorkers() {
   if (enterpriseWorker) {
     await enterpriseWorker.close();
   }
+  if (webhookWorker) {
+    await webhookWorker.close();
+  }
 }
 
 export function getWorkerStatus() {
@@ -105,6 +138,10 @@ export function getWorkerStatus() {
     enterprise: {
       isRunning: enterpriseWorker?.isRunning() || false,
       isPaused: enterpriseWorker?.isPaused() || false,
+    },
+    webhook: {
+      isRunning: webhookWorker?.isRunning() || false,
+      isPaused: webhookWorker?.isPaused() || false,
     },
   };
 }

@@ -6,13 +6,110 @@ Complete documentation of all 20 Wasp operations available in VibeScan. These ar
 
 | Category | Count | Operations |
 |----------|-------|-----------|
+| **Authentication** | 1 | refreshToken |
 | **User Management** | 3 | getPaginatedUsers, updateIsUserAdminById, updateUserSettings |
 | **API Keys** | 3 | generateApiKey, listApiKeys, revokeApiKey |
 | **Scans** | 3 | getScans, getScanById, submitScan |
 | **Reports** | 4 | getReport, getReportSummary, generateReportPDF, getCIDecision |
 | **Webhooks** | 5 | createWebhook, listWebhooks, getWebhook, updateWebhook, deleteWebhook |
 | **Billing** | 2 | getCustomerPortalUrl, generateCheckoutSession |
-| **Total** | **20** | Full-stack Wasp operations |
+| **Total** | **21** | Full-stack Wasp operations |
+
+---
+
+## Authentication Operations
+
+### 1. refreshToken
+
+**Type**: Action (mutation)  
+**Auth Required**: No (uses refresh token instead)  
+**Scope**: Issue new access token using refresh token
+
+**Description**: 
+Implements secure JWT refresh token flow with automatic token rotation. When called with a valid refresh token, issues a new access token + refresh token pair. The old refresh token is automatically blacklisted to prevent replay attacks.
+
+**Usage**:
+```typescript
+import { refreshToken } from 'wasp/client/operations'
+
+const result = await refreshToken({ 
+  refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+})
+
+// Use new tokens
+localStorage.setItem('access_token', result.accessToken)
+localStorage.setItem('refresh_token', result.refreshToken)
+```
+
+**Parameters**:
+```typescript
+{
+  refreshToken: string  // Valid refresh token (required)
+}
+```
+
+**Response** (Success):
+```typescript
+{
+  accessToken: string   // New short-lived access token (15 min expiry)
+  refreshToken: string  // New long-lived refresh token (30 day expiry, rotated)
+  expiresIn: number     // Access token expiry in seconds (900)
+}
+```
+
+**Response** (Error):
+```typescript
+{
+  error: string  // Error message
+}
+```
+
+**Error Codes**:
+- `401`: Invalid, expired, or blacklisted refresh token
+- `500`: Server error during token generation
+
+**cURL Example**:
+```bash
+curl -X POST http://localhost:3555/api/refresh-token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ1c2VyLTEyMyIsImp0aSI6ImJ0aV91c2VyLTEyM182YzQ1YTk4ZCIsImlhdCI6MTcxMzAyNDAwMCwiZXhwIjoxNzQ1NTU5NjAwLCJ0eXBlIjoicmVmcmVzaCJ9.signature"
+  }'
+```
+
+**Security Features**:
+- Token rotation: Old refresh token automatically blacklisted
+- Unique JTI (JWT ID) per token for tracking
+- HMAC-SHA256 signature verification
+- Redis blacklist prevents token reuse
+- 15-minute access token expiry (short-lived)
+- 30-day refresh token expiry (long-lived)
+
+**Auto-Refresh (React Hook)**:
+```typescript
+import { useTokenRefresh } from '@src/client/hooks/useTokenRefresh'
+
+export function MyComponent() {
+  // Automatically refreshes token before expiry
+  // Handles 401 responses with manual refresh
+  useTokenRefresh()
+  
+  return <div>Your component</div>
+}
+```
+
+**Token Lifecycle**:
+1. User logs in → receives first access + refresh token pair
+2. Access token used for API requests (15 min valid)
+3. Access token expires → call refreshToken with refresh token
+4. New access + refresh token pair issued
+5. Old refresh token blacklisted (prevented replay attacks)
+6. Client stores new tokens and continues
+7. Process repeats until refresh token expires (30 days)
+
+**Related Documentation**:
+- [TOKEN_MANAGEMENT.md](TOKEN_MANAGEMENT.md) - Complete token management guide
+- [TOKEN_VALIDATION.md](TOKEN_VALIDATION.md) - Token validation checklist
 
 ---
 
