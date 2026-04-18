@@ -197,7 +197,7 @@ See `.env.example` for all configurable variables. Key variables:
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | PostgreSQL connection |
 | `REDIS_URL` | Redis connection URL |
 | `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | AWS/S3 credentials |
-| `ENCRYPTION_KEY` | 32+ char key for pgcrypto encryption |
+| `ENCRYPTION_KEY` | 64-character hex string (32-byte key for AES-256-GCM encryption). Generate with: `openssl rand -hex 32` |
 | `JWT_SECRET` | 32+ char secret for JWT signing |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe integration |
 | `CODESCORING_API_URL`, `CODESCORING_API_KEY` | BlackDuck integration |

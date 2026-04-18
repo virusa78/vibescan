@@ -255,7 +255,8 @@ PORT=3555
 DATABASE_URL=postgresql://user:password@prod-db:5432/vibescan
 REDIS_URL=redis://prod-redis:6379
 JWT_SECRET=<production-secret>
-ENCRYPTION_KEY=<32-char-key>
+# ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes). Generate with: openssl rand -hex 32
+ENCRYPTION_KEY=<64-char-hex-key>
 STRIPE_SECRET_KEY=<stripe-prod-key>
 AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=<prod-key>
