@@ -129,7 +129,7 @@ export const webhooksPaths = {
       },
     },
 
-    patch: {
+    put: {
       summary: 'Update webhook',
       description: 'Update webhook configuration (URL, events, active status)',
       tags: ['Webhooks'],

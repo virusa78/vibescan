@@ -1,47 +1,108 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
 import { Button } from "../client/components/ui/button";
-import { Plus, Trash2, Edit, Check, X, Webhook as WebhookIcon } from "lucide-react";
+import { Plus, Trash2, Check, X, Webhook as WebhookIcon } from "lucide-react";
 
 interface Webhook {
   id: string;
   url: string;
-  isActive: boolean;
-  createdAt: string;
+  enabled: boolean;
+  created_at: string;
   lastTriggeredAt?: string;
   deliverySuccessRate?: number;
 }
 
 export default function WebhooksPage() {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [newWebhookUrl, setNewWebhookUrl] = useState("");
+
+  const loadWebhooks = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const res = await fetch("/api/v1/webhooks", { credentials: "include" });
+      if (!res.ok) {
+        throw new Error(`Failed to load webhooks (${res.status})`);
+      }
+      const data = await res.json();
+      setWebhooks((data.webhooks ?? []) as Webhook[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load webhooks.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadWebhooks();
+  }, []);
 
   const handleAddWebhook = async () => {
     if (!newWebhookUrl.trim()) return;
 
-    // API call would go here
-    const newWebhook: Webhook = {
-      id: Math.random().toString(36),
-      url: newWebhookUrl,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      deliverySuccessRate: 100,
-    };
+    try {
+      setError(null);
+      const res = await fetch("/api/v1/webhooks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          url: newWebhookUrl.trim(),
+          events: ["scan_complete", "report_ready", "scan_failed"],
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to create webhook (${res.status})`);
+      }
 
-    setWebhooks([...webhooks, newWebhook]);
-    setNewWebhookUrl("");
-    setIsAddingNew(false);
+      setNewWebhookUrl("");
+      setIsAddingNew(false);
+      await loadWebhooks();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create webhook.");
+    }
   };
 
-  const handleDeleteWebhook = (id: string) => {
-    // API call would go here
-    setWebhooks(webhooks.filter((w) => w.id !== id));
+  const handleDeleteWebhook = async (id: string) => {
+    try {
+      setError(null);
+      const res = await fetch(`/api/v1/webhooks/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to delete webhook (${res.status})`);
+      }
+      setWebhooks(webhooks.filter((w) => w.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete webhook.");
+    }
   };
 
-  const handleToggleActive = (id: string) => {
-    // API call would go here
-    setWebhooks(webhooks.map((w) => (w.id === id ? { ...w, isActive: !w.isActive } : w)));
+  const handleToggleActive = async (id: string) => {
+    const current = webhooks.find((w) => w.id === id);
+    if (!current) return;
+
+    try {
+      setError(null);
+      const res = await fetch(`/api/v1/webhooks/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ active: !current.enabled }),
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to update webhook (${res.status})`);
+      }
+      setWebhooks(
+        webhooks.map((w) => (w.id === id ? { ...w, enabled: !w.enabled } : w)),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update webhook.");
+    }
   };
 
   return (
@@ -64,6 +125,12 @@ export default function WebhooksPage() {
           Add Webhook
         </Button>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
 
       {/* Add New Webhook Form */}
       {isAddingNew && (
@@ -111,7 +178,13 @@ export default function WebhooksPage() {
       )}
 
       {/* Webhooks List */}
-      {webhooks.length === 0 ? (
+      {isLoading ? (
+        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+          <CardContent className="py-8 text-sm text-muted-foreground">
+            Loading webhooks...
+          </CardContent>
+        </Card>
+      ) : webhooks.length === 0 ? (
         <Card className="border-dashed border-border/50 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <div className="flex items-center gap-3">
@@ -146,15 +219,15 @@ export default function WebhooksPage() {
                         {webhook.url}
                       </code>
                       <div className={`px-2 py-1 rounded-md text-xs font-semibold ${
-                        webhook.isActive
+                        webhook.enabled
                           ? "bg-green-500/20 text-green-600"
                           : "bg-gray-500/20 text-gray-600"
                       }`}>
-                        {webhook.isActive ? "Active" : "Inactive"}
+                        {webhook.enabled ? "Active" : "Inactive"}
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Created {new Date(webhook.createdAt).toLocaleDateString()}
+                      Created {new Date(webhook.created_at).toLocaleDateString()}
                       {webhook.lastTriggeredAt && ` • Last triggered ${new Date(webhook.lastTriggeredAt).toLocaleDateString()}`}
                     </p>
                   </div>
@@ -173,7 +246,7 @@ export default function WebhooksPage() {
                       onClick={() => handleToggleActive(webhook.id)}
                       className="border-border/50"
                     >
-                      {webhook.isActive ? "Disable" : "Enable"}
+                      {webhook.enabled ? "Disable" : "Enable"}
                     </Button>
                     <Button
                       variant="outline"

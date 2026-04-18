@@ -50,3 +50,7 @@ vibescan-ui/test-results/
 # Claude Code
 .claude/
 backup/
+
+# Runtime artifacts
+.run/
+*.pid

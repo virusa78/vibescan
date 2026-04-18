@@ -182,6 +182,19 @@ action updateUserSettings {
   entities: [User]
 }
 
+// Auth compatibility for legacy email form endpoints used by current UI components.
+api emailSignupCompatApi {
+  fn: import { emailSignupCompatApi } from "@src/server/authCompat",
+  entities: [User],
+  httpRoute: (POST, "/auth/email/signup")
+}
+
+api emailLoginCompatApi {
+  fn: import { emailLoginCompatApi } from "@src/server/authCompat",
+  entities: [User],
+  httpRoute: (POST, "/auth/email/login")
+}
+
 action generateApiKey {
   fn: import { generateApiKey } from "@src/apiKeys/operations",
   entities: [User, ApiKey]
@@ -301,15 +314,70 @@ api getQuotaStatusApi {
 
 //#region Reports & Analysis
 
-// Reports & Analysis operations
-// Use HTTP API instead (/api/v1/reports/*, etc.)
-// These are available via REST endpoints, not Wasp queries
+// GET /api/v1/reports/:scanId - Get full report
+api getReportApi {
+  fn: import { getReportApiHandler } from "@src/server/operations/reports/handlers",
+  entities: [User, Scan, Finding],
+  httpRoute: (GET, "/api/v1/reports/:scanId")
+}
+
+// GET /api/v1/reports/:scanId/summary - Get report summary
+api getReportSummaryApi {
+  fn: import { getReportSummaryApiHandler } from "@src/server/operations/reports/handlers",
+  entities: [User, Scan, Finding],
+  httpRoute: (GET, "/api/v1/reports/:scanId/summary")
+}
+
+// POST /api/v1/reports/:scanId/pdf - Queue PDF generation
+api generateReportPDFApi {
+  fn: import { generateReportPDFApiHandler } from "@src/server/operations/reports/handlers",
+  entities: [User, Scan],
+  httpRoute: (POST, "/api/v1/reports/:scanId/pdf")
+}
+
+// GET /api/v1/reports/:scanId/ci-decision - Get CI decision
+api getCIDecisionApi {
+  fn: import { getCIDecisionApiHandler } from "@src/server/operations/reports/handlers",
+  entities: [User, Scan, Finding],
+  httpRoute: (GET, "/api/v1/reports/:scanId/ci-decision")
+}
 //#endregion
 
 //#region Webhooks & Notifications
-// Webhooks & Notifications operations
-// Use HTTP API instead (/api/v1/webhooks/*, etc.)
-// These are available via REST endpoints, not Wasp queries
+// POST /api/v1/webhooks - Create webhook
+api createWebhookApi {
+  fn: import { createWebhookApiHandler } from "@src/server/operations/webhooks/handlers",
+  entities: [User, Webhook],
+  httpRoute: (POST, "/api/v1/webhooks")
+}
+
+// GET /api/v1/webhooks - List webhooks
+api listWebhooksApi {
+  fn: import { listWebhooksApiHandler } from "@src/server/operations/webhooks/handlers",
+  entities: [User, Webhook],
+  httpRoute: (GET, "/api/v1/webhooks")
+}
+
+// GET /api/v1/webhooks/:webhookId - Get webhook details
+api getWebhookApi {
+  fn: import { getWebhookApiHandler } from "@src/server/operations/webhooks/handlers",
+  entities: [User, Webhook, WebhookDelivery],
+  httpRoute: (GET, "/api/v1/webhooks/:webhookId")
+}
+
+// PUT /api/v1/webhooks/:webhookId - Update webhook
+api updateWebhookApi {
+  fn: import { updateWebhookApiHandler } from "@src/server/operations/webhooks/handlers",
+  entities: [User, Webhook, WebhookDelivery],
+  httpRoute: (PUT, "/api/v1/webhooks/:webhookId")
+}
+
+// DELETE /api/v1/webhooks/:webhookId - Delete webhook
+api deleteWebhookApi {
+  fn: import { deleteWebhookApiHandler } from "@src/server/operations/webhooks/handlers",
+  entities: [User, Webhook, WebhookDelivery],
+  httpRoute: (DELETE, "/api/v1/webhooks/:webhookId")
+}
 //#endregion
 
 //#region Billing & Payment

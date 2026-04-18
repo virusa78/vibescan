@@ -4,6 +4,8 @@
  */
 
 import { FastifyInstance } from 'fastify';
+import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
 
 /**
  * Swagger options
@@ -45,7 +47,7 @@ export const swaggerOptions = {
             { name: 'Billing', description: 'Payment and subscription management' },
         ],
     },
-};
+} as const;
 
 export const swaggerUiOptions = {
     routePrefix: '/docs',
@@ -57,24 +59,21 @@ export const swaggerUiOptions = {
     },
     staticCSP: true,
     transformSpecificationClone: true,
-};
+} as const;
 
 /**
  * Register Swagger routes
  */
 export async function registerSwagger(app: FastifyInstance): Promise<void> {
     try {
-        console.log('Loading Swagger modules...');
-        const fastifySwagger = await import('@fastify/swagger');
-        const fastifySwaggerUi = await import('@fastify/swagger-ui');
-        console.log('✓ Swagger modules loaded');
-        
         console.log('Registering fastifySwagger...');
-        await app.register(fastifySwagger.default || fastifySwagger, swaggerOptions);
+        const swaggerPlugin = (fastifySwagger as any).default || fastifySwagger;
+        await app.register(swaggerPlugin, swaggerOptions);
         console.log('✓ fastifySwagger registered');
         
         console.log('Registering fastifySwaggerUi...');
-        await app.register(fastifySwaggerUi.default || fastifySwaggerUi, swaggerUiOptions);
+        const swaggerUiPlugin = (fastifySwaggerUi as any).default || fastifySwaggerUi;
+        await app.register(swaggerUiPlugin, swaggerUiOptions);
         console.log('✓ fastifySwaggerUi registered');
         
         console.log('✓ Swagger documentation registered at /docs');

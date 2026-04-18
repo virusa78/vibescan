@@ -1,5 +1,4 @@
-import { Link as WaspRouterLink, routes } from "wasp/client/router";
-import { getScans, useQuery } from "wasp/client/operations";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
 import { BarChart3, Bug, TrendingUp, Zap } from "lucide-react";
 
@@ -12,18 +11,108 @@ function getStatusBadge(status: string) {
 }
 
 export default function DashboardPage() {
-  const { data: scans, isLoading } = useQuery(getScans);
-  const recentScans = scans ?? [];
-  const totalScans = recentScans.length;
-  const queuedScans = recentScans.filter((scan) => scan.status === "pending").length;
-  const runningScans = recentScans.filter((scan) => scan.status === "scanning").length;
-  const failedScans = recentScans.filter((scan) => scan.status === "error").length;
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<{
+    total_scans: number;
+    total_vulnerabilities: number;
+    avg_severity: string | null;
+  } | null>(null);
+  const [quota, setQuota] = useState<{
+    used: number;
+    limit: number;
+    percentage: number;
+    monthly_reset_date: string;
+  } | null>(null);
+  const [severity, setSeverity] = useState<{
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    info: number;
+    total: number;
+  } | null>(null);
+  const [recentScans, setRecentScans] = useState<
+    Array<{
+      id: string;
+      status: string;
+      inputType: string;
+      inputRef: string;
+      created_at: string;
+      vulnerability_count: number;
+    }>
+  >([]);
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const [metricsRes, quotaRes, severityRes, recentRes] = await Promise.all([
+          fetch("/api/v1/dashboard/metrics", { credentials: "include" }),
+          fetch("/api/v1/dashboard/quota", { credentials: "include" }),
+          fetch("/api/v1/dashboard/severity-breakdown", { credentials: "include" }),
+          fetch("/api/v1/dashboard/recent-scans?limit=10", { credentials: "include" }),
+        ]);
+
+        if (!metricsRes.ok || !quotaRes.ok || !severityRes.ok || !recentRes.ok) {
+          throw new Error("Failed to load dashboard data.");
+        }
+
+        const [metricsData, quotaData, severityData, recentData] = await Promise.all([
+          metricsRes.json(),
+          quotaRes.json(),
+          severityRes.json(),
+          recentRes.json(),
+        ]);
+
+        setMetrics(metricsData);
+        setQuota(quotaData);
+        setSeverity(severityData);
+        setRecentScans(recentData.scans ?? []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load dashboard.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    run();
+  }, []);
+
+  const runningScans = useMemo(
+    () =>
+      recentScans.filter((scan) =>
+        ["pending", "scanning", "running"].includes(scan.status.toLowerCase()),
+      ).length,
+    [recentScans],
+  );
 
   const statCards = [
-    { label: "TOTAL SCANS", value: totalScans, subtext: "12 this week", icon: <BarChart3 className="text-primary" size={24} /> },
-    { label: "VULNERABILITIES", value: 156, subtext: "12 critical", icon: <Bug className="text-red-500" size={24} /> },
-    { label: "DELTA FOUND", value: 48, subtext: "Enterprise-only CVEs", icon: <TrendingUp className="text-primary" size={24} /> },
-    { label: "ACTIVE SCANS", value: runningScans, subtext: "2m 15s avg", icon: <Zap className="text-yellow-500" size={24} /> },
+    {
+      label: "TOTAL SCANS",
+      value: metrics?.total_scans ?? 0,
+      subtext: "All time",
+      icon: <BarChart3 className="text-primary" size={24} />,
+    },
+    {
+      label: "VULNERABILITIES",
+      value: metrics?.total_vulnerabilities ?? 0,
+      subtext: `Avg severity: ${metrics?.avg_severity ?? "N/A"}`,
+      icon: <Bug className="text-red-500" size={24} />,
+    },
+    {
+      label: "ACTIVE FINDINGS",
+      value: severity?.total ?? 0,
+      subtext: `Critical: ${severity?.critical ?? 0}`,
+      icon: <TrendingUp className="text-primary" size={24} />,
+    },
+    {
+      label: "ACTIVE SCANS",
+      value: runningScans,
+      subtext: "Recent running/pending",
+      icon: <Zap className="text-yellow-500" size={24} />,
+    },
   ];
 
   return (
@@ -37,6 +126,12 @@ export default function DashboardPage() {
           Monitor your vulnerability scans and security metrics
         </p>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -63,11 +158,26 @@ export default function DashboardPage() {
         <Card className="lg:col-span-2 border-border/50 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle>Vulnerability Trend</CardTitle>
-            <p className="text-xs text-muted-foreground mt-1">Last 7 days severity distribution</p>
+            <p className="text-xs text-muted-foreground mt-1">Current severity distribution</p>
           </CardHeader>
           <CardContent>
-            <div className="h-64 flex items-center justify-center text-muted-foreground">
-              [Chart Area - Would contain line chart]
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3">
+                <p className="text-xs text-muted-foreground">CRITICAL</p>
+                <p className="text-xl font-bold text-red-500">{severity?.critical ?? 0}</p>
+              </div>
+              <div className="rounded-md border border-orange-500/30 bg-orange-500/10 p-3">
+                <p className="text-xs text-muted-foreground">HIGH</p>
+                <p className="text-xl font-bold text-orange-500">{severity?.high ?? 0}</p>
+              </div>
+              <div className="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3">
+                <p className="text-xs text-muted-foreground">MEDIUM</p>
+                <p className="text-xl font-bold text-yellow-500">{severity?.medium ?? 0}</p>
+              </div>
+              <div className="rounded-md border border-green-500/30 bg-green-500/10 p-3">
+                <p className="text-xs text-muted-foreground">LOW</p>
+                <p className="text-xl font-bold text-green-500">{severity?.low ?? 0}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -80,14 +190,20 @@ export default function DashboardPage() {
             <CardContent className="space-y-3">
               <div>
                 <div className="flex justify-between text-xs mb-2">
-                  <span className="text-foreground">67 / 200 scans</span>
-                  <span className="text-primary">133 left</span>
+                  <span className="text-foreground">
+                    {quota?.used ?? 0} / {quota?.limit ?? 0} scans
+                  </span>
+                  <span className="text-primary">
+                    {Math.max((quota?.limit ?? 0) - (quota?.used ?? 0), 0)} left
+                  </span>
                 </div>
                 <div className="w-full bg-border/30 rounded-full h-2">
-                  <div className="bg-primary rounded-full h-2" style={{ width: "33.5%" }}></div>
+                  <div className="bg-primary rounded-full h-2" style={{ width: `${Math.min(quota?.percentage ?? 0, 100)}%` }}></div>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">Resets 2/1/2026</p>
+              <p className="text-xs text-muted-foreground">
+                Resets {quota?.monthly_reset_date ? new Date(quota.monthly_reset_date).toLocaleDateString() : "—"}
+              </p>
             </CardContent>
           </Card>
 
@@ -96,19 +212,19 @@ export default function DashboardPage() {
               <CardTitle className="text-sm">Delta Summary</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-primary mb-3">8</p>
+              <p className="text-2xl font-bold text-primary mb-3">{severity?.total ?? 0}</p>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="px-2 py-1 border border-red-500/50 text-red-500 rounded">CRITICAL: 2</span>
+                  <span className="px-2 py-1 border border-red-500/50 text-red-500 rounded">CRITICAL: {severity?.critical ?? 0}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="px-2 py-1 border border-yellow-500/50 text-yellow-500 rounded">HIGH: 2</span>
+                  <span className="px-2 py-1 border border-yellow-500/50 text-yellow-500 rounded">HIGH: {severity?.high ?? 0}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="px-2 py-1 border border-orange-500/50 text-orange-500 rounded">MEDIUM: 2</span>
+                  <span className="px-2 py-1 border border-orange-500/50 text-orange-500 rounded">MEDIUM: {severity?.medium ?? 0}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="px-2 py-1 border border-green-500/50 text-green-500 rounded">LOW: 2</span>
+                  <span className="px-2 py-1 border border-green-500/50 text-green-500 rounded">LOW: {severity?.low ?? 0}</span>
                 </div>
               </div>
             </CardContent>
@@ -148,7 +264,7 @@ export default function DashboardPage() {
                         <td className="py-3 px-4 text-foreground font-medium">{scan.inputRef || "Unknown scan"}</td>
                         <td className="py-3 px-4">
                           <span className="text-xs px-2 py-1 border border-primary/50 text-primary rounded">
-                            source_zip
+                            {scan.inputType || "unknown"}
                           </span>
                         </td>
                         <td className="py-3 px-4">
@@ -157,16 +273,11 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          <div className="flex gap-1">
-                            <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                            <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                          </div>
+                          <span className="text-muted-foreground">{scan.vulnerability_count}</span>
                         </td>
-                        <td className="py-3 px-4 text-primary font-medium">8</td>
+                        <td className="py-3 px-4 text-primary font-medium">—</td>
                         <td className="py-3 px-4 text-muted-foreground">
-                          {new Date(scan.createdAt).toLocaleDateString()}
+                          {new Date(scan.created_at).toLocaleDateString()}
                         </td>
                       </tr>
                     );
