@@ -169,17 +169,27 @@ page WebhooksPage {
 
 query getPaginatedUsers {
   fn: import { getPaginatedUsers } from "@src/user/operations",
-  entities: [User]
+  entities: [User],
+  auth: true
 }
 
 action updateIsUserAdminById {
   fn: import { updateIsUserAdminById } from "@src/user/operations",
-  entities: [User]
+  entities: [User],
+  auth: true
 }
 
 action updateUserSettings {
   fn: import { updateUserSettings } from "@src/user/operations",
-  entities: [User]
+  entities: [User],
+  auth: true
+}
+
+// Refresh Token Action - Implements token rotation and new token pair generation
+action refreshToken {
+  fn: import { refreshToken } from "@src/server/operations/auth/refreshToken",
+  entities: [],
+  auth: false
 }
 
 // Auth compatibility for legacy email form endpoints used by current UI components.
@@ -197,17 +207,20 @@ api emailLoginCompatApi {
 
 action generateApiKey {
   fn: import { generateApiKey } from "@src/apiKeys/operations",
-  entities: [User, ApiKey]
+  entities: [User, ApiKey],
+  auth: true
 }
 
 query listApiKeys {
   fn: import { listApiKeys } from "@src/apiKeys/operations",
-  entities: [User, ApiKey]
+  entities: [User, ApiKey],
+  auth: true
 }
 
 action revokeApiKey {
   fn: import { revokeApiKey } from "@src/apiKeys/operations",
-  entities: [User, ApiKey]
+  entities: [User, ApiKey],
+  auth: true
 }
 
 //#endregion
@@ -227,17 +240,20 @@ page ScanDetailsPage {
 
 query getScans {
   fn: import { getScans } from "@src/scans/operations",
-  entities: [User, Scan]
+  entities: [User, Scan],
+  auth: true
 }
 
 query getScanById {
   fn: import { getScanById } from "@src/scans/operations",
-  entities: [User, Scan]
+  entities: [User, Scan],
+  auth: true
 }
 
 action submitScan {
   fn: import { submitScan } from "@src/scans/operations",
-  entities: [User, Scan, Finding, FindingHistory, ScanDelta]
+  entities: [User, Scan, Finding, FindingHistory, ScanDelta],
+  auth: true
 }
 
 // Phase 2: Wasp-only HTTP API routes for scan operations
@@ -394,12 +410,14 @@ page CheckoutResultPage {
 
 query getCustomerPortalUrl {
   fn: import { getCustomerPortalUrl } from  "@src/payment/operations",
-  entities: [User]
+  entities: [User],
+  auth: true
 }
 
 action generateCheckoutSession {
   fn: import { generateCheckoutSession } from "@src/payment/operations",
-  entities: [User]
+  entities: [User],
+  auth: true
 }
 
 api paymentsWebhook {

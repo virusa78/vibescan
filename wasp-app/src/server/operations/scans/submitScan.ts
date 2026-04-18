@@ -1,11 +1,14 @@
 import { HttpError, prisma } from 'wasp/server';
 import * as z from 'zod';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation';
+import { quotaService } from '../../services/quotaService.js';
+import { orchestrateScan } from './orchestrator.js';
+import { emitWebhookEvent, buildWebhookPayload } from '../../services/webhookEventEmitter.js';
 
 const submitScanInputSchema = z.object({
-  source_type: z.string(),
-  source_input: z.unknown(),
-  plan_tier: z.string(),
+  inputRef: z.string(),
+  inputType: z.enum(['github', 'sbom', 'source_zip']),
+  plan_tier: z.string().optional(),
 });
 
 export type SubmitScanInput = z.infer<typeof submitScanInputSchema>;
@@ -24,7 +27,7 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
 
   const args = ensureArgsSchemaOrThrowHttpError(submitScanInputSchema, rawArgs);
 
-  // Wrap entire quota check, scan creation, and quota increment in a transaction
+  // Wrap entire quota check, scan creation, and quota consumption in a transaction
   // to prevent race conditions where concurrent requests bypass quota limits
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({
@@ -35,51 +38,24 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
       throw new HttpError(404, 'User not found');
     }
 
-    // Check if quota reset is needed
-    const now = new Date();
-    let currentUser = user;
-    if (user.quotaResetDate && user.quotaResetDate <= now) {
-      // Reset monthly quota if reset date has passed
-      const nextResetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      currentUser = await tx.user.update({
-        where: { id: context.user.id },
-        data: {
-          monthlyQuotaUsed: 0,
-          quotaResetDate: nextResetDate,
-        },
-      });
+    // Map UI input type to internal scan type
+    let internalInputType = '';
+    if (args.inputType === 'github') {
+      internalInputType = 'github_app';
+    } else if (args.inputType === 'source_zip') {
+      internalInputType = 'source_zip';
+    } else if (args.inputType === 'sbom') {
+      internalInputType = 'sbom_upload';
     }
 
-    const quotaAvailable = currentUser.monthlyQuotaLimit - currentUser.monthlyQuotaUsed;
-    if (quotaAvailable <= 0) {
-      throw new HttpError(429, 'Monthly scan quota exceeded', {
-        error: 'quota_exceeded',
-        quota_limit: currentUser.monthlyQuotaLimit,
-        quota_used: currentUser.monthlyQuotaUsed,
-      });
-    }
-
-    let inputRef = '';
-    let inputType = '';
-
-    if (args.source_type === 'github') {
-      inputRef = ((args.source_input as any)?.repo as string) || 'unknown';
-      inputType = 'github_app';
-    } else if (args.source_type === 'source_zip') {
-      inputRef = ((args.source_input as any)?.filename as string) || 'upload.zip';
-      inputType = 'source_zip';
-    } else if (args.source_type === 'sbom') {
-      inputRef = ((args.source_input as any)?.sbom_url as string) || 'sbom_upload';
-      inputType = 'sbom_upload';
-    }
-
+    // Create scan first (before consuming quota)
     const scan = await tx.scan.create({
       data: {
         userId: context.user.id,
-        inputType,
-        inputRef,
+        inputType: internalInputType,
+        inputRef: args.inputRef,
         status: 'pending',
-        planAtSubmission: args.plan_tier,
+        planAtSubmission: args.plan_tier || user.plan,
         components: [],
       },
     });
@@ -91,25 +67,50 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
         totalEnterpriseCount: 0,
         deltaCount: 0,
         deltaBySeverity: {},
-        isLocked: args.plan_tier === 'free_trial' || args.plan_tier === 'starter',
+        isLocked: (args.plan_tier || user.plan) === 'free_trial' || (args.plan_tier || user.plan) === 'starter',
       },
     });
 
-    // Increment quota within transaction
-    await tx.user.update({
-      where: { id: context.user.id },
-      data: {
-        monthlyQuotaUsed: currentUser.monthlyQuotaUsed + 1,
-      },
-    });
+    // Consume quota within transaction using the service
+    // This will throw HttpError(429) if quota exceeded
+    const quotaInfo = await quotaService.consumeQuota(context.user.id, scan.id, tx);
 
     return {
       id: scan.id,
       status: scan.status,
       created_at: scan.createdAt,
-      quota_remaining: quotaAvailable - 1,
+      quota_remaining: quotaInfo.remaining,
     };
   });
+
+  // After transaction completes, orchestrate the scan (enqueue workers)
+  // Do this outside the transaction to avoid holding transaction lock
+  try {
+    await orchestrateScan({
+      scanId: result.id,
+      userId: context.user.id,
+      inputType: args.inputType,
+      inputRef: args.inputRef,
+      planAtSubmission: result.status,
+    });
+
+    // Emit webhook event for scan submission
+    await emitWebhookEvent({
+      scanId: result.id,
+      eventType: 'scan_complete',
+      userId: context.user.id,
+      payload: buildWebhookPayload('scan_complete', result.id, context.user.id, {
+        status: 'submitted',
+        inputType: args.inputType,
+        createdAt: result.created_at,
+      }),
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    console.error(`[submitScan] Post-orchestration failed for scan ${result.id}:`, error);
+    // Don't fail the entire request - quota was already consumed
+    // Scan will remain in pending state for retry
+  }
 
   return result;
 }

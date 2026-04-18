@@ -50,30 +50,27 @@ services:
       timeout: 5s
       retries: 5
 
-  # VibeScan API
+  # VibeScan API (Wasp backend)
   vibescan:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: wasp-app
+      dockerfile: ../Dockerfile.wasp
     container_name: vibescan-api
     environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-vibescan}
-      - DB_USER=${DB_USER:-vibescan}
-      - DB_PASSWORD=${DB_PASSWORD:-vibescan}
+      - DATABASE_URL=postgresql://${DB_USER:-vibescan}:${DB_PASSWORD:-vibescan}@postgres:5432/${DB_NAME:-vibescan}
       - REDIS_URL=redis://redis:6379
-      - AWS_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-minioadmin}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
-      - S3_ENDPOINT=http://minio:9000
-      - S3_FORCE_PATH_STYLE=true
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-only-key-change-in-production}
+      - AWS_S3_REGION=us-east-1
+      - AWS_S3_IAM_ACCESS_KEY=${AWS_ACCESS_KEY_ID:-minioadmin}
+      - AWS_S3_IAM_SECRET_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      - AWS_S3_ENDPOINT=http://minio:9000
+      - AWS_S3_FILES_BUCKET=vibescan-sources
+      - AWS_S3_FORCE_PATH_STYLE=true
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
       - JWT_SECRET=${JWT_SECRET:-dev-only-secret-change-in-production}
       - NODE_ENV=development
-      - PORT=3001
+      - PORT=3555
     ports:
-      - "3001:3001"
+      - "3555:3555"
     depends_on:
       postgres:
         condition: service_healthy

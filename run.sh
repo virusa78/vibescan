@@ -7,14 +7,14 @@ cd "$ROOT_DIR"
 usage() {
   cat <<'EOF'
 Usage:
-  ./run.sh             Start full local project (infra + backend + frontend)
-  ./run.sh --stop      Stop processes started by run.sh/dev-up.sh
+  ./run.sh             Start full local project (Wasp backend + infra)
+  ./run.sh --stop      Stop processes started by run.sh
   ./run.sh --help      Show this help
 
-Any other flags are forwarded to ./scripts/dev-up.sh.
-Examples:
-  ./run.sh --backend-port 3001 --frontend-port 3000
-  ./run.sh --no-docker
+Backend runs on port 3555 (Wasp)
+Database: PostgreSQL 5432
+Cache: Redis 6379
+Storage: MinIO 9000
 EOF
 }
 
@@ -24,7 +24,10 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 fi
 
 if [[ "${1:-}" == "--stop" ]]; then
-  exec bash ./scripts/dev-up.sh --stop
+  exec bash ./scripts/wasp-dev.sh down
 fi
 
-exec bash ./scripts/dev-up.sh "$@"
+# Start Wasp full-stack (backend + infra + database)
+cd wasp-app
+export PORT="${PORT:-3555}"
+exec wasp start

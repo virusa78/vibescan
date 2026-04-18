@@ -72,8 +72,8 @@ npm run dev:stop           # Stop backend
 
 **What it does**:
 - Starts Docker services (PostgreSQL, Redis, MinIO)
-- Starts backend API on port 3001
-- Keeps frontend stopped
+- Starts Wasp backend on port 3555
+- Starts Wasp frontend on port 3000
 
 ---
 
@@ -196,7 +196,7 @@ npm run wasp:dev
 
 # Check what's running on ports
 netstat -tlnp | grep :3000  # Frontend
-netstat -tlnp | grep :3001  # Backend
+netstat -tlnp | grep :3555  # Backend (Wasp)
 ```
 
 ### Docker Issues
@@ -271,7 +271,7 @@ After startup, see:
 - 🚀 CONTRIBUTING.md - Development guidelines
 - 🧪 Testing - Run `npm test` for unit tests
 - 🌐 Frontend - Access at http://localhost:3000
-- 🔧 API - Docs at http://localhost:3001/swagger
+- 🔧 API - Docs at http://localhost:3555/docs (Wasp Swagger)
 
 ---
 

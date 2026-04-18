@@ -80,6 +80,7 @@ model User {
   aiFixPrompts              AiFixPrompt[]
   findings                  Finding[]
   organizations             Organization[]  @relation("members")
+  quotaLedger               QuotaLedger[]
 
   @@map("users")
 }
@@ -381,4 +382,35 @@ model WebhookDelivery {
   scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
 
   @@map("webhook_deliveries")
+}
+
+// Quota ledger for audit trail and tracking quota consumption
+model QuotaLedger {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt         DateTime        @default(now()) @map("created_at")
+  
+  userId            String          @map("user_id") @db.Uuid
+  
+  // Action type: scan_submitted, scan_refunded, monthly_reset
+  action            String
+  
+  // Amount of quota consumed/refunded
+  amount            Int
+  
+  // Reason for the action
+  reason            String?
+  
+  // Balance before and after for audit trail
+  balanceBefore     Int             @map("balance_before")
+  balanceAfter      Int             @map("balance_after")
+  
+  // Reference to related scan if applicable
+  relatedScanId     String?         @map("related_scan_id") @db.Uuid
+  
+  // Relations
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([createdAt])
+  @@map("quota_ledger")
 }
