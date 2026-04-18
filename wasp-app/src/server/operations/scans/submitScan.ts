@@ -3,9 +3,9 @@ import * as z from 'zod';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation';
 
 const submitScanInputSchema = z.object({
-  source_type: z.string(),
-  source_input: z.unknown(),
-  plan_tier: z.string(),
+  inputRef: z.string(),
+  inputType: z.enum(['github', 'sbom', 'source_zip']),
+  plan_tier: z.string().optional(),
 });
 
 export type SubmitScanInput = z.infer<typeof submitScanInputSchema>;
@@ -59,27 +59,23 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
       });
     }
 
-    let inputRef = '';
-    let inputType = '';
-
-    if (args.source_type === 'github') {
-      inputRef = ((args.source_input as any)?.repo as string) || 'unknown';
-      inputType = 'github_app';
-    } else if (args.source_type === 'source_zip') {
-      inputRef = ((args.source_input as any)?.filename as string) || 'upload.zip';
-      inputType = 'source_zip';
-    } else if (args.source_type === 'sbom') {
-      inputRef = ((args.source_input as any)?.sbom_url as string) || 'sbom_upload';
-      inputType = 'sbom_upload';
+    // Map UI input type to internal scan type
+    let internalInputType = '';
+    if (args.inputType === 'github') {
+      internalInputType = 'github_app';
+    } else if (args.inputType === 'source_zip') {
+      internalInputType = 'source_zip';
+    } else if (args.inputType === 'sbom') {
+      internalInputType = 'sbom_upload';
     }
 
     const scan = await tx.scan.create({
       data: {
         userId: context.user.id,
-        inputType,
-        inputRef,
+        inputType: internalInputType,
+        inputRef: args.inputRef,
         status: 'pending',
-        planAtSubmission: args.plan_tier,
+        planAtSubmission: args.plan_tier || user.plan,
         components: [],
       },
     });
@@ -91,7 +87,7 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
         totalEnterpriseCount: 0,
         deltaCount: 0,
         deltaBySeverity: {},
-        isLocked: args.plan_tier === 'free_trial' || args.plan_tier === 'starter',
+        isLocked: (args.plan_tier || user.plan) === 'free_trial' || (args.plan_tier || user.plan) === 'starter',
       },
     });
 
