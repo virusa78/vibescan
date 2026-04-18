@@ -3,6 +3,7 @@
  * Manages webhook event queuing and delivery orchestration
  */
 
+import * as crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { webhookDeliveryQueue } from '../queues/config.js';
 
@@ -58,7 +59,7 @@ export async function emitWebhookEvent(event: WebhookEvent): Promise<void> {
 
     // Create payload string for signing
     const payloadStr = JSON.stringify(payload);
-    const payloadHash = require('crypto')
+    const payloadHash = crypto
       .createHash('sha256')
       .update(payloadStr)
       .digest('hex');

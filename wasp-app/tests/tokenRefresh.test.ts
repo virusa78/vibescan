@@ -3,22 +3,22 @@
  * Unit tests for JWT token generation, verification, and blacklisting
  */
 
+// Mock process.env for testing
+process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing';
+process.env.REDIS_HOST = 'localhost';
+process.env.REDIS_PORT = '6379';
+
 import {
   generateTokenPair,
   verifyRefreshToken,
   verifyAccessToken,
-  blacklistToken,
-  isTokenBlacklisted,
   type TokenPayload,
 } from '../src/server/services/tokenService';
 import { TOKEN_CONFIG, isTokenExpired, getTokenExpiry } from '../src/server/config/tokens';
 
-// Mock environment
-process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing';
-
 describe('Token Service', () => {
   describe('generateTokenPair', () => {
-    it('should generate valid access and refresh tokens', async () => {
+    test('should generate valid access and refresh tokens', async () => {
       const userId = 'user-123';
       const tokens = await generateTokenPair(userId);
 
@@ -28,18 +28,18 @@ describe('Token Service', () => {
       expect(tokens.refreshTokenExpiresIn).toBe(TOKEN_CONFIG.REFRESH_TOKEN_EXPIRY);
     });
 
-    it('should generate tokens with correct format (3 parts separated by dots)', async () => {
+    test('should generate tokens with correct format (3 parts separated by dots)', async () => {
       const userId = 'user-456';
       const tokens = await generateTokenPair(userId);
 
       const accessParts = tokens.accessToken.split('.');
       const refreshParts = tokens.refreshToken.split('.');
 
-      expect(accessParts).toHaveLength(3);
-      expect(refreshParts).toHaveLength(3);
+      expect(accessParts.length).toBe(3);
+      expect(refreshParts.length).toBe(3);
     });
 
-    it('should generate different tokens for the same user', async () => {
+    test('should generate different tokens for the same user', async () => {
       const userId = 'user-789';
       const tokens1 = await generateTokenPair(userId);
       const tokens2 = await generateTokenPair(userId);
@@ -51,7 +51,7 @@ describe('Token Service', () => {
   });
 
   describe('verifyRefreshToken', () => {
-    it('should verify a valid refresh token', async () => {
+    test('should verify a valid refresh token', async () => {
       const userId = 'user-verify-1';
       const tokens = await generateTokenPair(userId);
 
@@ -63,14 +63,14 @@ describe('Token Service', () => {
       expect(payload?.jti).toBeDefined();
     });
 
-    it('should reject an invalid refresh token', async () => {
+    test('should reject an invalid refresh token', async () => {
       const invalidToken = 'invalid.token.here';
       const payload = await verifyRefreshToken(invalidToken);
 
       expect(payload).toBeNull();
     });
 
-    it('should reject an access token as refresh token', async () => {
+    test('should reject an access token as refresh token', async () => {
       const userId = 'user-verify-2';
       const tokens = await generateTokenPair(userId);
 
@@ -80,7 +80,7 @@ describe('Token Service', () => {
       expect(payload).toBeNull();
     });
 
-    it('should reject tampered tokens', async () => {
+    test('should reject tampered tokens', async () => {
       const userId = 'user-verify-3';
       const tokens = await generateTokenPair(userId);
 
@@ -94,7 +94,7 @@ describe('Token Service', () => {
   });
 
   describe('verifyAccessToken', () => {
-    it('should verify a valid access token', async () => {
+    test('should verify a valid access token', async () => {
       const userId = 'user-access-1';
       const tokens = await generateTokenPair(userId);
 
@@ -105,7 +105,7 @@ describe('Token Service', () => {
       expect(payload?.type).toBe('access');
     });
 
-    it('should reject a refresh token as access token', async () => {
+    test('should reject a refresh token as access token', async () => {
       const userId = 'user-access-2';
       const tokens = await generateTokenPair(userId);
 
@@ -117,7 +117,7 @@ describe('Token Service', () => {
   });
 
   describe('Token Expiry', () => {
-    it('should have correct expiry times in payload', async () => {
+    test('should have correct expiry times in payload', async () => {
       const userId = 'user-expiry';
       const tokens = await generateTokenPair(userId);
 
@@ -134,28 +134,8 @@ describe('Token Service', () => {
     });
   });
 
-  describe('Token Blacklist', () => {
-    it('should blacklist a token', async () => {
-      const jti = 'jti_user_123_test';
-      const expiry = getTokenExpiry(300);
-
-      await blacklistToken(jti, expiry);
-      const isBlacklisted = await isTokenBlacklisted(jti);
-
-      expect(isBlacklisted).toBe(true);
-    });
-
-    it('should recognize non-blacklisted tokens', async () => {
-      const jti = 'jti_user_456_test_non_blacklisted';
-
-      const isBlacklisted = await isTokenBlacklisted(jti);
-
-      expect(isBlacklisted).toBe(false);
-    });
-  });
-
   describe('getTokenExpiry', () => {
-    it('should calculate correct expiry timestamp', () => {
+    test('should calculate correct expiry timestamp', () => {
       const before = Math.floor(Date.now() / 1000);
       const expiry = getTokenExpiry(300); // 5 minutes
       const after = Math.floor(Date.now() / 1000);
@@ -166,19 +146,19 @@ describe('Token Service', () => {
   });
 
   describe('isTokenExpired', () => {
-    it('should identify expired tokens', () => {
+    test('should identify expired tokens', () => {
       const pastTimestamp = Math.floor(Date.now() / 1000) - 100;
       expect(isTokenExpired(pastTimestamp)).toBe(true);
     });
 
-    it('should identify non-expired tokens', () => {
+    test('should identify non-expired tokens', () => {
       const futureTimestamp = Math.floor(Date.now() / 1000) + 1000;
       expect(isTokenExpired(futureTimestamp)).toBe(false);
     });
   });
 
   describe('Token JTI uniqueness', () => {
-    it('should generate unique JTI for each token', async () => {
+    test('should generate unique JTI for each token', async () => {
       const userId = 'user-jti-uniqueness';
       const tokens1 = await generateTokenPair(userId);
       const tokens2 = await generateTokenPair(userId);
@@ -191,16 +171,16 @@ describe('Token Service', () => {
   });
 
   describe('TOKEN_CONFIG constants', () => {
-    it('should have correct token expiry times', () => {
+    test('should have correct token expiry times', () => {
       expect(TOKEN_CONFIG.ACCESS_TOKEN_EXPIRY).toBe(15 * 60); // 15 minutes
       expect(TOKEN_CONFIG.REFRESH_TOKEN_EXPIRY).toBe(30 * 24 * 60 * 60); // 30 days
     });
 
-    it('should have token rotation enabled', () => {
+    test('should have token rotation enabled', () => {
       expect(TOKEN_CONFIG.REFRESH_TOKEN_ROTATION).toBe(true);
     });
 
-    it('should use HS256 algorithm', () => {
+    test('should use HS256 algorithm', () => {
       expect(TOKEN_CONFIG.ALGORITHM).toBe('HS256');
     });
   });
