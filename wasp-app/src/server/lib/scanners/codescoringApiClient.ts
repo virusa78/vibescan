@@ -3,7 +3,7 @@
  * Supports both real API and mock mode for MVP testing
  */
 
-import type { NormalizedComponent } from '../../services/inputAdapterService';
+import type { NormalizedComponent } from '../../services/inputAdapterService.js';
 
 export interface CodescoringFinding {
   cveId: string;

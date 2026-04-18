@@ -6,7 +6,7 @@
 import { execSync, spawn } from 'child_process';
 import { writeFileSync, unlinkSync, existsSync } from 'fs';
 import { resolve } from 'path';
-import type { NormalizedComponent } from '../../services/inputAdapterService';
+import type { NormalizedComponent } from '../../services/inputAdapterService.js';
 
 export interface GrypeFinding {
   cveId: string;

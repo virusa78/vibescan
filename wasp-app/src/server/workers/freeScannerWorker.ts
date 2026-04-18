@@ -5,10 +5,10 @@
 
 import { Job } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
-import { normalizeGrypeFindings } from '../operations/scans/normalizeFindings';
-import { scanWithGrype, isGrypInstalled } from '../lib/scanners/grypeScannerUtil';
-import type { ScanJob } from '../queues/jobContract';
-import type { NormalizedComponent } from '../services/inputAdapterService';
+import { normalizeGrypeFindings } from '../operations/scans/normalizeFindings.js';
+import { scanWithGrype, isGrypInstalled } from '../lib/scanners/grypeScannerUtil.js';
+import type { ScanJob } from '../queues/jobContract.js';
+import type { NormalizedComponent } from '../services/inputAdapterService.js';
 
 const prisma = new PrismaClient();
 

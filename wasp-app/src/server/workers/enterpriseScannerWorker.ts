@@ -5,10 +5,10 @@
 
 import { Job } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
-import { normalizeCodescoringFindings } from '../operations/scans/normalizeFindings';
-import { scanWithCodescoring } from '../lib/scanners/codescoringApiClient';
-import type { ScanJob } from '../queues/jobContract';
-import type { NormalizedComponent } from '../services/inputAdapterService';
+import { normalizeCodescoringFindings } from '../operations/scans/normalizeFindings.js';
+import { scanWithCodescoring } from '../lib/scanners/codescoringApiClient.js';
+import type { ScanJob } from '../queues/jobContract.js';
+import type { NormalizedComponent } from '../services/inputAdapterService.js';
 
 const prisma = new PrismaClient();
 
