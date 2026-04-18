@@ -4,16 +4,12 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'wasp/client/router';
+import { useParams, useNavigate } from 'react-router';
 import { useScanPolling } from '../client/hooks/useScanPolling';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
 import { Alert } from '../client/components/ui/alert';
 import { Badge } from '../client/components/ui/badge';
 import { AlertTriangle, CheckCircle, Clock, Lock, Zap, ArrowLeft } from 'lucide-react';
-
-interface ScanDetailsParams {
-  scanId: string;
-}
 
 interface Report {
   scanId: string;
@@ -47,7 +43,8 @@ function formatDate(date: Date | string): string {
 }
 
 export function ScanDetailsPage() {
-  const { scanId } = useParams<ScanDetailsParams>();
+  const params = useParams<{ scanId?: string }>();
+  const scanId = params.scanId || '';
   const navigate = useNavigate();
   const { scan, isPolling, status, progress, error } = useScanPolling(scanId);
   

@@ -42,7 +42,7 @@ export function SeverityChart({ data, loading = false }: SeverityChartProps) {
     },
     legend: {
       position: 'bottom' as const,
-      fontSize: 12,
+      fontSize: '12',
       fontFamily: 'inherit',
       labels: {
         colors: '#9ca3af',

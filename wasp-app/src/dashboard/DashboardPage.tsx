@@ -1,118 +1,185 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "wasp/client/router";
-import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
-import { BarChart3, Bug, TrendingUp, Zap } from "lucide-react";
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { BarChart3, Bug, TrendingUp, Zap } from 'lucide-react';
+import { MetricCard } from '../client/components/common/MetricCard';
+import { ScanTable } from '../client/components/common/ScanTable';
+import { SeverityChart } from '../client/components/common/SeverityChart';
+import { EmptyState } from '../client/components/common/EmptyState';
+import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
+import {
+  getStatusBadge,
+  getScanTypeDisplay,
+  formatRelativeTime,
+} from '../client/utils/severity';
 
-function getStatusBadge(status: string) {
-  const normalized = status.toLowerCase();
-  if (normalized === "error") return { color: "text-red-500", bg: "bg-red-500/10", border: "border-red-500/30" };
-  if (normalized === "done") return { color: "text-green-500", bg: "bg-green-500/10", border: "border-green-500/30" };
-  if (normalized === "scanning") return { color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/30" };
-  return { color: "text-yellow-500", bg: "bg-yellow-500/10", border: "border-yellow-500/30" };
+interface Scan {
+  id: string;
+  status: string;
+  inputType: string;
+  inputRef: string;
+  createdAt: Date;
+  completedAt?: Date | null;
+  findingsCount?: number;
+  planAtSubmission?: string;
+}
+
+interface SeverityBreakdown {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+  total: number;
 }
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const [scans, setScans] = useState<Scan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [metrics, setMetrics] = useState<{
-    total_scans: number;
-    total_vulnerabilities: number;
-    avg_severity: string | null;
-  } | null>(null);
+  const [severity, setSeverity] = useState<SeverityBreakdown>({
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+    info: 0,
+    total: 0,
+  });
   const [quota, setQuota] = useState<{
     used: number;
     limit: number;
     percentage: number;
-    monthly_reset_date: string;
+    monthly_reset_date?: string;
   } | null>(null);
-  const [severity, setSeverity] = useState<{
-    critical: number;
-    high: number;
-    medium: number;
-    low: number;
-    info: number;
-    total: number;
-  } | null>(null);
-  const [recentScans, setRecentScans] = useState<
-    Array<{
-      id: string;
-      status: string;
-      inputType: string;
-      inputRef: string;
-      created_at: string;
-      vulnerability_count: number;
-    }>
-  >([]);
 
+  // Load data from API
   useEffect(() => {
-    const run = async () => {
+    const fetchData = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        const [metricsRes, quotaRes, severityRes, recentRes] = await Promise.all([
-          fetch("/api/v1/dashboard/metrics", { credentials: "include" }),
-          fetch("/api/v1/dashboard/quota", { credentials: "include" }),
-          fetch("/api/v1/dashboard/severity-breakdown", { credentials: "include" }),
-          fetch("/api/v1/dashboard/recent-scans?limit=10", { credentials: "include" }),
-        ]);
 
-        if (!metricsRes.ok || !quotaRes.ok || !severityRes.ok || !recentRes.ok) {
-          throw new Error("Failed to load dashboard data.");
+        // Fetch scans from API
+        const scansRes = await fetch('/api/v1/dashboard/recent-scans?limit=10', {
+          credentials: 'include',
+        });
+
+        if (!scansRes.ok) {
+          throw new Error('Failed to fetch scans');
         }
 
-        const [metricsData, quotaData, severityData, recentData] = await Promise.all([
-          metricsRes.json(),
-          quotaRes.json(),
-          severityRes.json(),
-          recentRes.json(),
+        const scansData = await scansRes.json();
+        const formattedScans = (scansData.scans || []).map((scan: any) => ({
+          id: scan.id,
+          status: scan.status,
+          inputType: scan.inputType,
+          inputRef: scan.inputRef,
+          createdAt: new Date(scan.created_at),
+          completedAt: scan.completed_at ? new Date(scan.completed_at) : null,
+          findingsCount: scan.vulnerability_count || 0,
+          planAtSubmission: scan.planAtSubmission,
+        }));
+
+        setScans(formattedScans);
+
+        // Fetch additional data from API
+        const [quotaRes, severityRes] = await Promise.all([
+          fetch('/api/v1/dashboard/quota', { credentials: 'include' }),
+          fetch('/api/v1/dashboard/severity-breakdown', { credentials: 'include' }),
         ]);
 
-        setMetrics(metricsData);
-        setQuota(quotaData);
-        setSeverity(severityData);
-        setRecentScans(recentData.scans ?? []);
+        if (quotaRes.ok) {
+          const quotaData = await quotaRes.json();
+          setQuota(quotaData);
+        }
+
+        if (severityRes.ok) {
+          const severityData = await severityRes.json();
+          setSeverity(severityData);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load dashboard.");
+        setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+        console.error('Dashboard error:', err);
       } finally {
         setIsLoading(false);
       }
     };
 
-    run();
+    fetchData();
   }, []);
 
-  const runningScans = useMemo(
+  // Calculate metrics
+  const metrics = useMemo(() => {
+    const completed = scans.filter(s => s.status === 'done' || s.status === 'completed');
+    const totalVulnerabilities = completed.reduce((sum, s) => sum + (s.findingsCount || 0), 0);
+    const running = scans.filter(s =>
+      ['pending', 'scanning', 'running', 'queued'].includes(s.status.toLowerCase())
+    ).length;
+
+    const avgSeverity =
+      severity.critical > 0
+        ? 'Critical'
+        : severity.high > 0
+        ? 'High'
+        : severity.medium > 0
+        ? 'Medium'
+        : 'Low';
+
+    return {
+      totalScans: completed.length,
+      totalVulnerabilities,
+      avgSeverity,
+      runningScans: running,
+    };
+  }, [scans, severity]);
+
+  // Format scans for table
+  const tableScans = useMemo(
     () =>
-      recentScans.filter((scan) =>
-        ["pending", "scanning", "running"].includes(scan.status.toLowerCase()),
-      ).length,
-    [recentScans],
+      scans.map(scan => ({
+        id: scan.id,
+        status: scan.status,
+        inputType: scan.inputType,
+        inputRef: scan.inputRef,
+        created_at: scan.createdAt.toISOString(),
+        vulnerability_count: scan.findingsCount || 0,
+      })),
+    [scans]
   );
 
   const statCards = [
     {
-      label: "TOTAL SCANS",
-      value: metrics?.total_scans ?? 0,
-      subtext: "All time",
+      label: 'TOTAL SCANS',
+      value: metrics.totalScans,
+      subtext: 'Completed scans',
       icon: <BarChart3 className="text-primary" size={24} />,
+      trend: {
+        direction: 'up' as const,
+        text: `${scans.length} total`,
+      },
     },
     {
-      label: "VULNERABILITIES",
-      value: metrics?.total_vulnerabilities ?? 0,
-      subtext: `Avg severity: ${metrics?.avg_severity ?? "N/A"}`,
+      label: 'VULNERABILITIES',
+      value: metrics.totalVulnerabilities,
+      subtext: `Avg: ${metrics.avgSeverity}`,
       icon: <Bug className="text-red-500" size={24} />,
+      trend: severity.critical > 0
+        ? {
+            direction: 'up' as const,
+            text: `${severity.critical} critical`,
+          }
+        : undefined,
     },
     {
-      label: "ACTIVE FINDINGS",
-      value: severity?.total ?? 0,
-      subtext: `Critical: ${severity?.critical ?? 0}`,
-      icon: <TrendingUp className="text-primary" size={24} />,
+      label: 'CRITICAL FINDINGS',
+      value: severity.critical,
+      subtext: `High: ${severity.high}`,
+      icon: <TrendingUp className="text-red-500" size={24} />,
     },
     {
-      label: "ACTIVE SCANS",
-      value: runningScans,
-      subtext: "Recent running/pending",
+      label: 'ACTIVE SCANS',
+      value: metrics.runningScans,
+      subtext: 'Running/pending',
       icon: <Zap className="text-yellow-500" size={24} />,
     },
   ];
@@ -121,112 +188,113 @@ export default function DashboardPage() {
     <div className="p-8 lg:p-10">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-foreground text-4xl font-bold tracking-tight mb-2">
-          Dashboard
-        </h1>
-        <p className="text-muted-foreground">
-          Monitor your vulnerability scans and security metrics
-        </p>
+        <h1 className="text-foreground text-4xl font-bold tracking-tight mb-2">Dashboard</h1>
+        <p className="text-muted-foreground">Monitor your vulnerability scans and security metrics</p>
       </div>
 
+      {/* Error State */}
       {error && (
         <div className="mb-6 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-600">
           {error}
+          <button
+            onClick={() => window.location.reload()}
+            className="ml-3 underline hover:no-underline"
+          >
+            Retry
+          </button>
         </div>
       )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {statCards.map((stat) => (
-          <Card key={stat.label} className="border-border/50 bg-card/50 backdrop-blur-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  {stat.label}
-                </CardTitle>
-                {stat.icon}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-foreground">{stat.value}</p>
-              <p className="text-xs text-muted-foreground mt-1">{stat.subtext}</p>
-            </CardContent>
-          </Card>
+        {statCards.map(stat => (
+          <MetricCard
+            key={stat.label}
+            label={stat.label}
+            value={stat.value}
+            subtext={stat.subtext}
+            icon={stat.icon}
+            trend={stat.trend}
+            loading={isLoading}
+          />
         ))}
       </div>
 
-      {/* Charts & Info Grid */}
+      {/* Charts & Sidebar Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <Card className="lg:col-span-2 border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle>Vulnerability Trend</CardTitle>
-            <p className="text-xs text-muted-foreground mt-1">Current severity distribution</p>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3">
-                <p className="text-xs text-muted-foreground">CRITICAL</p>
-                <p className="text-xl font-bold text-red-500">{severity?.critical ?? 0}</p>
-              </div>
-              <div className="rounded-md border border-orange-500/30 bg-orange-500/10 p-3">
-                <p className="text-xs text-muted-foreground">HIGH</p>
-                <p className="text-xl font-bold text-orange-500">{severity?.high ?? 0}</p>
-              </div>
-              <div className="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3">
-                <p className="text-xs text-muted-foreground">MEDIUM</p>
-                <p className="text-xl font-bold text-yellow-500">{severity?.medium ?? 0}</p>
-              </div>
-              <div className="rounded-md border border-green-500/30 bg-green-500/10 p-3">
-                <p className="text-xs text-muted-foreground">LOW</p>
-                <p className="text-xl font-bold text-green-500">{severity?.low ?? 0}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Severity Chart */}
+        <div className="lg:col-span-2">
+          <SeverityChart data={severity} loading={isLoading} />
+        </div>
 
+        {/* Right Sidebar */}
         <div className="space-y-6">
+          {/* Quota Card */}
           <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-sm">Quota Usage</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div>
-                <div className="flex justify-between text-xs mb-2">
-                  <span className="text-foreground">
-                    {quota?.used ?? 0} / {quota?.limit ?? 0} scans
-                  </span>
-                  <span className="text-primary">
-                    {Math.max((quota?.limit ?? 0) - (quota?.used ?? 0), 0)} left
-                  </span>
+              {isLoading ? (
+                <div className="space-y-2">
+                  <div className="h-4 bg-muted rounded animate-pulse"></div>
+                  <div className="h-2 bg-muted rounded animate-pulse"></div>
                 </div>
-                <div className="w-full bg-border/30 rounded-full h-2">
-                  <div className="bg-primary rounded-full h-2" style={{ width: `${Math.min(quota?.percentage ?? 0, 100)}%` }}></div>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Resets {quota?.monthly_reset_date ? new Date(quota.monthly_reset_date).toLocaleDateString() : "—"}
-              </p>
+              ) : quota ? (
+                <>
+                  <div>
+                    <div className="flex justify-between text-xs mb-2">
+                      <span className="text-foreground">
+                        {quota.used} / {quota.limit} scans
+                      </span>
+                      <span className="text-primary font-medium">
+                        {Math.max(quota.limit - quota.used, 0)} left
+                      </span>
+                    </div>
+                    <div className="w-full bg-border/30 rounded-full h-2">
+                      <div
+                        className="bg-primary rounded-full h-2 transition-all"
+                        style={{ width: `${Math.min(quota.percentage, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  {quota.monthly_reset_date && (
+                    <p className="text-xs text-muted-foreground">
+                      Resets {new Date(quota.monthly_reset_date).toLocaleDateString()}
+                    </p>
+                  )}
+                </>
+              ) : null}
             </CardContent>
           </Card>
 
+          {/* Severity Summary Card */}
           <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
             <CardHeader>
-              <CardTitle className="text-sm">Delta Summary</CardTitle>
+              <CardTitle className="text-sm">Severity Counts</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-primary mb-3">{severity?.total ?? 0}</p>
+              <p className="text-2xl font-bold text-primary mb-3">{severity.total}</p>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="px-2 py-1 border border-red-500/50 text-red-500 rounded">CRITICAL: {severity?.critical ?? 0}</span>
+                  <span className="px-2 py-1 border border-red-500/50 text-red-500 rounded bg-red-500/5">
+                    {severity.critical} Critical
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="px-2 py-1 border border-yellow-500/50 text-yellow-500 rounded">HIGH: {severity?.high ?? 0}</span>
+                  <span className="px-2 py-1 border border-orange-500/50 text-orange-500 rounded bg-orange-500/5">
+                    {severity.high} High
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="px-2 py-1 border border-orange-500/50 text-orange-500 rounded">MEDIUM: {severity?.medium ?? 0}</span>
+                  <span className="px-2 py-1 border border-yellow-500/50 text-yellow-500 rounded bg-yellow-500/5">
+                    {severity.medium} Medium
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="px-2 py-1 border border-green-500/50 text-green-500 rounded">LOW: {severity?.low ?? 0}</span>
+                  <span className="px-2 py-1 border border-green-500/50 text-green-500 rounded bg-green-500/5">
+                    {severity.low} Low
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -234,66 +302,21 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent Scans Table */}
-      <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-        <CardHeader>
-          <CardTitle>Recent Scans</CardTitle>
-          <p className="text-xs text-muted-foreground mt-1">Latest vulnerability scan results</p>
-        </CardHeader>
-        <CardContent>
-          {isLoading && <p className="text-muted-foreground">Loading scans...</p>}
-          {!isLoading && recentScans.length === 0 && (
-            <p className="text-muted-foreground">No scans yet.</p>
-          )}
-          {recentScans.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/30">
-                    <th className="text-left py-3 px-4 text-muted-foreground font-medium">PROJECT</th>
-                    <th className="text-left py-3 px-4 text-muted-foreground font-medium">TYPE</th>
-                    <th className="text-left py-3 px-4 text-muted-foreground font-medium">STATUS</th>
-                    <th className="text-left py-3 px-4 text-muted-foreground font-medium">SEVERITY</th>
-                    <th className="text-left py-3 px-4 text-muted-foreground font-medium">DELTA</th>
-                    <th className="text-left py-3 px-4 text-muted-foreground font-medium">DATE</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentScans.map((scan) => {
-                    const statusBadge = getStatusBadge(scan.status);
-                    return (
-                      <tr 
-                        key={scan.id} 
-                        className="border-b border-border/20 hover:bg-accent/5 transition-colors cursor-pointer"
-                        onClick={() => navigate(`/scans/${scan.id}`)}
-                      >
-                        <td className="py-3 px-4 text-foreground font-medium">{scan.inputRef || "Unknown scan"}</td>
-                        <td className="py-3 px-4">
-                          <span className="text-xs px-2 py-1 border border-primary/50 text-primary rounded">
-                            {scan.inputType || "unknown"}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={`text-xs px-2 py-1 border rounded ${statusBadge.color} ${statusBadge.border}`}>
-                            {scan.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="text-muted-foreground">{scan.vulnerability_count}</span>
-                        </td>
-                        <td className="py-3 px-4 text-primary font-medium">—</td>
-                        <td className="py-3 px-4 text-muted-foreground">
-                          {new Date(scan.created_at).toLocaleDateString()}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Recent Scans Table or Empty State */}
+      {scans.length === 0 && !isLoading ? (
+        <EmptyState
+          title="No scans yet"
+          description="Submit your first vulnerability scan to see results here"
+          actionLabel="Create First Scan"
+          actionRoute="/scans"
+        />
+      ) : (
+        <ScanTable
+          scans={tableScans}
+          loading={isLoading}
+          onRefresh={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 }

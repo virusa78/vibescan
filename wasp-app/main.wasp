@@ -238,12 +238,6 @@ page NewScanPage {
   component: import NewScanPage from "@src/scans/NewScanPage"
 }
 
-route ScanDetailsRoute { path: "/scans/:scanId", to: ScanDetailsPage }
-page ScanDetailsPage {
-  authRequired: true,
-  component: import ScanDetailsPage from "@src/scans/ScanDetailsPage"
-}
-
 query getScans {
   fn: import { getScans } from "@src/scans/operations",
   entities: [User, Scan],
