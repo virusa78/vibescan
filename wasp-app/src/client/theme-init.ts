@@ -1,15 +1,11 @@
+import { applyTheme, readThemePreference } from "./theme";
+
 // Initialize theme before React renders
 function initTheme() {
-  const root = document.documentElement;
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const stored = localStorage.getItem("theme");
-  const isDark = stored ? stored === "dark" : prefersDark;
-  
-  if (isDark) {
-    root.classList.add("dark");
-  } else {
-    root.classList.remove("dark");
-  }
+  const theme = readThemePreference(localStorage.getItem("theme"), prefersDark);
+
+  applyTheme(theme);
 }
 
 // Run immediately, before any React code

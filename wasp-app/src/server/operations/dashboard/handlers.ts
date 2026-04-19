@@ -17,10 +17,7 @@ type AuthenticatedRequest = Request & {
 };
 
 type OperationContext = {
-  entities: {
-    Scan: unknown;
-    Finding: unknown;
-  };
+  entities: Record<string, unknown>;
 };
 
 type HttpErrorWithData = Error & {

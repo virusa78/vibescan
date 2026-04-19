@@ -247,7 +247,7 @@ Authorization: Bearer <token>
 **Problem:** Frontend can't connect to backend API.
 
 **Solution:**
-1. Check backend is running: `curl http://localhost:3555/health`
+1. Check backend is running: `curl http://192.168.1.17:3555/health`
 2. Check `.env.local` has correct API URL: `cat vibescan-ui/.env.local`
 3. Restart frontend: Kill the process and run `./scripts/start.sh`
 
@@ -320,7 +320,7 @@ When accessing VibeScan from a different machine:
 Example:
 ```
 ✅ http://192.168.1.15:3000  (use this)
-❌ http://localhost:3000      (won't work remotely)
+❌ http://192.168.1.17:3000      (won't work remotely if you use the wrong host)
 ```
 
 ## Monitoring & Logs
@@ -346,7 +346,7 @@ tail -f /tmp/vibescan-frontend.log
 ### Health Checks
 ```bash
 # Backend health
-curl http://localhost:3555/health | jq '.'
+curl http://192.168.1.17:3555/health | jq '.'
 
 # Expected response
 {

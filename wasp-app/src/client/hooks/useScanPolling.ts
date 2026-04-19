@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { api } from 'wasp/client/api';
 
 export interface ScanPollingState {
   scan: {
@@ -65,36 +66,21 @@ export function useScanPolling(scanId: string) {
     try {
       abortControllerRef.current = new AbortController();
       
-      const response = await fetch(`/api/v1/scans/${scanId}`, {
-        credentials: 'include',
+      const response = await api.get(`/api/v1/scans/${scanId}`, {
         signal: abortControllerRef.current.signal,
       });
-
-      // Handle 429 Rate Limit with exponential backoff
-      if (response.status === 429) {
-        console.warn(`Rate limited polling scan ${scanId}, backing off for ${backoffRef.current}ms`);
-        setState(prev => ({
-          ...prev,
-          error: 'Rate limited - retrying...',
-        }));
-        
-        // Exponential backoff
-        await new Promise(resolve => setTimeout(resolve, backoffRef.current));
-        backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF_MS);
-        return;
-      }
 
       // Reset backoff on successful response
       backoffRef.current = RATE_LIMIT_INITIAL_BACKOFF_MS;
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch scan: ${response.statusText}`);
-      }
+      const data: PollResponse = response.data;
 
-      const data: PollResponse = await response.json();
+      if (!data?.scan) {
+         throw new Error('Invalid scan response');
+       }
 
-      // Determine current status
-      const scanStatus = data.scan.status.toLowerCase();
+       // Determine current status
+       const scanStatus = data.scan.status.toLowerCase();
       const isRunning = ['pending', 'scanning', 'running'].includes(scanStatus);
       const isCompleted = scanStatus === 'done';
       const isFailed = scanStatus === 'error' || scanStatus === 'failed';
@@ -135,7 +121,31 @@ export function useScanPolling(scanId: string) {
         return;
       }
 
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      const response = typeof err === 'object' && err && 'response' in err
+        ? (err as {
+            response?: {
+              status?: number;
+              data?: { message?: string; error?: string };
+            };
+          }).response
+        : undefined;
+
+      if (response?.status === 429) {
+        console.warn(`Rate limited polling scan ${scanId}, backing off for ${backoffRef.current}ms`);
+        setState(prev => ({
+          ...prev,
+          error: 'Rate limited - retrying...',
+        }));
+
+        await new Promise(resolve => setTimeout(resolve, backoffRef.current));
+        backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF_MS);
+        return;
+      }
+
+      const errorMsg =
+        response?.data?.message ||
+        response?.data?.error ||
+        (err instanceof Error ? err.message : 'Unknown error');
       console.error(`Polling error for scan ${scanId}:`, errorMsg);
       
       setState(prev => ({

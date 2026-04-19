@@ -1,47 +1,54 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { submitScan, getScans, useQuery } from "wasp/client/operations";
 import { Alert, AlertDescription } from "../client/components/ui/alert";
 import { Button } from "../client/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
 import { Input } from "../client/components/ui/input";
 import { Label } from "../client/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../client/components/ui/select";
 import { Link as WaspRouterLink, routes } from "wasp/client/router";
+import { useAsyncState } from "../client/hooks/useAsyncState";
 
 export default function NewScanPage() {
   const [inputRef, setInputRef] = useState("");
   const [inputType, setInputType] = useState<"github" | "sbom" | "source_zip">("github");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { isLoading: isSubmitting, error, run } = useAsyncState();
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [createdScanId, setCreatedScanId] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { refetch } = useQuery(getScans);
+  const {
+    data: recentScans,
+    isLoading: isRecentLoading,
+    error: recentError,
+    refetch,
+  } = useQuery(getScans);
+  const normalizedScans = useMemo(() => recentScans ?? [], [recentScans]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    setErrorMessage(null);
     setSuccessMessage(null);
     setCreatedScanId(null);
-    setIsSubmitting(true);
+    await run(
+      async () => {
+        const normalized = inputRef.trim();
 
-    try {
-      const normalized = inputRef.trim();
+        const createdScan = await submitScan({
+          inputRef: normalized,
+          inputType,
+        });
 
-      const createdScan = await submitScan({
-        inputRef: normalized,
-        inputType,
-      });
-
-      setSuccessMessage("Scan job created.");
-      setCreatedScanId(createdScan.id);
-      setInputRef("");
-      await refetch();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to submit scan.";
-      setErrorMessage(message);
-    } finally {
-      setIsSubmitting(false);
-    }
+        setSuccessMessage("Scan job created.");
+        setCreatedScanId(createdScan.id);
+        setInputRef("");
+        await refetch();
+      },
+      { errorMessage: "Failed to submit scan." },
+    );
   };
 
   return (
@@ -61,9 +68,9 @@ export default function NewScanPage() {
             <CardTitle>Scan Input</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {errorMessage && (
+            {error && (
               <Alert variant="destructive">
-                <AlertDescription>{errorMessage}</AlertDescription>
+                <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
             {successMessage && (
@@ -94,16 +101,21 @@ export default function NewScanPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="inputType">Input Type</Label>
-                <select
-                  id="inputType"
+                <Select
                   value={inputType}
-                  onChange={(e) => setInputType(e.target.value as any)}
-                  className="rounded border px-2 py-1"
+                  onValueChange={(value) =>
+                    setInputType(value as "github" | "sbom" | "source_zip")
+                  }
                 >
-                  <option value="github">GitHub Repository</option>
-                  <option value="sbom">SBOM File</option>
-                  <option value="source_zip">Source ZIP</option>
-                </select>
+                  <SelectTrigger id="inputType" className="w-full">
+                    <SelectValue placeholder="Select input type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="github">GitHub Repository</SelectItem>
+                    <SelectItem value="sbom">SBOM File</SelectItem>
+                    <SelectItem value="source_zip">Source ZIP</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "Submitting..." : "Start scan"}
@@ -117,9 +129,70 @@ export default function NewScanPage() {
             <CardTitle>Recent Scans</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-muted-foreground">
-              Scans will appear here once submitted.
-            </div>
+            {isRecentLoading && (
+              <div className="text-muted-foreground text-sm">Loading recent scans...</div>
+            )}
+            {recentError && !isRecentLoading && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {recentError instanceof Error
+                    ? recentError.message
+                    : "Failed to load recent scans."}
+                </AlertDescription>
+              </Alert>
+            )}
+            {!isRecentLoading && !recentError && normalizedScans.length === 0 && (
+              <div className="text-muted-foreground text-sm">
+                Scans will appear here once submitted.
+              </div>
+            )}
+            {!isRecentLoading && !recentError && normalizedScans.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-border/60 border-b text-left">
+                      <th className="py-2 pr-4 font-medium">Input</th>
+                      <th className="py-2 pr-4 font-medium">Type</th>
+                      <th className="py-2 pr-4 font-medium">Status</th>
+                      <th className="py-2 pr-4 font-medium">Created</th>
+                      <th className="py-2 text-right font-medium">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {normalizedScans.map((scan) => (
+                      <tr key={scan.id} className="border-border/50 border-b">
+                        <td className="py-3 pr-4">
+                          <div className="text-foreground font-medium">
+                            {scan.inputRef || scan.id}
+                          </div>
+                          <div className="text-muted-foreground text-xs">
+                            {scan.id}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4 capitalize">{scan.inputType}</td>
+                        <td className="py-3 pr-4">
+                          <span className="rounded-full border px-2 py-1 text-xs capitalize">
+                            {scan.status}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4 text-muted-foreground">
+                          {new Date(scan.createdAt).toLocaleString()}
+                        </td>
+                        <td className="py-3 text-right">
+                          <WaspRouterLink
+                            to={routes.ScanDetailsRoute.to}
+                            params={{ scanId: scan.id }}
+                            className="text-primary text-xs font-medium underline underline-offset-2"
+                          >
+                            View details
+                          </WaspRouterLink>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

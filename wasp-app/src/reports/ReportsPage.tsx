@@ -3,6 +3,8 @@ import { useParams } from "react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
 import { Button } from "../client/components/ui/button";
 import { AlertCircle, FileText, ShieldCheck } from "lucide-react";
+import { useAsyncState } from "../client/hooks/useAsyncState";
+import { api } from "wasp/client/api";
 
 type SeveritySummary = {
   critical?: number;
@@ -40,8 +42,7 @@ type CiDecision = {
 
 export default function ReportsPage() {
   const { scanId } = useParams();
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { isLoading, error, run, setError, setIsLoading } = useAsyncState(true);
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [ciDecision, setCiDecision] = useState<CiDecision | null>(null);
@@ -54,62 +55,31 @@ export default function ReportsPage() {
       return;
     }
 
-    const run = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-
+    run(
+      async () => {
         const [summaryRes, reportRes, ciRes] = await Promise.all([
-          fetch(`/api/v1/reports/${scanId}/summary`, { credentials: "include" }),
-          fetch(`/api/v1/reports/${scanId}`, { credentials: "include" }),
-          fetch(`/api/v1/reports/${scanId}/ci-decision`, { credentials: "include" }),
+          api.get(`/api/v1/reports/${scanId}/summary`),
+          api.get(`/api/v1/reports/${scanId}`),
+          api.get(`/api/v1/reports/${scanId}/ci-decision`),
         ]);
 
-        if (!summaryRes.ok) {
-          throw new Error(`Failed to load summary (${summaryRes.status})`);
-        }
-        if (!reportRes.ok) {
-          throw new Error(`Failed to load report (${reportRes.status})`);
-        }
-        if (!ciRes.ok) {
-          throw new Error(`Failed to load CI decision (${ciRes.status})`);
-        }
-
-        const [summaryData, reportData, ciData] = await Promise.all([
-          summaryRes.json(),
-          reportRes.json(),
-          ciRes.json(),
-        ]);
+        const [summaryData, reportData, ciData] = [summaryRes.data, reportRes.data, ciRes.data];
 
         setSummary(summaryData);
         setReport(reportData);
         setCiDecision(ciData);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load report data.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    run();
-  }, [scanId]);
+      },
+      { errorMessage: "Failed to load report data." },
+    );
+  }, [scanId, run, setError, setIsLoading]);
 
   const generatePdf = async () => {
     if (!scanId) return;
     setPdfStatus("Queueing PDF generation...");
     try {
-      const res = await fetch(`/api/v1/reports/${scanId}/pdf`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ format: "full" }),
-      });
+      const res = await api.post(`/api/v1/reports/${scanId}/pdf`, { format: "full" });
 
-      if (!res.ok) {
-        throw new Error(`Failed to queue PDF (${res.status})`);
-      }
-
-      const data = await res.json();
+      const data = res.data;
       setPdfStatus(`PDF job queued: ${data.jobId}`);
     } catch (err) {
       setPdfStatus(err instanceof Error ? err.message : "Failed to queue PDF.");

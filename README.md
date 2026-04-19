@@ -24,7 +24,7 @@ A SaaS vulnerability scanning platform that provides dual-scanner architecture (
 
 ```
 Client Layer
-    ├── Web UI (Next.js 15)
+    ├── Web UI (Wasp + React)
     ├── GitHub App
     └── CI/CD Pipeline
          ↓
@@ -68,7 +68,7 @@ Data Layer
 - **Infrastructure**: Kubernetes, AWS S3/KMS
 
 ### Frontend
-- **Framework**: Next.js 15.1.0 with App Router
+- **Framework**: Wasp (React + Vite)
 - **Styling**: Tailwind CSS with custom dark theme
 - **Charts**: Recharts
 - **Icons**: Lucide React
@@ -85,7 +85,7 @@ Wasp app scaffold is in `wasp-app/`.
 curl -sSL https://get.wasp-lang.dev/installer.sh | sh
 
 # run Wasp app
-npm run wasp:dev
+./run.sh
 ```
 
 Main file: `wasp-app/main.wasp`
@@ -104,8 +104,8 @@ npm install
 # Start everything (Docker services + frontend)
 ./run.sh
 
-# (or legacy wrapper)
-./scripts/start.sh
+# or start the Wasp dev stack directly
+cd wasp-app && PORT=3555 wasp start
 ```
 
 The script will:
@@ -143,14 +143,14 @@ DEMO_MONTHS=3 RESET_DEMO_DATA=true npm run seed:mock-data
 
 **Step 4: Start frontend**
 ```bash
-cd vibescan-ui
-npm run dev
+   cd wasp-app
+   PORT=3555 wasp start
 ```
 
 **Step 5: Configure API URL for remote access**
 ```bash
 # Replace 192.168.1.15 with your server's IP
-echo "NEXT_PUBLIC_API_URL=http://192.168.1.15:3555" > .env.local
+echo "REACT_APP_API_URL=http://192.168.1.15:3555" > .env.local
 ```
 
 Then access the frontend at the URL shown in your terminal.
@@ -159,14 +159,14 @@ Then access the frontend at the URL shown in your terminal.
    ```
 
 5. Access the API:
-   - API: http://localhost:3555
-   - Swagger UI: http://localhost:3555/docs (dev mode)
+   - API: http://192.168.1.17:3555
+   - Swagger UI: http://192.168.1.17:3555/docs (dev mode)
 
 ### Local Development
 
 **Dev port convention (fixed):**
-- Frontend: `http://localhost:3000`
-- Backend API: `http://localhost:3555`
+- Frontend: `http://192.168.1.17:3000`
+- Backend API: `http://192.168.1.17:3555`
 
 1. Install dependencies:
    ```bash
@@ -188,27 +188,52 @@ Then access the frontend at the URL shown in your terminal.
    npm run dev
    ```
 
+## Configuration map
+
+If you are unsure where to change a setting, use this map:
+
+| Setting | File | Notes |
+|---------|------|-------|
+| Backend port and backend base URL | `wasp-app/.env.server` | `PORT`, `WASP_SERVER_URL`; keep them on the same host/IP. |
+| Browser-facing auth/API URL | `wasp-app/.env.local` | `REACT_APP_API_URL`, `NEXT_PUBLIC_API_URL`; point these at the backend IP/port so auth and client API calls do not self-target the frontend. |
+| Vite dev proxy target | `wasp-app/.env.local` | `VITE_API_PROXY_TARGET`; used by the frontend dev server to reach the backend. |
+| Dev proxy from the Vite frontend to the backend | `wasp-app/vite.config.ts` | Proxies `/api/v1`, `/operations`, `/auth`, `/health`, and `/docs`. |
+| Swagger/OpenAPI server URL | `wasp-app/src/server/swaggerHandlers.ts` | Uses `WASP_SERVER_URL` when generating docs. |
+| Auth pages and compatibility endpoints | `wasp-app/main.wasp` | `/login` is the browser page; `/auth/email/login` and `/auth/email/signup` are POST-only compatibility routes. |
+| Client API fallback URL | `wasp-app/src/client/utils/api.ts` | Used only when the browser env var is missing. |
+
+## Plan files
+
+Use `plan.md` as the only active plan. The `MVP_*.md`, `PHASE_*.md`, and `*_COMPLETION*.md` files are historical notes and should be treated as archive, not live task tracking.
+
 ## Environment Variables
 
-See `.env.example` for all configurable variables. Key variables:
+See `wasp-app/.env.server`, `wasp-app/.env.local`, and `wasp-app/.env.server.example` for the actual values. The repo currently uses these variables:
 
 | Variable | Description |
 |----------|-------------|
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | PostgreSQL connection |
-| `REDIS_URL` | Redis connection URL |
-| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | AWS/S3 credentials |
-| `ENCRYPTION_KEY` | 64-character hex string (32-byte key for AES-256-GCM encryption). Generate with: `openssl rand -hex 32` |
-| `JWT_SECRET` | 32+ char secret for JWT signing |
-| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe integration |
-| `CODESCORING_API_URL`, `CODESCORING_API_KEY` | BlackDuck integration |
-| `REMOTE_SCANNER_ENABLED`, `REMOTE_SCANNER_API_URL`, `REMOTE_SCANNER_API_KEY`, `REMOTE_SCANNER_PROVIDER_ID` | Optional remote scanner provider integration |
-| `OPENSAAS_MODE`, `OPENSAAS_PLATFORM_OWNED` | OpenSaaS/Wasp boundary gating for `auth,api_keys,billing,settings` (`OPENSAAS_MODE=false` keeps all routes in VibeScan; core scan workflow remains backend-owned in this cutover) |
+| `PORT` | Wasp backend port |
+| `WASP_SERVER_URL` | Backend URL exposed to the app and tooling |
+| `WASP_WEB_CLIENT_URL` | Browser URL used in docs and auth redirects |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `AWS_S3_ENDPOINT`, `AWS_S3_REGION`, `AWS_S3_IAM_ACCESS_KEY`, `AWS_S3_IAM_SECRET_KEY`, `AWS_S3_FILES_BUCKET`, `AWS_S3_FORCE_PATH_STYLE` | S3/MinIO storage settings |
+| `JWT_SECRET`, `ENCRYPTION_KEY` | Auth token signing and secret encryption |
+| `STRIPE_API_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe billing integration |
+| `LEMONSQUEEZY_API_KEY`, `LEMONSQUEEZY_STORE_ID`, `LEMONSQUEEZY_WEBHOOK_SECRET` | Lemon Squeezy billing integration |
+| `POLAR_ORGANIZATION_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_SANDBOX_MODE` | Polar billing integration |
+| `REACT_APP_API_URL`, `NEXT_PUBLIC_API_URL` | Frontend API base URL |
+| `SKIP_EMAIL_VERIFICATION_IN_DEV` | Disable email verification in local dev |
+| `ADMIN_EMAILS` | Comma-separated bootstrap admin emails |
+| `PLAUSIBLE_API_KEY`, `PLAUSIBLE_SITE_ID`, `PLAUSIBLE_BASE_URL` | Analytics configuration |
+| `GOOGLE_ANALYTICS_CLIENT_EMAIL`, `GOOGLE_ANALYTICS_PRIVATE_KEY`, `GOOGLE_ANALYTICS_PROPERTY_ID` | Google Analytics service-account settings |
+| `OPENAI_API_KEY` | Optional OpenAI integration |
 
 ## API Endpoints
 
 ### Authentication
-- `POST /auth/register` - User registration
-- `POST /auth/login` - User login
+- `GET /login` - Browser login page
+- `POST /auth/email/signup` - User registration compat route
+- `POST /auth/email/login` - User login compat route
 - `POST /auth/refresh` - Token refresh (15 min access, 30 day refresh)
 - `POST /auth/logout` - User logout
 
@@ -291,13 +316,15 @@ npm run lint:fix
 - tears down only services/processes started by the test setup
 
 Default endpoints (used when `API_URL`/`FRONTEND_URL` are not set):
-- API: `http://127.0.0.1:3555` (health endpoint)
-- Frontend: `http://127.0.0.1:3000` (login page)
+- API: `http://192.168.1.17:3555` (health endpoint)
+- Frontend: `http://192.168.1.17:3000` (login page)
 
 Override endpoints when needed:
 ```bash
-API_URL=http://localhost:3555 FRONTEND_URL=http://localhost:3000 npm run test:e2e
+API_URL=http://192.168.1.17:3555 FRONTEND_URL=http://192.168.1.17:3000 npm run test:e2e
 ```
+
+If you are accessing the app from another device on your LAN, set the same host/IP in `wasp-app/.env.server` and `wasp-app/.env.local` instead of loopback defaults.
 
 Disable auto-orchestration if you want manual control:
 ```bash

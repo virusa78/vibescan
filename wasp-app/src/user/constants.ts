@@ -1,4 +1,4 @@
-import { LayoutDashboard, PlusCircle, Settings, Shield, Key } from "lucide-react";
+import { LayoutDashboard, PlusCircle, Settings, Key } from "lucide-react";
 import { routes } from "wasp/client/router";
 
 export const userMenuItems = [

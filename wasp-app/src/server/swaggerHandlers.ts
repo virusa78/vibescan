@@ -21,11 +21,11 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: process.env.WASP_WEB_CLIENT_URL || 'http://localhost:3001',
+        url: process.env.WASP_SERVER_URL || 'http://192.168.1.17:3555',
         description: 'Development server',
       },
       {
-        url: 'https://api.vibescan.app',
+        url: 'https://app.vibescan.app',
         description: 'Production server',
       },
     ],
@@ -41,7 +41,7 @@ const swaggerOptions = {
           type: 'apiKey',
           in: 'header',
           name: 'Authorization',
-          description: 'API Key (format: vsk_xxxxx) generated from /api-keys',
+          description: 'API Key (format: sk_live_...) generated from /api/v1/api-keys',
         },
       },
       schemas,
@@ -70,6 +70,18 @@ const swaggerOptions = {
       {
         name: 'Webhooks',
         description: 'Configure and manage webhooks',
+      },
+      {
+        name: 'Dashboard',
+        description: 'Dashboard analytics and metrics',
+      },
+      {
+        name: 'Settings',
+        description: 'Profile and notification settings',
+      },
+      {
+        name: 'Billing',
+        description: 'Billing and payment operations',
       },
     ],
   },

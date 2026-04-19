@@ -112,21 +112,21 @@ Mock BlackDuck scanner for testing
 ```bash
 ./run.sh
 # Access:
-# - Frontend: http://localhost:3000
-# - API: http://localhost:3555
-# - API Docs: http://localhost:3555/swagger
+# - Frontend: http://192.168.1.17:3000
+# - API: http://192.168.1.17:3555
+# - API Docs: http://192.168.1.17:3555/swagger
 ```
 
 ### Backend Only
 ```bash
 npm run dev:up
-# Access: http://localhost:3555
+# Access: http://192.168.1.17:3555
 ```
 
 ### Wasp Development
 ```bash
 npm run wasp:dev
-# Access: http://localhost:3000
+# Access: http://192.168.1.17:3000
 # Wasp code: wasp-app/src/**
 ```
 

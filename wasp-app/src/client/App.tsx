@@ -3,11 +3,11 @@ import { Outlet, useLocation } from "react-router";
 import { routes } from "wasp/client/router";
 import { useAuth } from "wasp/client/auth";
 import { Toaster } from "../client/components/ui/toaster";
+import { applyTheme, readThemePreference } from "./theme";
 import { useTokenRefresh } from "./hooks/useTokenRefresh";
 import "./theme-init";
 import "./Main.css";
 import NavBar from "./components/NavBar/NavBar";
-import Sidebar from "./components/Sidebar/Sidebar";
 import {
   appNavigationItems,
   marketingNavigationItems,
@@ -32,8 +32,8 @@ export default function App() {
         // Authenticated: go to dashboard
         window.location.href = "/dashboard";
       } else {
-        // Anonymous: go to landing page
-        window.location.href = "/landing";
+        // Anonymous: go straight to login so the auth flow is visible immediately
+        window.location.href = "/login";
       }
     }
   }, [location.pathname, user, isAuthLoading]);
@@ -56,31 +56,16 @@ export default function App() {
     );
   }, [location]);
 
-  const shouldDisplaySidebar = useMemo(() => {
-    return (
-      user &&
-      !isMarketingPage &&
-      location.pathname !== routes.LoginRoute.build() &&
-      location.pathname !== routes.SignupRoute.build()
-    );
-  }, [location, user, isMarketingPage]);
-
   const isAdminDashboard = useMemo(() => {
     return location.pathname.startsWith("/admin");
   }, [location]);
 
   useEffect(() => {
     // Initialize theme
-    const root = document.documentElement;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const stored = localStorage.getItem("theme");
-    const isDark = stored ? stored === "dark" : prefersDark;
-    
-    if (isDark) {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+    const theme = readThemePreference(localStorage.getItem("theme"), prefersDark);
+
+    applyTheme(theme);
   }, []);
 
   useEffect(() => {
@@ -107,8 +92,7 @@ export default function App() {
             {shouldDisplayAppNavBar && (
               <NavBar navigationItems={navigationItems} />
             )}
-            {shouldDisplaySidebar && <Sidebar />}
-            <main className={shouldDisplaySidebar ? "ml-56" : ""}>
+            <main>
               <Outlet />
             </main>
           </>

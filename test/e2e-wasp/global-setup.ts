@@ -12,11 +12,14 @@ async function globalSetup(config: FullConfig) {
   
   for (let i = 0; i < maxRetries; i++) {
     try {
-      const response = await fetch("http://localhost:3555/health", {
-        method: "GET",
-      }).catch(() => null);
-      
-      if (response?.ok) {
+      const response = await fetch(
+        "http://192.168.1.17:3000/api/v1/dashboard/recent-scans?limit=1",
+        {
+          method: "GET",
+        },
+      ).catch(() => null);
+
+      if (response && [200, 401, 403].includes(response.status)) {
         isBackendReady = true;
         console.log("✓ Backend is ready");
         break;
@@ -32,13 +35,13 @@ async function globalSetup(config: FullConfig) {
   
   if (!isBackendReady) {
     console.warn(
-      "⚠ Backend may not be ready. Make sure to run: PORT=3555 wasp start"
+      "⚠ Backend may not be ready. Make sure to run: ./run.sh"
     );
   }
   
   // Test frontend connectivity
   try {
-    const frontendUrl = process.env.FRONTEND_URL || "http://127.0.0.1:3000";
+    const frontendUrl = process.env.FRONTEND_URL || "http://192.168.1.17:3000";
     const response = await fetch(frontendUrl);
     if (response.ok) {
       console.log(`✓ Frontend is ready at ${frontendUrl}`);
@@ -46,7 +49,7 @@ async function globalSetup(config: FullConfig) {
   } catch (err) {
     console.warn(
       `⚠ Frontend may not be ready at ${
-        process.env.FRONTEND_URL || "http://127.0.0.1:3000"
+        process.env.FRONTEND_URL || "http://192.168.1.17:3000"
       }`
     );
   }

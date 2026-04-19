@@ -15,8 +15,8 @@ VibeScan is a SaaS vulnerability scanning platform with dual-scanner architectur
 - **Architecture**: Wasp-only with 20 operations
 
 ### Service Configuration
-- **Frontend**: http://localhost:3000 (Vite via Wasp)
-- **Backend**: http://localhost:3555 (Wasp + Node.js)
+- **Frontend**: http://192.168.1.17:3000 (Vite via Wasp)
+- **Backend**: http://192.168.1.17:3555 (Wasp + Node.js)
 - **Database**: PostgreSQL on localhost:5432
 - **Cache**: Redis on localhost:6379
 - **Storage**: MinIO (S3-compatible) on localhost:9000
@@ -157,10 +157,10 @@ VibeScan is a SaaS vulnerability scanning platform with dual-scanner architectur
 **Backend Port**:
 - Configured in `.env.server`: `PORT=3555`
 - Wasp server reads this and listens on specified port
-- Critical: Avoids port conflict with legacy root backend
+- Critical: Avoids port conflict with the older root launcher/backend setup
 
 **Frontend API URL**:
-- Configured in `.env.local`: `NEXT_PUBLIC_API_URL=http://127.0.0.1:3555`
+- Configured in `.env.local`: `REACT_APP_API_URL=http://192.168.1.17:3555`
 - Frontend automatically routes all API calls to this URL
 - Set before Wasp dev server starts
 
@@ -617,7 +617,7 @@ wasp db migrate-dev  # Apply pending migrations
 
 **Frontend can't connect to backend**
 - Check PORT=3555 is set in `.env.server`
-- Verify `NEXT_PUBLIC_API_URL` points to backend
+- Verify `REACT_APP_API_URL` points to backend
 - Ensure both processes are running
 
 ### Testing Issues
@@ -696,8 +696,7 @@ CODESCORING_API_KEY=your-key
 
 ### Client (`.env.local`)
 ```
-VITE_API_URL=http://localhost:3555
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+REACT_APP_API_URL=http://192.168.1.17:3555
 ```
 
 ## Contributing Guidelines
@@ -713,9 +712,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ### Local Development
 1. `cd wasp-app && PORT=3555 wasp start`
-2. Frontend: http://localhost:3000
-3. Backend: http://localhost:3555
-4. API Docs: http://localhost:3555/docs
+2. Frontend: http://192.168.1.17:3000
+3. Backend: http://192.168.1.17:3555
+4. API Docs: http://192.168.1.17:3555/docs
 
 ### Production (Railway)
 ```bash

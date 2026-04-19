@@ -8,7 +8,15 @@ import parser from '@typescript-eslint/parser';
 
 export default [
     {
-        ignores: ['node_modules/', 'dist/', '.data/', 'coverage/', 'vibescan-ui/'],
+        ignores: [
+            'node_modules/',
+            'dist/',
+            '.data/',
+            'coverage/',
+            'vibescan-ui/',
+            'backup/',
+            'wasp-app/.wasp/',
+        ],
     },
     {
         files: ['**/*.ts', '**/*.tsx'],
@@ -17,7 +25,12 @@ export default [
             parserOptions: {
                 ecmaVersion: 2022,
                 sourceType: 'module',
-                project: true,
+                project: [
+                    './tsconfig.json',
+                    './tsconfig.test.json',
+                    './wasp-app/tsconfig.json',
+                    './wasp-app/tsconfig.eslint.json',
+                ],
             },
         },
         plugins: {

@@ -36,20 +36,28 @@ export const paymentPlanCards: Record<PaymentPlanId, PaymentPlanCard> = {
   [PaymentPlanId.Hobby]: {
     name: prettyPaymentPlanName(PaymentPlanId.Hobby),
     price: "$9.99",
-    description: "All you need to get started",
-    features: ["Limited monthly usage", "Basic support"],
+    description: "Starter access for personal repos and small teams",
+    features: [
+      "Scan submissions and status tracking",
+      "Severity counts with delta summary",
+      "Basic email support",
+    ],
   },
   [PaymentPlanId.Pro]: {
     name: prettyPaymentPlanName(PaymentPlanId.Pro),
     price: "$19.99",
-    description: "Our most popular plan",
-    features: ["Unlimited monthly usage", "Priority customer support"],
+    description: "Full vulnerability visibility for growing teams",
+    features: [
+      "Everything in Hobby",
+      "Detailed findings with fix guidance",
+      "Priority support response",
+    ],
   },
   [PaymentPlanId.Credits10]: {
     name: prettyPaymentPlanName(PaymentPlanId.Credits10),
     price: "$9.99",
-    description: "One-time purchase of 10 credits for your account",
-    features: ["Use credits for e.g. OpenAI API calls", "No expiration date"],
+    description: "One-time pack for burst scan usage",
+    features: ["Add 10 scan credits", "Use for one-off projects", "No expiration date"],
   },
 };
 
@@ -125,12 +133,10 @@ const PricingPage = () => {
           </h2>
         </div>
         <p className="text-muted-foreground mx-auto mt-6 max-w-2xl text-center text-lg leading-8">
-          Choose between Stripe, LemonSqueezy or Polar as your payment provider.
-          Just add your Product IDs! Try it out below with test credit card
-          number <br />
-          <span className="bg-muted text-muted-foreground rounded-md px-2 py-1 font-mono text-sm">
-            4242 4242 4242 4242 4242
-          </span>
+          Choose the plan that matches your scan volume and reporting needs. Starter
+          access includes scan submissions with summary counts, while Pro unlocks
+          detailed vulnerability findings and remediation data. Credits are a simple
+          way to top up one-off scans.
         </p>
         {errorMessage && (
           <Alert variant="destructive" className="mt-8">

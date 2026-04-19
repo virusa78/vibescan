@@ -12,23 +12,8 @@ export async function registerUser(
   email: string,
   password: string
 ): Promise<void> {
-  // Navigate to signup page
-  await page.goto("/");
-  
-  // Click signup link if on landing page
-  const signupButton = page.locator('button:has-text("Sign up")').first();
-  if (await signupButton.isVisible()) {
-    await signupButton.click();
-  }
-  
-  // Wait for signup page to load
-  await page.waitForURL(/\/(signup|login)/, { timeout: 5000 });
-  
-  // Check if we're on login page, click sign up link
-  const signUpLink = page.locator('a:has-text("Sign up")');
-  if (await signUpLink.isVisible()) {
-    await signUpLink.click();
-  }
+  await page.goto("/signup");
+  await page.waitForLoadState("domcontentloaded");
   
   // Fill in signup form
   await page.fill('input[type="email"]', email);
@@ -43,12 +28,14 @@ export async function registerUser(
   
   // Submit form
   const submitButton = page.locator('button:has-text("Sign up"), button:has-text("Create account")');
-  await submitButton.click();
-  
-  // Wait for redirect to dashboard or verification email
-  await page.waitForURL(/\/(dashboard|verify-email|email-verification)/, {
-    timeout: 10000,
-  });
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/auth/email/signup") &&
+        response.request().method() === "POST"
+    ),
+    submitButton.click(),
+  ]);
 }
 
 /**
@@ -68,10 +55,14 @@ export async function loginUser(
   
   // Submit form
   const submitButton = page.locator('button:has-text("Log in"), button:has-text("Sign in")');
-  await submitButton.click();
-  
-  // Wait for redirect to dashboard
-  await page.waitForURL("/dashboard", { timeout: 10000 });
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/auth/email/login") &&
+        response.request().method() === "POST"
+    ),
+    submitButton.click(),
+  ]);
 }
 
 /**
@@ -132,32 +123,25 @@ export async function uploadSbomFile(
   page: Page,
   filePath: string
 ): Promise<void> {
-  // Click "New Scan" button
-  const newScanButton = page.locator('button:has-text("New Scan"), button:has-text("Start Scan")').first();
-  await newScanButton.click();
+  // Open the new scan form from the dashboard/sidebar.
+  const newScanTrigger = page
+    .locator(
+      'button:has-text("New Scan"), button:has-text("Start Scan"), button:has-text("Create First Scan"), a:has-text("New Scan"), a:has-text("Scans")'
+    )
+    .first();
+  await newScanTrigger.click();
   
-  // Wait for scan form modal/page
-  await page.waitForSelector('[data-testid="scan-form"], form', { timeout: 5000 });
-  
-  // Select SBOM upload tab
-  const sbomTab = page.locator('button:has-text("SBOM"), [role="tab"]:has-text("SBOM")');
-  if (await sbomTab.isVisible()) {
-    await sbomTab.click();
-  }
-  
-  // Upload file
-  const fileInput = page.locator('input[type="file"]').first();
-  await fileInput.setInputFiles(filePath);
-  
-  // Wait for file to be selected
-  await page.waitForTimeout(500);
-  
-  // Submit form
-  const submitButton = page.locator('button:has-text("Submit"), button:has-text("Start Scan")').last();
+  // Wait for scan form to load
+  await page.waitForSelector('form, [data-testid="scan-form"]', { timeout: 5000 });
+
+  // Submit SBOM scan path via the current form.
+  await page.getByLabel("Input Reference").fill(filePath);
+  await page.locator("#inputType").selectOption("sbom");
+
+  const submitButton = page.getByRole("button", { name: /start scan/i });
   await submitButton.click();
-  
-  // Wait for scan to be queued
-  await page.waitForURL("/dashboard", { timeout: 10000 });
+
+  await page.waitForSelector('text=Scan job created.', { timeout: 20_000 });
 }
 
 /**

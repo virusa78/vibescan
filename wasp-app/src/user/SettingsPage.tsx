@@ -6,12 +6,19 @@ import { Button } from "../client/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
 import { Input } from "../client/components/ui/input";
 import { Label } from "../client/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../client/components/ui/select";
+import { useAsyncState } from "../client/hooks/useAsyncState";
 
 export default function SettingsPage() {
   const { data: user } = useAuth();
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { isLoading, error, run } = useAsyncState();
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
   const [timezone, setTimezone] = useState("");
@@ -23,31 +30,27 @@ export default function SettingsPage() {
       setDisplayName(user.displayName ?? user.username ?? "");
       setTimezone(user.timezone ?? "");
       setLanguage(user.language ?? "en");
-      setRegion((user.region as any) ?? "OTHER");
+      setRegion(
+        user.region === "IN" || user.region === "PK" ? user.region : "OTHER",
+      );
     }
   }, [user]);
 
   const onSave = async (event: FormEvent) => {
     event.preventDefault();
-    setErrorMessage(null);
     setSuccessMessage(null);
-    setIsLoading(true);
-
-    try {
-      await updateUserSettings({
-        displayName,
-        timezone,
-        language,
-        region,
-      });
-      setSuccessMessage("Settings saved successfully.");
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to save settings.";
-      setErrorMessage(message);
-    } finally {
-      setIsLoading(false);
-    }
+    await run(
+      async () => {
+        await updateUserSettings({
+          displayName,
+          timezone,
+          language,
+          region,
+        });
+        setSuccessMessage("Settings saved successfully.");
+      },
+      { errorMessage: "Failed to save settings." },
+    );
   };
 
   return (
@@ -57,9 +60,9 @@ export default function SettingsPage() {
           <CardTitle>User Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {errorMessage && (
+          {error && (
             <Alert variant="destructive">
-              <AlertDescription>{errorMessage}</AlertDescription>
+              <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
           {successMessage && (
@@ -88,28 +91,33 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="language">Language</Label>
-              <select
-                id="language"
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="rounded border px-2 py-1"
-              >
-                <option value="en">English</option>
-                <option value="ru">Русский</option>
-              </select>
+              <Select value={language} onValueChange={setLanguage}>
+                <SelectTrigger id="language" className="w-full">
+                  <SelectValue placeholder="Select language" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="ru">Русский</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="region">Region</Label>
-              <select
-                id="region"
+              <Select
                 value={region}
-                onChange={(e) => setRegion(e.target.value as any)}
-                className="rounded border px-2 py-1"
+                onValueChange={(value) =>
+                  setRegion(value === "IN" || value === "PK" ? value : "OTHER")
+                }
               >
-                <option value="IN">India (IN)</option>
-                <option value="PK">Pakistan (PK)</option>
-                <option value="OTHER">Other</option>
-              </select>
+                <SelectTrigger id="region" className="w-full">
+                  <SelectValue placeholder="Select region" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="IN">India (IN)</SelectItem>
+                  <SelectItem value="PK">Pakistan (PK)</SelectItem>
+                  <SelectItem value="OTHER">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <Button type="submit" disabled={isLoading}>
               {isLoading ? "Saving..." : "Save settings"}

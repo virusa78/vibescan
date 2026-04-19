@@ -34,7 +34,13 @@ export function normalizeSeverity(severity: string): SeverityLevel {
 /**
  * Calculate severity breakdown from scans
  */
-export function calculateSeverityBreakdown(scans: any[]): SeverityBreakdown {
+type ScanLike = {
+  findings?: Array<{
+    severity: string;
+  }>;
+};
+
+export function calculateSeverityBreakdown(scans: ScanLike[]): SeverityBreakdown {
   const breakdown: SeverityBreakdown = {
     critical: 0,
     high: 0,
@@ -50,7 +56,7 @@ export function calculateSeverityBreakdown(scans: any[]): SeverityBreakdown {
   scans.forEach(scan => {
     if (!scan.findings) return;
     
-    scan.findings.forEach(finding => {
+    scan.findings.forEach((finding) => {
       const severity = normalizeSeverity(finding.severity);
       breakdown[severity]++;
       breakdown.total++;

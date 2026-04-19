@@ -10,8 +10,8 @@
     "start": "cd wasp-app && wasp start",
     "test": "npm run test:wasp",
     "test:wasp": "cd wasp-app && wasp test client",
-    "test:e2e": "FRONTEND_URL=${FRONTEND_URL:-http://127.0.0.1:3000} playwright test -c playwright.wasp.config.ts",
-    "lint": "cd wasp-app && npm run lint || true"
+    "test:e2e": "FRONTEND_URL=${FRONTEND_URL:-http://192.168.1.17:3000} playwright test -c playwright.wasp.config.ts",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@aws-sdk/s3-request-presigner": "^3.1024.0",

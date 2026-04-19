@@ -45,8 +45,8 @@ PORT=3555 wasp start
 
 ## 📍 Service Ports
 
-- **Frontend (Wasp React):** http://localhost:3000
-- **Backend API (Wasp Node.js):** http://localhost:3555
+- **Frontend (Wasp React):** http://192.168.1.17:3000
+- **Backend API (Wasp Node.js):** http://192.168.1.17:3555
 - **PostgreSQL:** localhost:5432
 - **Redis:** localhost:6379
 - **MinIO Console:** http://localhost:9001
@@ -114,7 +114,7 @@ cd wasp-app && npm install
 
 ```bash
 # Verify backend is running
-curl http://localhost:3555/health
+curl http://192.168.1.17:3555/health
 
 # Expected response:
 # OK or {status:"ok",...}

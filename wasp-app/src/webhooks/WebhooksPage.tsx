@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
 import { Button } from "../client/components/ui/button";
 import { Plus, Trash2, Check, X, Webhook as WebhookIcon } from "lucide-react";
+import { useAsyncState } from "../client/hooks/useAsyncState";
+import { api } from "wasp/client/api";
 
 interface Webhook {
   id: string;
@@ -14,26 +16,18 @@ interface Webhook {
 
 export default function WebhooksPage() {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { isLoading, error, run } = useAsyncState(true);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [newWebhookUrl, setNewWebhookUrl] = useState("");
 
   const loadWebhooks = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const res = await fetch("/api/v1/webhooks", { credentials: "include" });
-      if (!res.ok) {
-        throw new Error(`Failed to load webhooks (${res.status})`);
-      }
-      const data = await res.json();
-      setWebhooks((data.webhooks ?? []) as Webhook[]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load webhooks.");
-    } finally {
-      setIsLoading(false);
-    }
+    await run(
+      async () => {
+        const data = (await api.get("/api/v1/webhooks")).data;
+        setWebhooks((data.webhooks ?? []) as Webhook[]);
+      },
+      { errorMessage: "Failed to load webhooks." },
+    );
   };
 
   useEffect(() => {
@@ -43,66 +37,44 @@ export default function WebhooksPage() {
   const handleAddWebhook = async () => {
     if (!newWebhookUrl.trim()) return;
 
-    try {
-      setError(null);
-      const res = await fetch("/api/v1/webhooks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
+    await run(
+      async () => {
+        await api.post("/api/v1/webhooks", {
           url: newWebhookUrl.trim(),
           events: ["scan_complete", "report_ready", "scan_failed"],
-        }),
-      });
-      if (!res.ok) {
-        throw new Error(`Failed to create webhook (${res.status})`);
-      }
+        });
 
-      setNewWebhookUrl("");
-      setIsAddingNew(false);
-      await loadWebhooks();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create webhook.");
-    }
+        setNewWebhookUrl("");
+        setIsAddingNew(false);
+        await loadWebhooks();
+      },
+      { errorMessage: "Failed to create webhook.", setLoading: false },
+    );
   };
 
   const handleDeleteWebhook = async (id: string) => {
-    try {
-      setError(null);
-      const res = await fetch(`/api/v1/webhooks/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok) {
-        throw new Error(`Failed to delete webhook (${res.status})`);
-      }
-      setWebhooks(webhooks.filter((w) => w.id !== id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete webhook.");
-    }
+    await run(
+      async () => {
+        await api.delete(`/api/v1/webhooks/${id}`);
+        setWebhooks(webhooks.filter((w) => w.id !== id));
+      },
+      { errorMessage: "Failed to delete webhook.", setLoading: false },
+    );
   };
 
   const handleToggleActive = async (id: string) => {
     const current = webhooks.find((w) => w.id === id);
     if (!current) return;
 
-    try {
-      setError(null);
-      const res = await fetch(`/api/v1/webhooks/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ active: !current.enabled }),
-      });
-      if (!res.ok) {
-        throw new Error(`Failed to update webhook (${res.status})`);
-      }
-      setWebhooks(
-        webhooks.map((w) => (w.id === id ? { ...w, enabled: !w.enabled } : w)),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update webhook.");
-    }
+    await run(
+      async () => {
+        await api.put(`/api/v1/webhooks/${id}`, { active: !current.enabled });
+        setWebhooks(
+          webhooks.map((w) => (w.id === id ? { ...w, enabled: !w.enabled } : w)),
+        );
+      },
+      { errorMessage: "Failed to update webhook.", setLoading: false },
+    );
   };
 
   return (

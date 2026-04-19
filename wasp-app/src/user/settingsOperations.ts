@@ -3,6 +3,10 @@ import { HttpError, prisma } from "wasp/server";
 import * as z from "zod";
 import { ensureArgsSchemaOrThrowHttpError } from "../server/validation";
 
+type AuthContext = {
+  user?: User | null;
+};
+
 const updateUserSettingsInputSchema = z.object({
   displayName: z.string().trim().max(120).optional(),
   timezone: z.string().trim().max(50).optional(),
@@ -10,12 +14,10 @@ const updateUserSettingsInputSchema = z.object({
   region: z.enum(["IN", "PK", "OTHER"]).optional(),
 });
 
-type UpdateUserSettingsInput = z.infer<typeof updateUserSettingsInputSchema>;
-
 // Get current user profile/settings
 export const getUserSettings = async (
-  _args: any,
-  context: any
+  _args: unknown,
+  context: AuthContext
 ): Promise<User | null> => {
   if (!context.user) {
     throw new HttpError(401, "User not authenticated");
@@ -28,8 +30,8 @@ export const getUserSettings = async (
 
 // Update user profile/settings
 export const updateUserSettings = async (
-  rawArgs: any,
-  context: any
+  rawArgs: unknown,
+  context: AuthContext
 ): Promise<User> => {
   if (!context.user) {
     throw new HttpError(401, "User not authenticated");

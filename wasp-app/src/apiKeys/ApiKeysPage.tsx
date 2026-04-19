@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from 'wasp/client/auth';
 import {
   generateApiKey,
@@ -11,77 +11,72 @@ import { Button } from '../client/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
 import { Input } from '../client/components/ui/input';
 import { Label } from '../client/components/ui/label';
+import { useAsyncState } from '../client/hooks/useAsyncState';
+
+type ApiKeyListItem = Omit<ApiKey, 'keyHash'>;
 
 export default function ApiKeysPage() {
   const { data: user } = useAuth();
-  const [apiKeys, setApiKeys] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [apiKeys, setApiKeys] = useState<ApiKeyListItem[]>([]);
+  const { isLoading, error, run, setError } = useAsyncState();
   const [showNewKeyForm, setShowNewKeyForm] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [generatedKey, setGeneratedKey] = useState<{ key: string; id: string } | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Load API keys on mount
-  const loadApiKeys = async () => {
+  const loadApiKeys = useCallback(async () => {
     if (!user) return;
-    setIsLoading(true);
-    try {
-      const keys = await listApiKeys();
-      setApiKeys(keys);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to load API keys';
-      setErrorMessage(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    await run(
+      async () => {
+        const keys = await listApiKeys();
+        setApiKeys(keys);
+      },
+      { errorMessage: 'Failed to load API keys' },
+    );
+  }, [run, user]);
+
+  useEffect(() => {
+    void loadApiKeys();
+  }, [loadApiKeys]);
 
   const handleGenerateKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newKeyName.trim()) {
-      setErrorMessage('Key name is required');
+      setSuccessMessage(null);
+      setError('Key name is required');
       return;
     }
 
-    setErrorMessage(null);
     setSuccessMessage(null);
-    setIsLoading(true);
+    await run(
+      async () => {
+        const result = await generateApiKey({ name: newKeyName });
+        setGeneratedKey(result);
+        setNewKeyName('');
+        setShowNewKeyForm(false);
+        setSuccessMessage('API key generated. Copy it now—you won\'t see it again!');
 
-    try {
-      const result = await generateApiKey({ name: newKeyName });
-      setGeneratedKey(result);
-      setNewKeyName('');
-      setShowNewKeyForm(false);
-      setSuccessMessage('API key generated. Copy it now—you won\'t see it again!');
-      
-      // Reload keys
-      const keys = await listApiKeys();
-      setApiKeys(keys);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to generate API key';
-      setErrorMessage(message);
-    } finally {
-      setIsLoading(false);
-    }
+        // Reload keys
+        const keys = await listApiKeys();
+        setApiKeys(keys);
+      },
+      { errorMessage: 'Failed to generate API key' },
+    );
   };
 
   const handleRevokeKey = async (keyId: string) => {
     if (!confirm('Are you sure you want to revoke this API key?')) return;
 
-    setErrorMessage(null);
-    try {
-      await revokeApiKey({ id: keyId });
-      setSuccessMessage('API key revoked');
-      const keys = await listApiKeys();
-      setApiKeys(keys);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to revoke API key';
-      setErrorMessage(message);
-    }
+    await run(
+      async () => {
+        await revokeApiKey({ id: keyId });
+        setSuccessMessage('API key revoked');
+        const keys = await listApiKeys();
+        setApiKeys(keys);
+      },
+      { errorMessage: 'Failed to revoke API key', setLoading: false },
+    );
   };
 
   const copyToClipboard = (text: string) => {
@@ -98,7 +93,6 @@ export default function ApiKeysPage() {
           <Button
             onClick={() => {
               setShowNewKeyForm(!showNewKeyForm);
-              loadApiKeys();
             }}
             disabled={isLoading}
           >
@@ -106,9 +100,9 @@ export default function ApiKeysPage() {
           </Button>
         </CardHeader>
         <CardContent className="space-y-6">
-          {errorMessage && (
+          {error && (
             <Alert variant="destructive">
-              <AlertDescription>{errorMessage}</AlertDescription>
+              <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
           {successMessage && (
@@ -161,11 +155,13 @@ export default function ApiKeysPage() {
 
           <div className="space-y-2">
             <h3 className="font-semibold">Your API Keys</h3>
-            {apiKeys.length === 0 ? (
+            {isLoading && apiKeys.length === 0 ? (
+              <p className="text-gray-500">Loading API keys...</p>
+            ) : apiKeys.length === 0 ? (
               <p className="text-gray-500">No API keys yet. Create one to get started.</p>
             ) : (
               <div className="space-y-2">
-                {apiKeys.map((key: any) => (
+                {apiKeys.map((key) => (
                   <div
                     key={key.id}
                     className="flex items-center justify-between rounded border p-3"

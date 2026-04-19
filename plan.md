@@ -197,7 +197,7 @@ DoD:
    - **Status**: All passing ✅
 
 9. **Documentation** ✅
-   - File: `MVP_PLAN.md` - Architecture and implementation details
+   - Historical MVP plan docs were removed; this file is now the single active plan.
    - File: `PHASE_2_SUMMARY.md` - Complete overview
    - Code comments throughout inputAdapterService.ts
    - Error handling strategy documented
@@ -219,11 +219,10 @@ DoD:
 
 #### Files Created/Modified
 
-**Created (3)**:
-- `wasp-app/src/server/services/inputAdapterService.ts` (280 lines)
-- `test/integration/input-adapters.test.ts` (300 lines)
-- `MVP_PLAN.md` (400+ lines)
-- `PHASE_2_SUMMARY.md` (600+ lines)
+**Created (2)**:
+   - `wasp-app/src/server/services/inputAdapterService.ts` (280 lines)
+   - `test/integration/input-adapters.test.ts` (300 lines)
+   - `PHASE_2_SUMMARY.md` (600+ lines)
 
 **Modified (2)**:
 - `wasp-app/src/server/operations/scans/submitScan.ts` (+50 lines)

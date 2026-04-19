@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../client/components/u
 import { Alert } from '../client/components/ui/alert';
 import { Badge } from '../client/components/ui/badge';
 import { AlertTriangle, CheckCircle, Clock, Lock, Zap, ArrowLeft } from 'lucide-react';
+import { api } from 'wasp/client/api';
 
 interface Report {
   scanId: string;
@@ -60,15 +61,8 @@ export function ScanDetailsPage() {
           setReportLoading(true);
           setReportError(null);
           
-          const response = await fetch(`/api/v1/reports/${scanId}`, {
-            credentials: 'include',
-          });
-
-          if (!response.ok) {
-            throw new Error(`Failed to fetch report: ${response.statusText}`);
-          }
-
-          const data: Report = await response.json();
+          const response = await api.get(`/api/v1/reports/${scanId}`);
+          const data: Report = response.data;
           setReport(data);
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Failed to load report';
@@ -368,28 +362,52 @@ export function ScanDetailsPage() {
                         <th className="text-left py-3 px-4 text-slate-400 font-medium">Fixed</th>
                         <th className="text-left py-3 px-4 text-slate-400 font-medium">Severity</th>
                         <th className="text-left py-3 px-4 text-slate-400 font-medium">CVSS</th>
+                        <th className="text-left py-3 px-4 text-slate-400 font-medium">Status</th>
                         <th className="text-left py-3 px-4 text-slate-400 font-medium">Source</th>
                       </tr>
                     </thead>
                     <tbody>
                       {report.vulnerabilities.map((vuln: any, idx: number) => (
-                        <tr key={idx} className="border-b border-slate-700 hover:bg-slate-700/20">
-                          <td className="py-3 px-4 text-blue-400 font-mono">{vuln.cveId}</td>
-                          <td className="py-3 px-4 text-white">{vuln.packageName}</td>
-                          <td className="py-3 px-4 text-slate-300">{vuln.installedVersion}</td>
-                          <td className="py-3 px-4 text-green-400">{vuln.fixedVersion || '-'}</td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-1 text-xs rounded font-semibold border ${getSeverityColor(vuln.severity)}`}>
-                              {vuln.severity}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-slate-300">{vuln.cvssScore || '-'}</td>
-                          <td className="py-3 px-4">
-                            <span className="px-2 py-1 text-xs rounded bg-slate-700 text-slate-300">
-                              {vuln.source}
-                            </span>
-                          </td>
-                        </tr>
+                        <React.Fragment key={vuln.id ?? `${vuln.cveId}-${idx}`}>
+                          <tr className="border-b border-slate-700 hover:bg-slate-700/20">
+                            <td className="py-3 px-4 text-blue-400 font-mono">{vuln.cveId}</td>
+                            <td className="py-3 px-4 text-white">{vuln.packageName}</td>
+                            <td className="py-3 px-4 text-slate-300">{vuln.installedVersion}</td>
+                            <td className="py-3 px-4 text-green-400">{vuln.fixedVersion || '-'}</td>
+                            <td className="py-3 px-4">
+                              <span className={`px-2 py-1 text-xs rounded font-semibold border ${getSeverityColor(vuln.severity)}`}>
+                                {vuln.severity}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-slate-300">{vuln.cvssScore || '-'}</td>
+                            <td className="py-3 px-4">
+                              <span className="px-2 py-1 text-xs rounded bg-slate-700 text-slate-300 capitalize">
+                                {vuln.status || 'active'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="px-2 py-1 text-xs rounded bg-slate-700 text-slate-300">
+                                {vuln.source}
+                              </span>
+                            </td>
+                          </tr>
+                          {(vuln.description || vuln.filePath) && (
+                            <tr className="border-b border-slate-700 bg-slate-800/40">
+                              <td className="px-4 pb-3 pt-2 text-xs text-slate-400" colSpan={8}>
+                                <div className="space-y-1">
+                                  {vuln.description && (
+                                    <p className="text-slate-300">{vuln.description}</p>
+                                  )}
+                                  {vuln.filePath && (
+                                    <p>
+                                      Path: <span className="font-mono text-slate-200">{vuln.filePath}</span>
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -407,7 +425,10 @@ export function ScanDetailsPage() {
                       Your current plan includes vulnerability counts and delta analysis.<br />
                       Upgrade to Pro or Enterprise to view all vulnerability details.
                     </p>
-                    <button className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md">
+                    <button
+                      onClick={() => navigate('/pricing')}
+                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+                    >
                       View Pricing
                     </button>
                   </div>

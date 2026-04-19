@@ -6,6 +6,8 @@ import { ScanTable } from '../client/components/common/ScanTable';
 import { SeverityChart } from '../client/components/common/SeverityChart';
 import { EmptyState } from '../client/components/common/EmptyState';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
+import { useAsyncState } from '../client/hooks/useAsyncState';
+import { api } from 'wasp/client/api';
 import {
   getStatusBadge,
   getScanTypeDisplay,
@@ -35,8 +37,7 @@ interface SeverityBreakdown {
 export default function DashboardPage() {
   const navigate = useNavigate();
   const [scans, setScans] = useState<Scan[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { isLoading, error, run } = useAsyncState(true);
   const [severity, setSeverity] = useState<SeverityBreakdown>({
     critical: 0,
     high: 0,
@@ -54,59 +55,47 @@ export default function DashboardPage() {
 
   // Load data from API
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-
+    run(
+      async () => {
         // Fetch scans from API
-        const scansRes = await fetch('/api/v1/dashboard/recent-scans?limit=10', {
-          credentials: 'include',
-        });
+        const scansRes = await api.get('/api/v1/dashboard/recent-scans?limit=10');
+        const scansData = scansRes.data;
+        const formattedScans = (scansData.scans || []).map((scan: any) => {
+          const createdAtValue = scan.createdAt ?? scan.created_at ?? Date.now();
+          const completedAtValue = scan.completedAt ?? scan.completed_at;
 
-        if (!scansRes.ok) {
-          throw new Error('Failed to fetch scans');
-        }
-
-        const scansData = await scansRes.json();
-        const formattedScans = (scansData.scans || []).map((scan: any) => ({
+          return {
           id: scan.id,
           status: scan.status,
           inputType: scan.inputType,
           inputRef: scan.inputRef,
-          createdAt: new Date(scan.created_at),
-          completedAt: scan.completed_at ? new Date(scan.completed_at) : null,
-          findingsCount: scan.vulnerability_count || 0,
-          planAtSubmission: scan.planAtSubmission,
-        }));
+          createdAt: new Date(createdAtValue),
+          completedAt: completedAtValue ? new Date(completedAtValue) : null,
+          findingsCount: scan.vulnerability_count ?? scan.findingsCount ?? 0,
+          planAtSubmission: scan.planAtSubmission ?? scan.plan_at_submission,
+          };
+        });
 
         setScans(formattedScans);
 
         // Fetch additional data from API
         const [quotaRes, severityRes] = await Promise.all([
-          fetch('/api/v1/dashboard/quota', { credentials: 'include' }),
-          fetch('/api/v1/dashboard/severity-breakdown', { credentials: 'include' }),
+          api.get('/api/v1/dashboard/quota'),
+          api.get('/api/v1/dashboard/severity-breakdown'),
         ]);
 
-        if (quotaRes.ok) {
-          const quotaData = await quotaRes.json();
-          setQuota(quotaData);
-        }
+        setQuota(quotaRes.data);
 
-        if (severityRes.ok) {
-          const severityData = await severityRes.json();
-          setSeverity(severityData);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load dashboard');
-        console.error('Dashboard error:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
+        setSeverity(severityRes.data);
+      },
+      {
+        errorMessage: 'Failed to load dashboard',
+        onError: (err) => {
+          console.error('Dashboard error:', err);
+        },
+      },
+    );
+  }, [run]);
 
   // Calculate metrics
   const metrics = useMemo(() => {

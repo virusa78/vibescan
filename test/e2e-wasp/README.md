@@ -61,8 +61,17 @@ This directory contains comprehensive E2E tests for the VibeScan MVP, verifying 
   16. Severity badge and CVSS score
   17. Paywall enforcement check
   18. Navigate back to dashboard
-  19. Scan in recent scans list
-  20. Metrics cards updated
+19. Scan in recent scans list
+20. Metrics cards updated
+
+### 5. `settings-api-keys-webhooks-billing.spec.ts`
+**Test 5: Settings, API keys, webhooks, billing**
+- User Story: Register → Update settings → Manage API keys → Configure webhooks → Review pricing
+- Verifies:
+  - User settings update and persistence
+  - API key generation and revocation
+  - Webhook creation and deletion
+  - Billing navigation to pricing plans
 
 ## Test Utilities
 
@@ -82,8 +91,8 @@ Reusable test helpers:
 
 ### `global-setup.ts`
 Global test initialization:
-- Verifies backend (http://localhost:3555) is running
-- Verifies frontend (http://127.0.0.1:3000) is running
+- Verifies backend (http://192.168.1.17:3555) is running
+- Verifies frontend (http://192.168.1.17:3000) is running
 - Clears browser cache and cookies
 
 ## Test Fixtures
@@ -110,10 +119,10 @@ Sample source code ZIP file with:
    cd /home/virus/vibescan/wasp-app
    PORT=3555 wasp start
    ```
-   Wait for: `✓ Server running at http://localhost:3555`
+   Wait for: `✓ Server running at http://192.168.1.17:3555`
 
 2. **Verify frontend loads:**
-   - Frontend should be available at http://127.0.0.1:3000
+   - Frontend should be available at http://192.168.1.17:3000
    - Wasp start command handles this automatically
 
 ### Run All E2E Tests
@@ -169,7 +178,7 @@ npx playwright show-report
 
 ## Success Criteria
 
-- [ ] All 4 E2E tests pass
+- [ ] All 5 E2E tests pass
 - [ ] No console errors or warnings
 - [ ] Tests pass consecutively (no flakiness)
 - [ ] Database clean between tests
@@ -188,7 +197,8 @@ test/e2e-wasp/
 ├── sbom-upload-e2e.spec.ts         # Test 1: SBOM upload
 ├── github-url-e2e.spec.ts          # Test 2: GitHub URL
 ├── zip-upload-e2e.spec.ts          # Test 3: ZIP upload
-└── complete-happy-path.spec.ts    # Test 4: Complete flow
+├── complete-happy-path.spec.ts    # Test 4: Complete flow
+└── settings-api-keys-webhooks-billing.spec.ts # Test 5: Settings + admin flows
 
 test/fixtures/
 └── sample.sbom.json               # CycloneDX SBOM fixture

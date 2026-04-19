@@ -35,6 +35,6 @@
     "noFallthroughCasesInSwitch": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["src/**/*", "test/**/*"],
+  "include": ["src/**/*", "test/**/*", "scripts/**/*", "playwright*.ts"],
   "exclude": ["node_modules", "dist"]
 }

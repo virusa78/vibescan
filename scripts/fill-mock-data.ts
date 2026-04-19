@@ -15,6 +15,25 @@ import { getPool } from '../src/database/client.js';
 import config from '../src/config/index.js';
 import { computeDelta } from '../src/services/diffEngine.js';
 
+type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+type MockVulnerability = {
+  id: string;
+  cve_id: string;
+  ghsa_id: string | null;
+  severity: Severity;
+  cvss_score: number;
+  package_name: string;
+  package_ecosystem: 'npm';
+  installed_version: string;
+  fixed_version: string | null;
+  purl: string;
+  epss_score: number;
+  is_exploitable: boolean;
+  description: string;
+  references: string[];
+};
+
 // Constants
 const BCRYPT_ROUNDS = 10;
 const NUM_MONTHS = Number(process.env.DEMO_MONTHS || 6);
@@ -51,7 +70,13 @@ const DEMO_USERS = [
 ];
 
 // CVE database for mock data
-const CVE_DATABASE = [
+const CVE_DATABASE: Array<{
+  cveId: string;
+  package: string;
+  severity: Severity;
+  cvss: number;
+  description: string;
+}> = [
   { cveId: 'CVE-2026-1001', package: 'lodash', severity: 'CRITICAL', cvss: 9.8, description: 'Prototype pollution in lodash' },
   { cveId: 'CVE-2026-1002', package: 'express', severity: 'HIGH', cvss: 8.1, description: 'Open redirect vulnerability in express' },
   { cveId: 'CVE-2026-1003', package: 'axios', severity: 'HIGH', cvss: 7.5, description: 'Server-side request forgery in axios' },
@@ -79,29 +104,9 @@ const CVE_DATABASE = [
   { cveId: 'CVE-2026-1025', package: 'dot-prop', severity: 'MEDIUM', cvss: 5.4, description: 'Prototype pollution' },
 ];
 
-// Severity breakdown for realistic data
-function getSeverityBreakdown(numVulns: number) {
-  const breakdown = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-  let remaining = numVulns;
-
-  // Distribute CVEs based on realistic patterns
-  const critical = Math.floor(numVulns * 0.15);
-  const high = Math.floor(numVulns * 0.35);
-  const medium = Math.floor(numVulns * 0.35);
-  const low = numVulns - critical - high - medium;
-
-  breakdown.CRITICAL = critical;
-  breakdown.HIGH = high;
-  breakdown.MEDIUM = medium;
-  breakdown.LOW = low;
-
-  return breakdown;
-}
-
-function generateVulnerabilities(numVulns: number): any[] {
-  const vulns: any[] = [];
+function generateVulnerabilities(numVulns: number): MockVulnerability[] {
+  const vulns: MockVulnerability[] = [];
   const selectedCves = [...CVE_DATABASE].sort(() => 0.5 - Math.random()).slice(0, Math.min(numVulns, CVE_DATABASE.length));
-  const breakdown = getSeverityBreakdown(numVulns);
 
   selectedCves.forEach((cve, i) => {
     vulns.push({

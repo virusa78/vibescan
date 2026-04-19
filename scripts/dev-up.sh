@@ -4,7 +4,7 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-BACKEND_PORT="${BACKEND_PORT:-3001}"
+BACKEND_PORT="${BACKEND_PORT:-3555}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 HOST="${HOST:-0.0.0.0}"
 USE_DOCKER_INFRA=1
@@ -15,6 +15,7 @@ BACKEND_PID_FILE="$RUN_DIR/backend.pid"
 FRONTEND_PID_FILE="$RUN_DIR/frontend.pid"
 BACKEND_LOG="$LOG_DIR/backend.log"
 FRONTEND_LOG="$LOG_DIR/frontend.log"
+SERVER_IP=""
 
 mkdir -p "$RUN_DIR" "$LOG_DIR"
 
@@ -33,7 +34,7 @@ usage() {
 Usage: ./scripts/dev-up.sh [options]
 
 Options:
-  --backend-port <port>   Backend API port (default: 3001)
+  --backend-port <port>   Backend API port (default: 3555)
   --frontend-port <port>  Frontend port (default: 3000)
   --host <host>           Host for dev servers (default: 0.0.0.0)
   --no-docker             Do not start docker infra (postgres/redis/minio)
@@ -167,11 +168,12 @@ start_docker_infra() {
 }
 
 prepare_frontend_env() {
-  local server_ip
-  server_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  [[ -n "${server_ip:-}" ]] || server_ip="127.0.0.1"
-  cat > "$ROOT_DIR/wasp-app/.env.local" <<EOF
-NEXT_PUBLIC_API_URL=http://${server_ip}:${BACKEND_PORT}
+  SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  [[ -n "${SERVER_IP:-}" ]] || SERVER_IP="192.168.1.17"
+cat > "$ROOT_DIR/wasp-app/.env.local" <<EOF
+REACT_APP_API_URL=http://${SERVER_IP}:${BACKEND_PORT}
+NEXT_PUBLIC_API_URL=http://${SERVER_IP}:${BACKEND_PORT}
+VITE_API_PROXY_TARGET=http://${SERVER_IP}:${BACKEND_PORT}
 EOF
 }
 
@@ -180,7 +182,7 @@ start_backend() {
   info "Starting backend on ${HOST}:${BACKEND_PORT}"
   PORT="$BACKEND_PORT" npm run dev >"$BACKEND_LOG" 2>&1 &
   echo $! > "$BACKEND_PID_FILE"
-  wait_http "http://127.0.0.1:${BACKEND_PORT}/health" 90 || die "Backend failed to become healthy. See $BACKEND_LOG"
+  wait_http "http://${SERVER_IP}:${BACKEND_PORT}/health" 90 || die "Backend failed to become healthy. See $BACKEND_LOG"
   ok "Backend is ready"
 }
 
@@ -192,20 +194,19 @@ start_frontend() {
     WASP_PORT="$FRONTEND_PORT" wasp start
   ) >"$FRONTEND_LOG" 2>&1 &
   echo $! > "$FRONTEND_PID_FILE"
-  wait_http "http://127.0.0.1:${FRONTEND_PORT}" 120 || die "Frontend failed to start. See $FRONTEND_LOG"
+  wait_http "http://${SERVER_IP}:${FRONTEND_PORT}" 120 || die "Frontend failed to start. See $FRONTEND_LOG"
   ok "Frontend is ready"
 }
 
 print_summary() {
-  local server_ip
-  server_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  [[ -n "${server_ip:-}" ]] || server_ip="127.0.0.1"
+  SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  [[ -n "${SERVER_IP:-}" ]] || SERVER_IP="192.168.1.17"
 
   cat <<EOF
 
 VibeScan dev environment is running:
-  Backend:   http://${server_ip}:${BACKEND_PORT}
-  Frontend:  http://${server_ip}:${FRONTEND_PORT}
+  Backend:   http://${SERVER_IP}:${BACKEND_PORT}
+  Frontend:  http://${SERVER_IP}:${FRONTEND_PORT}
 
 Logs:
   Backend:   $BACKEND_LOG

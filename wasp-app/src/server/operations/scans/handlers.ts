@@ -19,31 +19,11 @@ type AuthenticatedRequest = Request & {
   } | null;
 };
 
-type EntityCollection<T> = {
-  findMany<R = T>(args?: Record<string, unknown>): Promise<R[]>;
-  count(args?: Record<string, unknown>): Promise<number>;
-};
-
-type ScanEntities = {
-  Scan: EntityCollection<{
-    id: string;
-    status: string;
-    inputType: string;
-    inputRef: string;
-    planAtSubmission: string;
-    createdAt: Date;
-    completedAt: Date | null;
-  }>;
-  Finding: EntityCollection<{
-    severity: string;
-  }>;
-};
-
 type OperationContext = {
   user?: {
     id: string;
   } | null;
-  entities: ScanEntities;
+  entities: Record<string, unknown>;
 };
 
 type HttpErrorWithData = Error & {

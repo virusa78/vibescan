@@ -152,7 +152,7 @@
  *         key:
  *           type: string
  *           description: Raw API key (shown only on generation)
- *           example: "vbs_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+ *           example: "sk_live_example_key"
  *         created_at:
  *           type: string
  *           format: date-time

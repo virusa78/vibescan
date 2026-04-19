@@ -5,24 +5,22 @@ export const schemas = {
   // ============================================
   SubmitScanRequest: {
     type: 'object',
-    required: ['source_type', 'source_input', 'plan_tier'],
+    required: ['inputType', 'inputRef'],
     properties: {
-      source_type: {
+      inputType: {
         type: 'string',
-        enum: ['github', 'source_zip', 'sbom'],
-        description: 'Type of scan source',
+        enum: ['github', 'sbom', 'source_zip'],
+        description: 'Type of scan input source',
         example: 'github',
       },
-      source_input: {
-        type: 'object',
-        description: 'Dynamic input based on source_type. For github: {repo}, for source_zip: {filename}, for sbom: {sbom_url}',
-        example: { repo: 'owner/repo' },
-      },
-      plan_tier: {
+      inputRef: {
         type: 'string',
-        enum: ['free_trial', 'starter', 'pro', 'enterprise'],
-        description: 'User plan at submission time',
-        example: 'starter',
+        description: 'Repository URL or file reference for the scan',
+        example: 'https://github.com/owner/repo',
+      },
+      sbomContent: {
+        type: 'string',
+        description: 'Raw SBOM JSON content (required when inputType is sbom)',
       },
     },
   },
@@ -308,146 +306,84 @@ export const schemas = {
   Vulnerability: {
     type: 'object',
     properties: {
-      cve_id: { type: 'string', description: 'CVE identifier (e.g. CVE-2024-1234)' },
-      package_name: { type: 'string', description: 'Affected package name' },
-      installed_version: { type: 'string', description: 'Currently installed version' },
+      id: { type: 'string', format: 'uuid', description: 'Finding ID' },
+      cveId: { type: 'string', description: 'CVE identifier (e.g. CVE-2024-1234)' },
+      packageName: { type: 'string', description: 'Affected package name' },
+      installedVersion: { type: 'string', description: 'Currently installed version' },
       severity: {
         type: 'string',
-        enum: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'],
+        enum: ['critical', 'high', 'medium', 'low', 'info'],
       },
-      cvss_score: { type: 'number', format: 'float', description: 'CVSS v3.1 score (0-10)' },
-      fixed_version: { type: 'string', description: 'Version with fix (if available)' },
+      cvssScore: { type: 'number', format: 'float', description: 'CVSS v3.1 score (0-10)' },
+      fixedVersion: { type: 'string', nullable: true, description: 'Version with fix (if available)' },
       description: { type: 'string', description: 'Vulnerability description' },
       source: {
         type: 'string',
         enum: ['free', 'enterprise'],
         description: 'Scanner that found this (Grype for free, BlackDuck for enterprise)',
       },
+      filePath: { type: 'string', nullable: true, description: 'File path where finding was detected' },
+      status: { type: 'string', description: 'Finding status' },
     },
   },
 
   ReportResponse: {
     type: 'object',
     properties: {
-      scan_id: { type: 'string', format: 'uuid' },
+      scanId: { type: 'string', format: 'uuid' },
       status: {
         type: 'string',
-        enum: ['pending', 'scanning', 'done', 'error', 'cancelled'],
+        enum: ['completed', 'failed', 'partial'],
       },
+      lockedView: { type: 'boolean', description: 'True if plan restricts vulnerability details' },
+      severity_breakdown: { $ref: '#/components/schemas/SeverityBreakdown' },
+      total_free: { type: 'integer', description: 'Total free scanner findings' },
+      total_enterprise: { type: 'integer', description: 'Total enterprise scanner findings' },
+      delta_count: { type: 'integer', description: 'Enterprise-only findings count' },
       vulnerabilities: {
         type: 'array',
         items: { $ref: '#/components/schemas/Vulnerability' },
-        description: 'List of vulnerabilities (filtered by plan)',
+        description: 'Full findings list (only when lockedView=false)',
       },
-      delta: {
-        type: 'object',
-        properties: {
-          total_free_count: { type: 'integer', description: 'Total from free scanner' },
-          total_enterprise_count: { type: 'integer', description: 'Total from enterprise scanner' },
-          delta_count: { type: 'integer', description: 'Enterprise-only vulnerabilities' },
-          delta_by_severity: {
-            type: 'object',
-            additionalProperties: { type: 'integer' },
-            description: 'Delta breakdown by severity',
-          },
-        },
-      },
-      stats: {
-        type: 'object',
-        properties: {
-          critical_count: { type: 'integer' },
-          high_count: { type: 'integer' },
-          medium_count: { type: 'integer' },
-          low_count: { type: 'integer' },
-          info_count: { type: 'integer' },
-        },
-      },
-      generated_at: { type: 'string', format: 'date-time' },
     },
   },
 
   ReportSummaryResponse: {
     type: 'object',
     properties: {
-      scan_id: { type: 'string', format: 'uuid' },
-      status: { type: 'string', enum: ['pending', 'scanning', 'done', 'error', 'cancelled'] },
-      critical_count: { type: 'integer' },
-      high_count: { type: 'integer' },
-      medium_count: { type: 'integer' },
-      low_count: { type: 'integer' },
-      info_count: { type: 'integer' },
-      total_count: { type: 'integer', description: 'Total vulnerabilities (filtered by plan)' },
-      delta_counts: {
+      scanId: { type: 'string', format: 'uuid' },
+      totalFindings: { type: 'integer' },
+      severity: {
         type: 'object',
         properties: {
-          new_in_enterprise: { type: 'integer', description: 'Enterprise-only findings' },
-          removed_in_enterprise: { type: 'integer' },
-          upgraded_severity: { type: 'integer' },
-          downgraded_severity: { type: 'integer' },
+          critical: { type: 'integer' },
+          high: { type: 'integer' },
         },
       },
-      plan_at_submission: { type: 'string', enum: ['free_trial', 'starter', 'pro', 'enterprise'] },
-      locked: { type: 'boolean', description: 'True if plan restricts full details' },
     },
   },
 
   PDFResponse: {
     type: 'object',
     properties: {
-      url: { type: 'string', format: 'uri', description: 'S3 pre-signed download URL' },
-      expires_at: { type: 'string', format: 'date-time', description: 'URL expiry time (typically 24h)' },
-      file_size: { type: 'integer', description: 'File size in bytes' },
-      format: {
-        type: 'string',
-        enum: ['pdf', 'html'],
-        description: 'File format generated',
-      },
-    },
-  },
-
-  CIPolicy: {
-    type: 'object',
-    properties: {
-      security_level: {
-        type: 'string',
-        enum: ['strict', 'moderate', 'permissive'],
-        description: 'Predefined policy level (optional, overridden by specific limits)',
-      },
-      max_severity: {
-        type: 'string',
-        enum: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'],
-        description: 'Maximum allowed severity level',
-      },
-      max_critical_count: { type: 'integer', description: 'Max critical vulnerabilities allowed' },
-      max_high_count: { type: 'integer', description: 'Max high vulnerabilities allowed' },
-    },
-  },
-
-  BlockingVuln: {
-    type: 'object',
-    properties: {
-      cve_id: { type: 'string' },
-      severity: { type: 'string' },
-      cvss_score: { type: 'number', format: 'float' },
-      reason: { type: 'string', description: 'Why this CVE blocks the policy' },
+      scanId: { type: 'string', format: 'uuid' },
+      jobId: { type: 'string', description: 'PDF generation job ID' },
+      status: { type: 'string', description: 'Job status' },
+      estimatedTime: { type: 'string', description: 'Estimated processing time' },
     },
   },
 
   CIDecisionResponse: {
     type: 'object',
     properties: {
+      scanId: { type: 'string', format: 'uuid' },
       decision: {
         type: 'string',
         enum: ['pass', 'fail'],
         description: 'CI gate result',
       },
-      message: { type: 'string', description: 'Human-readable result message' },
-      blocking_vulns: {
-        type: 'array',
-        items: { $ref: '#/components/schemas/BlockingVuln' },
-        description: 'Vulnerabilities that caused failure (capped at 10)',
-      },
-      policy_applied: { $ref: '#/components/schemas/CIPolicy' },
+      reason: { type: 'string', description: 'Human-readable result message' },
+      criticalIssues: { type: 'integer', description: 'Number of critical vulnerabilities' },
     },
   },
 
@@ -568,8 +504,53 @@ export const schemas = {
         },
         description: 'Updated event types (optional)',
       },
-      active: { type: 'boolean', description: 'Enable/disable webhook (optional)' },
+      enabled: { type: 'boolean', description: 'Enable/disable webhook (optional)' },
+      rotateSecret: {
+        type: 'boolean',
+        description: 'Rotate the signing secret (optional)',
+      },
     },
+  },
+
+  UpdateWebhookResponse: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      url: { type: 'string', format: 'uri' },
+      events: {
+        type: 'array',
+        items: { type: 'string' },
+      },
+      enabled: { type: 'boolean' },
+      updated_at: { type: 'string', format: 'date-time' },
+    },
+  },
+
+  // ============================================
+  // Billing & Payments
+  // ============================================
+  PaymentPlanId: {
+    type: 'string',
+    enum: ['hobby', 'pro', 'credits10'],
+    description: 'Payment plan identifier',
+  },
+
+  CheckoutSessionResponse: {
+    type: 'object',
+    properties: {
+      sessionUrl: {
+        type: 'string',
+        nullable: true,
+        description: 'Hosted checkout URL',
+      },
+      sessionId: { type: 'string', description: 'Checkout session ID' },
+    },
+  },
+
+  CustomerPortalUrlResponse: {
+    type: 'string',
+    nullable: true,
+    description: 'Customer portal URL (null if not available)',
   },
 
   // ============================================

@@ -8,7 +8,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
-    baseURL: process.env.FRONTEND_URL || "http://127.0.0.1:3000",
+    baseURL: process.env.FRONTEND_URL || "http://192.168.1.17:3000",
     screenshot: "on",
   },
   projects: [

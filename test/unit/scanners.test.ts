@@ -75,7 +75,7 @@ describe('Grype Scanner Utility', () => {
       expect(findings).toHaveLength(1);
       expect(findings[0].cveId).toBe('UNKNOWN');
       expect(findings[0].description).toBe('');
-    };
+    });
 
     it('should handle missing artifact data', () => {
       const grypOutput = {

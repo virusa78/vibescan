@@ -4,17 +4,19 @@ import { HttpError, prisma } from "wasp/server";
 import * as z from "zod";
 import { ensureArgsSchemaOrThrowHttpError } from "../server/validation";
 
+type AuthContext = {
+  user?: User | null;
+};
+
 // Update user admin status
 const updateUserAdminByIdInputSchema = z.object({
   id: z.string().nonempty(),
   isAdmin: z.boolean(),
 });
 
-type UpdateUserAdminByIdInput = z.infer<typeof updateUserAdminByIdInputSchema>;
-
 export const updateIsUserAdminById = async (
-  rawArgs: any,
-  context: any
+  rawArgs: unknown,
+  context: AuthContext
 ): Promise<User> => {
   const { id, isAdmin } = ensureArgsSchemaOrThrowHttpError(
     updateUserAdminByIdInputSchema,
@@ -66,11 +68,9 @@ const getPaginatorArgsSchema = z.object({
   }),
 });
 
-type GetPaginatedUsersInput = z.infer<typeof getPaginatorArgsSchema>;
-
 export const getPaginatedUsers = async (
-  rawArgs: any,
-  context: any
+  rawArgs: unknown,
+  context: AuthContext
 ): Promise<GetPaginatedUsersOutput> => {
   if (!context.user) {
     throw new HttpError(
@@ -163,11 +163,9 @@ const updateUserSettingsSchema = z.object({
   language: z.string().optional(),
 });
 
-type UpdateUserSettingsInput = z.infer<typeof updateUserSettingsSchema>;
-
 export const updateUserSettings = async (
-  rawArgs: any,
-  context: any
+  rawArgs: unknown,
+  context: AuthContext
 ): Promise<User> => {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
@@ -175,7 +173,9 @@ export const updateUserSettings = async (
 
   const args = ensureArgsSchemaOrThrowHttpError(updateUserSettingsSchema, rawArgs);
 
-  const updateData: any = {};
+  const updateData: Partial<
+    Pick<User, "displayName" | "timezone" | "region" | "language">
+  > = {};
   if (args.displayName !== undefined) {
     updateData.displayName = args.displayName;
   }
