@@ -10,21 +10,51 @@ import {
   type GetSeverityBreakdownInput,
 } from './index';
 
+type AuthenticatedRequest = Request & {
+  user?: {
+    id: string;
+  } | null;
+};
+
+type OperationContext = {
+  entities: {
+    Scan: unknown;
+    Finding: unknown;
+  };
+};
+
+type HttpErrorWithData = Error & {
+  statusCode?: number;
+  data?: {
+    error?: string;
+  };
+};
+
+type DashboardTimeRange = '7d' | '30d' | 'all';
+
+function normalizeTimeRange(value: string | string[] | undefined): DashboardTimeRange {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === '7d' || raw === '30d' || raw === 'all') {
+    return raw;
+  }
+  return '30d';
+}
+
 export async function getDashboardMetricsApiHandler(
   request: Request,
   response: Response,
-  context: any
+  context: OperationContext
 ) {
   try {
-    const timeRangeParam = request.query.time_range as string | string[] | undefined;
-    const timeRange = Array.isArray(timeRangeParam) ? timeRangeParam[0] : (timeRangeParam || '30d');
+    const timeRange = normalizeTimeRange(request.query.time_range as string | string[] | undefined);
 
     const args: GetDashboardMetricsInput = {
-      time_range: timeRange as any,
+      time_range: timeRange,
     };
 
+    const authRequest = request as AuthenticatedRequest;
     const result = await getDashboardMetrics(args, {
-      user: (request as any).user,
+      user: authRequest.user,
       entities: context.entities,
     });
 
@@ -37,7 +67,7 @@ export async function getDashboardMetricsApiHandler(
 export async function getRecentScansApiHandler(
   request: Request,
   response: Response,
-  context: any
+  context: OperationContext
 ) {
   try {
     const limitParam = request.query.limit as string | string[] | undefined;
@@ -47,8 +77,9 @@ export async function getRecentScansApiHandler(
       limit: Math.min(Math.max(limit, 1), 20), // Clamp between 1-20
     };
 
+    const authRequest = request as AuthenticatedRequest;
     const result = await getRecentScans(args, {
-      user: (request as any).user,
+      user: authRequest.user,
       entities: context.entities,
     });
 
@@ -61,18 +92,18 @@ export async function getRecentScansApiHandler(
 export async function getSeverityBreakdownApiHandler(
   request: Request,
   response: Response,
-  context: any
+  context: OperationContext
 ) {
   try {
-    const timeRangeParam = request.query.time_range as string | string[] | undefined;
-    const timeRange = Array.isArray(timeRangeParam) ? timeRangeParam[0] : (timeRangeParam || '30d');
+    const timeRange = normalizeTimeRange(request.query.time_range as string | string[] | undefined);
 
     const args: GetSeverityBreakdownInput = {
-      time_range: timeRange as any,
+      time_range: timeRange,
     };
 
+    const authRequest = request as AuthenticatedRequest;
     const result = await getSeverityBreakdown(args, {
-      user: (request as any).user,
+      user: authRequest.user,
       entities: context.entities,
     });
 
@@ -85,11 +116,12 @@ export async function getSeverityBreakdownApiHandler(
 export async function getQuotaStatusApiHandler(
   request: Request,
   response: Response,
-  context: any
+  context: OperationContext
 ) {
   try {
+    const authRequest = request as AuthenticatedRequest;
     const result = await getQuotaStatus({}, {
-      user: (request as any).user,
+      user: authRequest.user,
       entities: context.entities,
     });
 
@@ -99,11 +131,11 @@ export async function getQuotaStatusApiHandler(
   }
 }
 
-function handleOperationError(error: any, response: Response) {
+function handleOperationError(error: unknown, response: Response) {
   if (error instanceof HttpError) {
     const statusCode = error.statusCode || 500;
     const message = error.message || 'Internal server error';
-    const data = (error as any).data;
+    const data = (error as HttpErrorWithData).data;
 
     response.status(statusCode).json({
       error: data?.error || getErrorCode(statusCode),

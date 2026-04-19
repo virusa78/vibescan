@@ -13,15 +13,56 @@ import {
   type GetScanStatsInput,
 } from './index';
 
-export async function submitScanApiHandler(request: Request, response: Response, context: any) {
+type AuthenticatedRequest = Request & {
+  user?: {
+    id: string;
+  } | null;
+};
+
+type EntityCollection<T> = {
+  findMany<R = T>(args?: Record<string, unknown>): Promise<R[]>;
+  count(args?: Record<string, unknown>): Promise<number>;
+};
+
+type ScanEntities = {
+  Scan: EntityCollection<{
+    id: string;
+    status: string;
+    inputType: string;
+    inputRef: string;
+    planAtSubmission: string;
+    createdAt: Date;
+    completedAt: Date | null;
+  }>;
+  Finding: EntityCollection<{
+    severity: string;
+  }>;
+};
+
+type OperationContext = {
+  user?: {
+    id: string;
+  } | null;
+  entities: ScanEntities;
+};
+
+type HttpErrorWithData = Error & {
+  statusCode?: number;
+  data?: {
+    error?: string;
+  };
+};
+
+export async function submitScanApiHandler(request: Request, response: Response, context: OperationContext) {
   try {
-    let body: any = {};
+    let body: unknown = {};
     if (request.body) {
       body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
     }
 
+    const authRequest = request as AuthenticatedRequest;
     const result = await submitScan(body as SubmitScanInput, {
-      user: (request as any).user,
+      user: authRequest.user,
       entities: context.entities,
     });
 
@@ -31,7 +72,7 @@ export async function submitScanApiHandler(request: Request, response: Response,
   }
 }
 
-export async function listScansApiHandler(request: Request, response: Response, context: any) {
+export async function listScansApiHandler(request: Request, response: Response, context: OperationContext) {
   try {
     const limitParam = request.query.limit as string | string[] | undefined;
     const offsetParam = request.query.offset as string | string[] | undefined;
@@ -48,13 +89,14 @@ export async function listScansApiHandler(request: Request, response: Response, 
     const args: ListScansInput = {
       limit,
       offset,
-      status: status as any,
+      status,
       created_from: createdFrom,
       created_to: createdTo,
     };
 
+    const authRequest = request as AuthenticatedRequest;
     const result = await listScans(args, {
-      user: (request as any).user,
+      user: authRequest.user,
       entities: context.entities,
     });
 
@@ -64,14 +106,15 @@ export async function listScansApiHandler(request: Request, response: Response, 
   }
 }
 
-export async function getScanApiHandler(request: Request, response: Response, context: any) {
+export async function getScanApiHandler(request: Request, response: Response, context: OperationContext) {
   try {
     const args: GetScanInput = {
       scan_id: String(request.params.scanId),
     };
 
+    const authRequest = request as AuthenticatedRequest;
     const result = await getScan(args, {
-      user: (request as any).user,
+      user: authRequest.user,
       entities: context.entities,
     });
 
@@ -81,14 +124,15 @@ export async function getScanApiHandler(request: Request, response: Response, co
   }
 }
 
-export async function cancelScanApiHandler(request: Request, response: Response, context: any) {
+export async function cancelScanApiHandler(request: Request, response: Response, context: OperationContext) {
   try {
     const args: CancelScanInput = {
       scan_id: String(request.params.scanId),
     };
 
+    const authRequest = request as AuthenticatedRequest;
     const result = await cancelScan(args, {
-      user: (request as any).user,
+      user: authRequest.user,
       entities: context.entities,
     });
 
@@ -98,17 +142,18 @@ export async function cancelScanApiHandler(request: Request, response: Response,
   }
 }
 
-export async function getScanStatsApiHandler(request: Request, response: Response, context: any) {
+export async function getScanStatsApiHandler(request: Request, response: Response, context: OperationContext) {
   try {
     const timeRangeParam = request.query.time_range as string | string[] | undefined;
     const timeRange = Array.isArray(timeRangeParam) ? timeRangeParam[0] : (timeRangeParam || '30d');
 
     const args: GetScanStatsInput = {
-      time_range: timeRange as any,
+      time_range: timeRange,
     };
 
+    const authRequest = request as AuthenticatedRequest;
     const result = await getScanStats(args, {
-      user: (request as any).user,
+      user: authRequest.user,
       entities: context.entities,
     });
 
@@ -118,11 +163,11 @@ export async function getScanStatsApiHandler(request: Request, response: Respons
   }
 }
 
-function handleOperationError(error: any, response: Response) {
+function handleOperationError(error: unknown, response: Response) {
   if (error instanceof HttpError) {
     const statusCode = error.statusCode || 500;
     const message = error.message || 'Internal server error';
-    const data = (error as any).data;
+    const data = (error as HttpErrorWithData).data;
 
     response.status(statusCode).json({
       error: data?.error || getErrorCode(statusCode),

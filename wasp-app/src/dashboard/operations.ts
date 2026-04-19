@@ -10,6 +10,13 @@ const getDashboardMetricsInputSchema = z.object({
 
 type GetDashboardMetricsInput = z.infer<typeof getDashboardMetricsInputSchema>;
 
+type DashboardContext = {
+  user?: {
+    id: string;
+    subscriptionStatus?: string | null;
+  } | null;
+};
+
 export type DashboardMetrics = {
   totalScans: number;
   scansThisMonth: number;
@@ -21,15 +28,16 @@ export type DashboardMetrics = {
 };
 
 export const getDashboardMetrics = async (
-  rawArgs: any,
-  context: any
+  rawArgs: unknown,
+  context: DashboardContext
 ): Promise<DashboardMetrics> => {
-  const { timeRange = "30d" } = ensureArgsSchemaOrThrowHttpError(
+  const { timeRange: _timeRange = "30d" } = ensureArgsSchemaOrThrowHttpError(
     getDashboardMetricsInputSchema,
     rawArgs
   );
 
-  if (!context.user) {
+  const user = context.user;
+  if (!user) {
     throw new HttpError(
       401,
       "Only authenticated users are allowed to perform this operation"
@@ -37,7 +45,7 @@ export const getDashboardMetrics = async (
   }
 
   const allScans = await prisma.scan.findMany({
-    where: { userId: context.user.id },
+    where: { userId: user.id },
     include: { findings: true },
   });
 
@@ -67,15 +75,15 @@ export const getDashboardMetrics = async (
     totalVulnerabilities,
     avgSeverity,
     quotaUsed: allScans.length,
-    quotaLimit: context.user.subscriptionStatus === "pro" ? 1000 : 100,
-    planTier: context.user.subscriptionStatus || "free_trial",
+    quotaLimit: user.subscriptionStatus === "pro" ? 1000 : 100,
+    planTier: user.subscriptionStatus || "free_trial",
   };
 };
 
 // Get quota status
 export const getQuotaStatus = async (
-  rawArgs: any,
-  context: any
+  _rawArgs: unknown,
+  context: DashboardContext
 ): Promise<{
   used: number;
   limit: number;
@@ -83,7 +91,8 @@ export const getQuotaStatus = async (
   resetDate: Date;
   trend: "increasing" | "decreasing" | "stable";
 }> => {
-  if (!context.user) {
+  const user = context.user;
+  if (!user) {
     throw new HttpError(
       401,
       "Only authenticated users are allowed to perform this operation"
@@ -91,7 +100,7 @@ export const getQuotaStatus = async (
   }
 
   const scans = await prisma.scan.findMany({
-    where: { userId: context.user.id },
+    where: { userId: user.id },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
@@ -106,7 +115,7 @@ export const getQuotaStatus = async (
   ).length;
 
   const limit =
-    context.user.subscriptionStatus === "pro" ? 1000 : 100;
+    user.subscriptionStatus === "pro" ? 1000 : 100;
 
   let trend: "increasing" | "decreasing" | "stable" = "stable";
   if (scansLastSevenDays > scansThisMonth / 4) {
@@ -135,8 +144,8 @@ const getRecentScansInputSchema = z.object({
 type GetRecentScansInput = z.infer<typeof getRecentScansInputSchema>;
 
 export const getRecentScans = async (
-  rawArgs: any,
-  context: any
+  rawArgs: unknown,
+  context: DashboardContext
 ): Promise<Array<{
   id: string;
   inputRef: string;
@@ -150,7 +159,8 @@ export const getRecentScans = async (
     rawArgs
   );
 
-  if (!context.user) {
+  const user = context.user;
+  if (!user) {
     throw new HttpError(
       401,
       "Only authenticated users are allowed to perform this operation"
@@ -158,7 +168,7 @@ export const getRecentScans = async (
   }
 
   const scans = await prisma.scan.findMany({
-    where: { userId: context.user.id },
+    where: { userId: user.id },
     include: { findings: true },
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -167,11 +177,11 @@ export const getRecentScans = async (
   return scans.map((s) => {
     const findings = s.findings || [];
     const severity = {
-      critical: findings.filter((f: any) => f.severity === "critical").length,
-      high: findings.filter((f: any) => f.severity === "high").length,
-      medium: findings.filter((f: any) => f.severity === "medium").length,
-      low: findings.filter((f: any) => f.severity === "low").length,
-      info: findings.filter((f: any) => f.severity === "info").length,
+      critical: findings.filter((f) => f.severity === "critical").length,
+      high: findings.filter((f) => f.severity === "high").length,
+      medium: findings.filter((f) => f.severity === "medium").length,
+      low: findings.filter((f) => f.severity === "low").length,
+      info: findings.filter((f) => f.severity === "info").length,
     };
 
     return {
@@ -193,8 +203,8 @@ const getSeverityBreakdownInputSchema = z.object({
 type GetSeverityBreakdownInput = z.infer<typeof getSeverityBreakdownInputSchema>;
 
 export const getSeverityBreakdown = async (
-  rawArgs: any,
-  context: any
+  rawArgs: unknown,
+  context: DashboardContext
 ): Promise<{
   critical: number;
   high: number;
@@ -203,12 +213,13 @@ export const getSeverityBreakdown = async (
   info: number;
   total: number;
 }> => {
-  const { timeRange = "30d" } = ensureArgsSchemaOrThrowHttpError(
+  const { timeRange: _timeRange = "30d" } = ensureArgsSchemaOrThrowHttpError(
     getSeverityBreakdownInputSchema,
     rawArgs
   );
 
-  if (!context.user) {
+  const user = context.user;
+  if (!user) {
     throw new HttpError(
       401,
       "Only authenticated users are allowed to perform this operation"
@@ -216,18 +227,18 @@ export const getSeverityBreakdown = async (
   }
 
   const scans = await prisma.scan.findMany({
-    where: { userId: context.user.id },
+    where: { userId: user.id },
     include: { findings: true },
   });
 
   const findings = scans.flatMap((s) => s.findings);
 
   return {
-    critical: findings.filter((f: any) => f.severity === "critical").length,
-    high: findings.filter((f: any) => f.severity === "high").length,
-    medium: findings.filter((f: any) => f.severity === "medium").length,
-    low: findings.filter((f: any) => f.severity === "low").length,
-    info: findings.filter((f: any) => f.severity === "info").length,
+    critical: findings.filter((f) => f.severity === "critical").length,
+    high: findings.filter((f) => f.severity === "high").length,
+    medium: findings.filter((f) => f.severity === "medium").length,
+    low: findings.filter((f) => f.severity === "low").length,
+    info: findings.filter((f) => f.severity === "info").length,
     total: findings.length,
   };
 };

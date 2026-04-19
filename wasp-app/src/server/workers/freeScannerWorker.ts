@@ -4,7 +4,7 @@
  */
 
 import { Job } from 'bullmq';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma, type ScanSource, type ScanStatus } from '@prisma/client';
 import { normalizeGrypeFindings } from '../operations/scans/normalizeFindings.js';
 import { scanWithGrype, isGrypInstalled } from '../lib/scanners/grypeScannerUtil.js';
 import { emitWebhookEvent, buildWebhookPayload } from '../services/webhookEventEmitter.js';
@@ -151,10 +151,10 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
     if (currentScan && currentScan.status === 'scanning') {
       // Determine expected scanners based on plan at submission
       const isEnterprisePlan = currentScan.planAtSubmission === 'enterprise';
-      const expectedScanners = isEnterprisePlan ? ['free', 'enterprise'] : ['free'];
+      const expectedScanners: ScanSource[] = isEnterprisePlan ? ['free', 'enterprise'] : ['free'];
       
       // Check which scanners have completed
-      const completedScanners = currentScan.scanResults.map((r) => r.source);
+      const completedScanners: ScanSource[] = currentScan.scanResults.map((r) => r.source as ScanSource);
       const allExpectedComplete = expectedScanners.every((scanner) => completedScanners.includes(scanner));
       
       if (allExpectedComplete) {
@@ -202,8 +202,8 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
     });
 
     const errorMessage = error instanceof Error ? error.message : String(error);
-    let statusUpdate: { status: string; completedAt?: Date; errorMessage: string } = {
-      status: 'error',
+    let statusUpdate: Prisma.ScanUpdateInput = {
+      status: 'error' as ScanStatus,
       errorMessage: `Free scanner failed: ${errorMessage}`,
     };
 
@@ -216,14 +216,14 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
         if (enterpriseResult) {
           // Enterprise completed, mark as partial (done)
           statusUpdate = {
-            status: 'done',
+            status: 'done' as ScanStatus,
             completedAt: new Date(),
             errorMessage: `Free scanner failed: ${errorMessage}`,
           };
         } else {
           // Both failed (enterprise plan)
           statusUpdate = {
-            status: 'error',
+            status: 'error' as ScanStatus,
             completedAt: new Date(),
             errorMessage: `Free scanner failed: ${errorMessage}`,
           };
@@ -231,7 +231,7 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       } else {
         // For non-enterprise plans, only free scanner expected, so this is an error
         statusUpdate = {
-          status: 'error',
+          status: 'error' as ScanStatus,
           completedAt: new Date(),
           errorMessage: `Free scanner failed: ${errorMessage}`,
         };

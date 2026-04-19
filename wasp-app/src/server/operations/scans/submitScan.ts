@@ -26,7 +26,8 @@ export interface ScanResponse {
 }
 
 export async function submitScan(rawArgs: any, context: any): Promise<ScanResponse> {
-  if (!context.user) {
+  const user = context.user;
+  if (!user) {
     throw new HttpError(401, 'User not authenticated');
   }
 
@@ -119,7 +120,7 @@ export async function submitScan(rawArgs: any, context: any): Promise<ScanRespon
   try {
     await orchestrateScan({
       scanId: result.id,
-      userId: context.user.id,
+      userId: user.id,
       inputType: args.inputType,
       inputRef: args.inputRef,
       planAtSubmission: user.plan,

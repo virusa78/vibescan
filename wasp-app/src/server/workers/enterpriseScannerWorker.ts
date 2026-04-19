@@ -4,7 +4,7 @@
  */
 
 import { Job } from 'bullmq';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma, type ScanSource, type ScanStatus } from '@prisma/client';
 import { normalizeCodescoringFindings } from '../operations/scans/normalizeFindings.js';
 import { scanWithCodescoring } from '../lib/scanners/codescoringApiClient.js';
 import { emitWebhookEvent, buildWebhookPayload } from '../services/webhookEventEmitter.js';
@@ -136,13 +136,6 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
 
     console.log(`[Enterprise Scanner] Created ${normalizedFindings.length} findings for scan ${scanId}`);
 
-    // Update scan with completion timestamp (unless already done by free worker)
-    const currentScan = await prisma.scan.findUnique({
-      where: { id: scanId },
-      include: { scanResults: true },
-    });
-
-    // Update scan with completion timestamp based on plan
     const currentScan = await prisma.scan.findUnique({
       where: { id: scanId },
       include: { scanResults: true },
@@ -151,10 +144,10 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
     if (currentScan && currentScan.status === 'scanning') {
       // Determine expected scanners based on plan at submission
       const isEnterprisePlan = currentScan.planAtSubmission === 'enterprise';
-      const expectedScanners = isEnterprisePlan ? ['free', 'enterprise'] : ['free'];
+      const expectedScanners: ScanSource[] = isEnterprisePlan ? ['free', 'enterprise'] : ['free'];
       
       // Check which scanners have completed
-      const completedScanners = currentScan.scanResults.map((r) => r.source);
+      const completedScanners: ScanSource[] = currentScan.scanResults.map((r) => r.source as ScanSource);
       const allExpectedComplete = expectedScanners.every((scanner) => completedScanners.includes(scanner));
       
       if (allExpectedComplete) {
@@ -202,8 +195,8 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
     });
 
     const errorMessage = error instanceof Error ? error.message : String(error);
-    let statusUpdate: { status: string; completedAt?: Date; errorMessage: string } = {
-      status: 'error',
+    let statusUpdate: Prisma.ScanUpdateInput = {
+      status: 'error' as ScanStatus,
       errorMessage: `Enterprise scanner failed: ${errorMessage}`,
     };
 
@@ -216,14 +209,14 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
         if (freeResult) {
           // Free completed, mark as partial (done)
           statusUpdate = {
-            status: 'done',
+            status: 'done' as ScanStatus,
             completedAt: new Date(),
             errorMessage: `Enterprise scanner failed: ${errorMessage}`,
           };
         } else {
           // Both failed
           statusUpdate = {
-            status: 'error',
+            status: 'error' as ScanStatus,
             completedAt: new Date(),
             errorMessage: `Enterprise scanner failed: ${errorMessage}`,
           };
@@ -234,7 +227,7 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
         const freeResult = existingScan.scanResults.some((r) => r.source === 'free');
         if (!freeResult) {
           statusUpdate = {
-            status: 'error',
+            status: 'error' as ScanStatus,
             completedAt: new Date(),
             errorMessage: `Enterprise scanner failed: ${errorMessage}`,
           };
@@ -263,8 +256,6 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
       } catch (webhookError) {
         console.error(`[Enterprise Scanner] Failed to emit webhook for scan ${scanId}:`, webhookError);
         // Don't fail if webhook emission fails
-      }
-    }
       }
     }
 
