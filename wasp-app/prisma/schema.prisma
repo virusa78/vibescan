@@ -28,6 +28,13 @@ enum WebhookDeliveryStatus {
   exhausted
 }
 
+enum RemediationPromptStatus {
+  accepted
+  rejected_quota
+  failed_provider
+  completed
+}
+
 enum VulnAcceptanceStatus {
   accepted
   revoked
@@ -78,6 +85,8 @@ model User {
   webhooks                  Webhook[]
   vulnAcceptances           VulnAcceptance[]
   aiFixPrompts              AiFixPrompt[]
+  policyOverride            UserPolicyOverride?
+  remediationPromptUsages   RemediationPromptUsage[]
   findings                  Finding[]
   organizations             Organization[]  @relation("members")
   quotaLedger               QuotaLedger[]
@@ -145,6 +154,7 @@ model Scan {
   findings                  Finding[]
   scanDeltas                ScanDelta[]
   aiFixPrompts              AiFixPrompt[]
+  remediationPromptUsages   RemediationPromptUsage[]
   securityScores            SecurityScore[]
   vulnAcceptances           VulnAcceptance[]
   webhookDeliveries         WebhookDelivery[]
@@ -211,6 +221,7 @@ model Finding {
   scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
   user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   history                   FindingHistory[]
+  remediationPromptUsages   RemediationPromptUsage[]
 
   @@index([fingerprint])
   @@index([userId, status])
@@ -266,6 +277,69 @@ model ScanDelta {
   scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
 
   @@map("scan_deltas")
+}
+
+// Regional policy configuration
+model RegionPolicy {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  regionCode                String          @unique @map("region_code")
+  monthlyScanLimit          Int             @map("monthly_scan_limit")
+  monthlyRemediationPromptLimit Int          @map("monthly_remediation_prompt_limit")
+  maxPromptsPerFinding      Int             @default(3) @map("max_prompts_per_finding")
+  isActive                  Boolean         @default(true) @map("is_active")
+  updatedByUserId           String?         @map("updated_by_user_id") @db.Uuid
+
+  @@map("region_policies")
+}
+
+// Per-user overrides for regional policy
+model UserPolicyOverride {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  userId                    String          @unique @map("user_id") @db.Uuid
+  monthlyScanLimit          Int?            @map("monthly_scan_limit")
+  monthlyRemediationPromptLimit Int?        @map("monthly_remediation_prompt_limit")
+  maxPromptsPerFinding      Int?            @map("max_prompts_per_finding")
+  reason                    String?
+  updatedByUserId           String?         @map("updated_by_user_id") @db.Uuid
+
+  user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_policy_overrides")
+}
+
+// Remediation prompt usage ledger
+model RemediationPromptUsage {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+
+  userId                    String          @map("user_id") @db.Uuid
+  scanId                    String          @map("scan_id") @db.Uuid
+  findingId                 String          @map("finding_id") @db.Uuid
+  regionAtCall              String          @map("region_at_call")
+  policySnapshot            Json            @map("policy_snapshot")
+  requestKey                String          @map("request_key")
+  promptType                String          @map("prompt_type")
+  provider                  String
+  status                    RemediationPromptStatus @default(accepted)
+  tokensIn                  Int             @default(0) @map("tokens_in")
+  tokensOut                 Int             @default(0) @map("tokens_out")
+  costEstimate              Decimal?        @map("cost_estimate") @db.Decimal(10, 4)
+
+  user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  finding                   Finding         @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, requestKey])
+  @@index([scanId])
+  @@index([findingId])
+  @@map("remediation_prompt_usages")
 }
 
 // AI fix prompt suggestions
