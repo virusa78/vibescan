@@ -107,6 +107,14 @@ test("API keys and webhooks flows", async ({ page }) => {
 
   await expect(webhookCard.getByText(/active/i)).toBeVisible();
 
+  const toggleButton = webhookCard.getByRole("button", { name: /disable/i });
+  await toggleButton.click();
+  await expect(webhookCard.getByText(/inactive/i)).toBeVisible();
+  await expect(webhookCard.getByRole("button", { name: /enable/i })).toBeVisible();
+
+  await webhookCard.getByRole("button", { name: /enable/i }).click();
+  await expect(webhookCard.getByText(/active/i)).toBeVisible();
+
   const deleteButton = webhookCard.locator("button", {
     has: webhookCard.locator('svg[data-lucide="trash2"]'),
   });

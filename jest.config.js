@@ -28,6 +28,7 @@ const config = {
     moduleFileExtensions: ['ts', 'js', 'json'],
     moduleNameMapper: {
         '^(\\.{1,2}/.*)\\.js$': '$1',
+        '^wasp/server$': '<rootDir>/test/mocks/wasp-server.ts',
         '^.+\\.(css|less|scss|sass)$': 'identity-obj-proxy',
     },
     verbose: true,

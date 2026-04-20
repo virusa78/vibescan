@@ -68,7 +68,7 @@ export default function WebhooksPage() {
 
     await run(
       async () => {
-        await api.put(`/api/v1/webhooks/${id}`, { active: !current.enabled });
+        await api.put(`/api/v1/webhooks/${id}`, { enabled: !current.enabled });
         setWebhooks(
           webhooks.map((w) => (w.id === id ? { ...w, enabled: !w.enabled } : w)),
         );
