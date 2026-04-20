@@ -4,9 +4,9 @@
  *   post:
  *     summary: Submit a new vulnerability scan
  *     description: |
- *       Create and submit a new scan for vulnerability detection.
+ *       Create and submit a new GitHub repository scan for vulnerability detection.
  *       Quota is consumed at submission time (not completion).
- *       Enqueues both free (Grype) and enterprise (BlackDuck) scanner jobs.
+ *       Enqueues the live scanner pipeline for GitHub repos.
  *     operationId: submitScan
  *     tags:
  *       - Scans

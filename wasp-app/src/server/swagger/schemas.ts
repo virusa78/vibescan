@@ -9,18 +9,14 @@ export const schemas = {
     properties: {
       inputType: {
         type: 'string',
-        enum: ['github', 'sbom', 'source_zip'],
-        description: 'Type of scan input source',
+        enum: ['github'],
+        description: 'GitHub repository scan input',
         example: 'github',
       },
       inputRef: {
         type: 'string',
-        description: 'Repository URL or file reference for the scan',
+        description: 'GitHub repository URL for the scan',
         example: 'https://github.com/owner/repo',
-      },
-      sbomContent: {
-        type: 'string',
-        description: 'Raw SBOM JSON content (required when inputType is sbom)',
       },
     },
   },
@@ -81,8 +77,8 @@ export const schemas = {
     properties: {
       id: { type: 'string', format: 'uuid', description: 'Scan ID' },
       status: { type: 'string', enum: ['pending', 'scanning', 'done', 'error', 'cancelled'] },
-      inputType: { type: 'string', enum: ['github_app', 'source_zip', 'sbom_upload', 'ci_plugin'] },
-      inputRef: { type: 'string', description: 'Reference to input (repo, filename, URL, etc)' },
+      inputType: { type: 'string', enum: ['github_app'] },
+      inputRef: { type: 'string', description: 'GitHub repository reference' },
       planAtSubmission: { type: 'string', enum: ['free_trial', 'starter', 'pro', 'enterprise'] },
       created_at: { type: 'string', format: 'date-time' },
       completed_at: { type: 'string', format: 'date-time', nullable: true },
@@ -109,8 +105,8 @@ export const schemas = {
     properties: {
       id: { type: 'string', format: 'uuid' },
       status: { type: 'string', enum: ['pending', 'scanning', 'done', 'error', 'cancelled'] },
-      inputType: { type: 'string' },
-      inputRef: { type: 'string' },
+      inputType: { type: 'string', example: 'github_app' },
+      inputRef: { type: 'string', description: 'GitHub repository reference' },
       planAtSubmission: { type: 'string', enum: ['free_trial', 'starter', 'pro', 'enterprise'] },
       created_at: { type: 'string', format: 'date-time' },
       completed_at: { type: 'string', format: 'date-time', nullable: true },
@@ -263,7 +259,7 @@ export const schemas = {
   },
 
   // ============================================
-  // Legacy Scan Schemas (for backward compatibility)
+  // Scan Schemas (for backward compatibility)
   // ============================================
   ScanSubmission: {
     type: 'object',

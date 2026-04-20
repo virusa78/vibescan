@@ -6,7 +6,6 @@ import {
   viewScanDetails,
   verifyFindingsDisplay,
 } from "./helpers";
-
 /**
  * Test 3: Source ZIP E2E
  * User Story: Upload ZIP file → Extract components → See results

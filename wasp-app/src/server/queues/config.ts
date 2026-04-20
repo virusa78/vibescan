@@ -65,8 +65,13 @@ export const webhookDeliveryQueue = new Queue(QUEUE_NAMES.WEBHOOK_DELIVERY, {
 let freeWorker: Worker | null = null;
 let enterpriseWorker: Worker | null = null;
 let webhookWorker: Worker | null = null;
+let workersInitialized = false;
 
 export async function initializeWorkers() {
+  if (workersInitialized) {
+    return;
+  }
+
   try {
     // Free scanner worker: 20 concurrent jobs (lower priority)
     freeWorker = new Worker(QUEUE_NAMES.FREE_SCAN, freeScannerWorker, {
@@ -111,6 +116,7 @@ export async function initializeWorkers() {
     });
 
     console.log('✅ Workers initialized: free_scan (20 concurrent), enterprise_scan (3 concurrent), webhook_delivery (10 concurrent)');
+    workersInitialized = true;
   } catch (error) {
     console.error('❌ Failed to initialize workers:', error);
     throw error;
@@ -127,6 +133,8 @@ export async function closeWorkers() {
   if (webhookWorker) {
     await webhookWorker.close();
   }
+
+  workersInitialized = false;
 }
 
 export function getWorkerStatus() {

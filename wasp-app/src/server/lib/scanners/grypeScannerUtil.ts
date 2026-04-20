@@ -3,10 +3,9 @@
  * Grype is the free vulnerability scanner (Anchore)
  */
 
-import { execSync, spawn } from 'child_process';
-import { writeFileSync, unlinkSync, existsSync } from 'fs';
+import { execSync } from 'child_process';
+import { writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
 import { resolve } from 'path';
-import { tmpdir } from 'os';
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
 
 export interface GrypeFinding {
@@ -18,6 +17,18 @@ export interface GrypeFinding {
   description: string;
   cvssScore: number;
   source: 'free';
+}
+
+function isGrypeMissingError(error: unknown): boolean {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return true;
+    }
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return /grype/i.test(message) && /(not found|enoent)/i.test(message);
 }
 
 /**
@@ -134,11 +145,17 @@ export async function scanWithGrype(
   let sbomPath: string | null = null;
 
   try {
+    if (!isGrypInstalled()) {
+      throw new Error('Grype CLI is not installed');
+    }
+
     // Generate SBOM
     const sbomContent = generateCycloneDxSbom(components);
 
-    // Write SBOM to temp file (use OS tmpdir instead of hardcoded path)
-    sbomPath = resolve(tmpdir(), `sbom-${scanId}.json`);
+    // Write SBOM to temp file (keep within repo, avoid OS temp dir)
+    const scratchDir = resolve(process.cwd(), '.cache', 'grype');
+    mkdirSync(scratchDir, { recursive: true });
+    sbomPath = resolve(scratchDir, `sbom-${scanId}.json`);
     writeFileSync(sbomPath, sbomContent);
 
     console.log(`[Grype] Generated SBOM at ${sbomPath}`);
@@ -157,7 +174,12 @@ export async function scanWithGrype(
 
     return findings;
   } catch (error) {
-    console.error(`[Grype] Scan failed:`, error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (isGrypeMissingError(error)) {
+      throw new Error(`Grype CLI is not installed: ${message}`);
+    }
+
+    console.error(`[Grype] Scan failed: ${message}`);
     throw error;
   } finally {
     // Cleanup temp file

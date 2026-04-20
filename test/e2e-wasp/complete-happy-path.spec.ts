@@ -25,7 +25,7 @@ import {
  * 6. Login redirects to dashboard
  * 7. Dashboard loads with empty state
  * 8. Click "New Scan" button
- * 9. Upload SBOM file
+ * 9. Submit GitHub repository
  * 10. Watch real-time polling
  * 11. See progress bar and time estimate
  * 12. Scan completes, results appear
@@ -96,11 +96,11 @@ test("Complete Happy Path E2E - Full MVP flow", async ({ page, context }) => {
     expect(isEmptyOrReady).toBeTruthy();
     console.log("✓ Dashboard ready for first scan");
     
-    // Step 8-9: Click "New Scan" and upload SBOM
-    console.log("📤 Step 8-9: Uploading SBOM file");
-    const sbomPath = "test/fixtures/sample.sbom.json";
-    await uploadSbomFile(page, sbomPath);
-    console.log("✓ SBOM uploaded and scan submitted");
+    // Step 8-9: Click "New Scan" and submit GitHub repo
+    console.log("📤 Step 8-9: Submitting GitHub repository");
+    const githubUrl = "https://github.com/lodash/lodash";
+    await uploadSbomFile(page, githubUrl);
+    console.log("✓ GitHub repository submitted and scan started");
     
     // Step 10-11: Watch real-time polling with progress
     console.log("⏳ Step 10-11: Polling for scan completion with progress tracking");

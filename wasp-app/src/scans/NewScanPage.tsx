@@ -63,7 +63,7 @@ export default function NewScanPage() {
           </p>
         </div>
 
-        <Card className="from-card/95 to-card/75 border-border/70 mt-8 bg-gradient-to-b backdrop-blur-sm">
+        <Card className="border-border/70 mt-8 bg-card/90 shadow-sm">
           <CardHeader>
             <CardTitle>Scan Input</CardTitle>
           </CardHeader>
@@ -124,7 +124,7 @@ export default function NewScanPage() {
           </CardContent>
         </Card>
 
-        <Card className="from-card/95 to-card/75 border-border/70 mt-8 bg-gradient-to-b backdrop-blur-sm">
+        <Card className="border-border/70 mt-8 bg-card/90 shadow-sm">
           <CardHeader>
             <CardTitle>Recent Scans</CardTitle>
           </CardHeader>

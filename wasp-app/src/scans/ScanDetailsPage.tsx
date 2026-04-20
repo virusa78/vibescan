@@ -4,6 +4,7 @@ import { Link as WaspRouterLink, routes } from "wasp/client/router";
 import { Alert, AlertDescription } from "../client/components/ui/alert";
 import { Button } from "../client/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
+import { getScanTypeDisplay } from "../client/utils/severity";
 
 function getStatusClass(status: string) {
   const normalized = status.toLowerCase();
@@ -60,6 +61,10 @@ export default function ScanDetailsPage() {
     );
   }
 
+  const scanResults = Array.isArray((scan as any).scanResults) ? (scan as any).scanResults : [];
+  const scanDeltas = Array.isArray((scan as any).scanDeltas) ? (scan as any).scanDeltas : [];
+  const latestDelta = scanDeltas[0];
+
   return (
     <div className="py-10 lg:mt-10">
       <div className="mx-auto max-w-4xl px-6 lg:px-8">
@@ -96,7 +101,7 @@ export default function ScanDetailsPage() {
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Input Type</p>
-                <p className="text-sm">{scan.inputType}</p>
+                <p className="text-sm">{getScanTypeDisplay(scan.inputType)}</p>
               </div>
               <div>
                 <p className="text-muted-foreground text-xs">Created At</p>
@@ -107,6 +112,37 @@ export default function ScanDetailsPage() {
                 <p className="text-sm">
                   {scan.completedAt ? new Date(scan.completedAt).toLocaleString() : "Not finished"}
                 </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-4" data-testid="scanner-summary">
+                <p className="text-muted-foreground text-xs uppercase tracking-wide">Scanner results</p>
+                <div className="mt-2 space-y-2">
+                  {scanResults.length === 0 ? (
+                    <p className="text-sm">No scanner results yet.</p>
+                  ) : (
+                    scanResults.map((result: any) => (
+                      <div key={result.id} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="font-medium capitalize">{result.source}</span>
+                        <span className="text-muted-foreground">{result.scannerVersion}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-4" data-testid="delta-summary">
+                <p className="text-muted-foreground text-xs uppercase tracking-wide">Delta / dedup</p>
+                {latestDelta ? (
+                  <div className="mt-2 space-y-1 text-sm">
+                    <div className="flex items-center justify-between"><span>Free</span><span>{latestDelta.totalFreeCount}</span></div>
+                    <div className="flex items-center justify-between"><span>Enterprise</span><span>{latestDelta.totalEnterpriseCount}</span></div>
+                    <div className="flex items-center justify-between"><span>Delta</span><span>{latestDelta.deltaCount}</span></div>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm">No delta recorded yet.</p>
+                )}
               </div>
             </div>
           </CardContent>

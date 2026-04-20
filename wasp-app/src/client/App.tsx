@@ -82,8 +82,8 @@ export default function App() {
     <>
       <div className="bg-background text-foreground min-h-screen">
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-          <div className="bg-primary/15 absolute -top-28 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full blur-3xl" />
-          <div className="bg-secondary/20 absolute right-0 bottom-0 h-96 w-96 translate-x-1/3 translate-y-1/4 rounded-full blur-3xl" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.05),_transparent_42%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-15" />
         </div>
         {isAdminDashboard ? (
           <Outlet />

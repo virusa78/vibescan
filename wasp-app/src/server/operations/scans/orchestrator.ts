@@ -5,7 +5,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { freeScanQueue, enterpriseScanQueue } from '../../queues/config';
+import { freeScanQueue, enterpriseScanQueue, initializeWorkers } from '../../queues/config';
 import type { ScanJob } from '../../queues/jobContract';
 
 const prisma = new PrismaClient();
@@ -37,6 +37,7 @@ export async function orchestrateScan(input: OrchestratorInput): Promise<Orchest
 
   try {
     console.log(`[Orchestrator] Starting orchestration for scan ${scanId}`);
+    await initializeWorkers();
 
     // Prepare job data
     const jobData: ScanJob = {

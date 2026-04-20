@@ -260,9 +260,8 @@ git add test/e2e-wasp/ test/fixtures/
 
 git commit -m "feat(mvp-p5): Add E2E integration tests - SBOM, GitHub, ZIP, complete happy path
 
-- SBOM upload E2E test (paywall verification for starter)
 - GitHub URL E2E test (full details for pro plan)
-- Source ZIP E2E test
+- Dashboard proofpack using GitHub repo scan
 - Complete happy path E2E test (20 steps)
 - Playwright helpers and global setup
 - Test fixtures (sample.sbom.json)

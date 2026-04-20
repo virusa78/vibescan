@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
+import { getScanById, useQuery } from 'wasp/client/operations';
 import { useScanPolling } from '../client/hooks/useScanPolling';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
 import { Alert } from '../client/components/ui/alert';
@@ -48,6 +49,14 @@ export function ScanDetailsPage() {
   const scanId = params.scanId || '';
   const navigate = useNavigate();
   const { scan, isPolling, status, progress, error } = useScanPolling(scanId);
+  const scanDetailsQuery = useQuery(
+    getScanById,
+    { scanId },
+    {
+      enabled: status === 'completed' && !!scanId,
+      refetchInterval: 3000,
+    },
+  );
   
   const [report, setReport] = useState<Report | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -123,7 +132,7 @@ export function ScanDetailsPage() {
             </button>
           </div>
 
-          <Card className="border-red-700 bg-red-900/20">
+          <Card className="border-red-700 bg-red-900/20" data-testid="scan-status-failed">
             <CardHeader>
               <div className="flex items-center gap-2">
                 <AlertTriangle className="text-red-500" size={24} />
@@ -164,7 +173,7 @@ export function ScanDetailsPage() {
             </button>
           </div>
 
-          <Card className="border-blue-700 bg-blue-900/20">
+          <Card className="border-blue-700 bg-blue-900/20" data-testid="scan-status-running">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -231,6 +240,10 @@ export function ScanDetailsPage() {
   if (status === 'completed' && report) {
     const isLocked = report.lockedView;
     const totalVulnerabilities = report.total_free + report.total_enterprise;
+    const scanDetails = scanDetailsQuery.data;
+    const scanResults = scanDetails?.scanResults ?? [];
+    const scanDeltas = scanDetails?.scanDeltas ?? [];
+    const latestDelta = scanDeltas[0];
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-8">
@@ -249,7 +262,7 @@ export function ScanDetailsPage() {
           </div>
 
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-8" data-testid="scan-status-completed">
             <div className="flex items-center gap-3">
               <CheckCircle className="text-green-500" size={32} />
               <div>
@@ -322,28 +335,66 @@ export function ScanDetailsPage() {
             </Card>
           </div>
 
-          {/* Delta Summary */}
-          <Card className="border-slate-700 bg-slate-800/50 mb-8">
-            <CardHeader>
-              <CardTitle>Scan Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-6 text-center">
-                <div>
-                  <p className="text-slate-400 text-sm mb-2">Free Scanner</p>
-                  <p className="text-2xl font-bold text-blue-400">{report.total_free}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-sm mb-2">Enterprise Scanner</p>
-                  <p className="text-2xl font-bold text-purple-400">{report.total_enterprise}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-sm mb-2">Delta (Enterprise Only)</p>
-                  <p className="text-2xl font-bold text-indigo-400">{report.delta_count}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mb-8">
+            <Card className="border-slate-700 bg-slate-800/50" data-testid="scanner-summary">
+              <CardHeader>
+                <CardTitle>Scanner Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {scanResults.length > 0 ? (
+                  scanResults.map((result) => (
+                    <div
+                      key={result.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-2"
+                    >
+                      <div>
+                        <p className="text-sm font-medium capitalize text-white">{result.source}</p>
+                        <p className="text-xs text-slate-400">{result.scannerVersion}</p>
+                      </div>
+                      <span className="text-xs text-slate-300">
+                        {Array.isArray(result.vulnerabilities) ? result.vulnerabilities.length : 0} findings
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-400">No scanner results yet.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-700 bg-slate-800/50" data-testid="delta-summary">
+              <CardHeader>
+                <CardTitle>Delta / dedup</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {latestDelta ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                      <div className="rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-3">
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Free</p>
+                        <p className="text-xl font-bold text-blue-400">{latestDelta.totalFreeCount}</p>
+                      </div>
+                      <div className="rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-3">
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Enterprise</p>
+                        <p className="text-xl font-bold text-purple-400">
+                          {latestDelta.totalEnterpriseCount}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-3">
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Delta</p>
+                        <p className="text-xl font-bold text-indigo-400">{latestDelta.deltaCount}</p>
+                      </div>
+                    </div>
+                    <div className="text-sm text-slate-400">
+                      Fingerprint dedup keeps shared CVEs collapsed into a single stored finding.
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400">No delta recorded yet.</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Vulnerabilities Table */}
           {!isLocked && report.vulnerabilities && report.vulnerabilities.length > 0 ? (

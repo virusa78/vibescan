@@ -1,12 +1,12 @@
 /**
- * Free Scanner Worker - Runs Grype vulnerability scanner
- * Handles source_zip and sbom_upload input types
+ * Free Scanner Worker - Runs Grype vulnerability scanner.
+ * Consumes GitHub-first scan jobs and legacy compatibility inputs.
  */
 
 import { Job } from 'bullmq';
 import { PrismaClient, type Prisma, type ScanSource, type ScanStatus } from '@prisma/client';
 import { normalizeGrypeFindings } from '../operations/scans/normalizeFindings.js';
-import { scanWithGrype, isGrypInstalled } from '../lib/scanners/grypeScannerUtil.js';
+import { scanWithGrype } from '../lib/scanners/grypeScannerUtil.js';
 import { emitWebhookEvent, buildWebhookPayload } from '../services/webhookEventEmitter.js';
 import type { ScanJob } from '../queues/jobContract.js';
 import type { NormalizedComponent } from '../services/inputAdapterService.js';
@@ -24,11 +24,6 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       where: { id: scanId },
       data: { status: 'scanning' },
     });
-
-    // Check if Grype is installed
-    if (!isGrypInstalled()) {
-      throw new Error('Grype CLI not found - please install Grype');
-    }
 
     // Fetch scan from database to get components
     const scan = await prisma.scan.findUnique({

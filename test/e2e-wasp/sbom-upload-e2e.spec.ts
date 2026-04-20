@@ -12,7 +12,6 @@ import {
   generateTestEmail,
   checkForConsoleErrors,
 } from "./helpers";
-
 /**
  * Test 1: SBOM Upload E2E
  * User Story: Register → Upload SBOM → See results on dashboard
