@@ -152,7 +152,7 @@
  *         key:
  *           type: string
  *           description: Raw API key (shown only on generation)
- *           example: "sk_live_example_key"
+ *           example: "vsk_example_key"
  *         created_at:
  *           type: string
  *           format: date-time

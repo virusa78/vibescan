@@ -41,7 +41,7 @@ const swaggerOptions = {
           type: 'apiKey',
           in: 'header',
           name: 'Authorization',
-          description: 'API Key (format: sk_live_...) generated from /api/v1/api-keys',
+          description: 'API Key (format: vsk_...; legacy sk_live_... still accepted) generated from /api/v1/api-keys',
         },
       },
       schemas,
