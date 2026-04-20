@@ -1,17 +1,7 @@
 import type { Scan } from "wasp/entities";
 import { HttpError, prisma } from "wasp/server";
-import type { Prisma } from "@prisma/client";
-import { readFileSync } from "fs";
 import { quotaService } from "./quotaService.js";
-import {
-  buildCycloneDxSbom,
-  cloneGitHubAndScanWithSyft,
-  extractZipAndScanWithSyft,
-  normalizeComponents,
-  validateAndExtractSBOM,
-  validateGitHubUrl,
-  type NormalizedComponent,
-} from "./inputAdapterService.js";
+import { validateGitHubUrl } from "./inputAdapterService.js";
 import { initializeWorkers } from "../queues/config.js";
 import { orchestrateScan } from "../operations/scans/orchestrator.js";
 
@@ -26,7 +16,6 @@ interface SubmissionInput {
   userId: string;
   inputType: ScanInputType;
   inputRef: string;
-  sbomContent?: string;
 }
 
 function internalInputTypeFor(inputType: ScanInputType): "github_app" | "sbom_upload" | "source_zip" {
@@ -40,40 +29,13 @@ function internalInputTypeFor(inputType: ScanInputType): "github_app" | "sbom_up
   }
 }
 
-async function resolveComponentsAndSbom(
-  input: SubmissionInput,
-): Promise<{ components: NormalizedComponent[]; sbomRaw: Prisma.InputJsonValue }> {
-  if (input.inputType === "github") {
-    validateGitHubUrl(input.inputRef);
-    const components = await cloneGitHubAndScanWithSyft(input.inputRef);
-    return {
-      components: await normalizeComponents(components),
-      sbomRaw: buildCycloneDxSbom(components) as Prisma.InputJsonValue,
-    };
-  }
-
-  if (input.inputType === "sbom") {
-    const rawText =
-      input.sbomContent?.trim() ||
-      readFileSync(input.inputRef, "utf8").trim();
-    const sbomResult = validateAndExtractSBOM(rawText);
-    return {
-      components: await normalizeComponents(sbomResult.components),
-      sbomRaw: JSON.parse(rawText) as Prisma.InputJsonValue,
-    };
-  }
-
-  const components = await extractZipAndScanWithSyft(input.inputRef);
-  return {
-    components,
-    sbomRaw: buildCycloneDxSbom(components) as Prisma.InputJsonValue,
-  };
-}
-
 export async function submitScanSubmission(
   input: SubmissionInput,
 ): Promise<ScanSubmissionResult> {
-  const { components, sbomRaw } = await resolveComponentsAndSbom(input);
+  if (input.inputType === "github") {
+    validateGitHubUrl(input.inputRef);
+  }
+
   const planAtSubmission = await prisma.user.findUnique({
     where: { id: input.userId },
     select: { plan: true },
@@ -95,8 +57,6 @@ export async function submitScanSubmission(
         inputRef: input.inputRef,
         status: "pending",
         planAtSubmission,
-        components: components as unknown as Prisma.InputJsonValue,
-        sbomRaw,
       },
     });
     createdScanId = scan.id;

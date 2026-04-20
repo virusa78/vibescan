@@ -1,4 +1,4 @@
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -26,6 +26,7 @@ const { fromCycloneDX, validateCycloneDX } = require("../src/ingestion/cyclonedx
 const {
   extractZipAndScanWithSyft,
   normalizeComponents,
+  resolveTrustedScanInputPath,
   validateAndExtractSBOM,
 } = require("../src/server/services/inputAdapterService");
 
@@ -54,6 +55,33 @@ describe("PR-02: CycloneDX ingestion runtime", () => {
 
     expect(validation.valid).toBe(false);
     expect(validation.errors.join(" ")).toContain("specVersion");
+  });
+
+  it("keeps sbom and zip inputs inside the trusted scan root", () => {
+    const originalRoot = process.env.VIBESCAN_SCAN_INPUT_DIR;
+    const tempDir = mkdtempSync(join(tmpdir(), "vibescan-scan-inputs-"));
+    const safeDir = join(tempDir, "uploads");
+    mkdirSync(safeDir, { recursive: true });
+
+    try {
+      process.env.VIBESCAN_SCAN_INPUT_DIR = safeDir;
+
+      const safeFile = join(safeDir, "sample.sbom.json");
+      writeFileSync(safeFile, readFileSync(sampleSbomPath, "utf8"));
+
+      expect(resolveTrustedScanInputPath("sample.sbom.json")).toBe(safeFile);
+
+      const escapedPath = join(tmpdir(), "escape.sbom.json");
+      expect(() => resolveTrustedScanInputPath(escapedPath)).toThrow(/unsafe_input_reference/i);
+    } finally {
+      if (originalRoot === undefined) {
+        delete process.env.VIBESCAN_SCAN_INPUT_DIR;
+      } else {
+        process.env.VIBESCAN_SCAN_INPUT_DIR = originalRoot;
+      }
+
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("ingests and links vulnerabilities to matching components", () => {

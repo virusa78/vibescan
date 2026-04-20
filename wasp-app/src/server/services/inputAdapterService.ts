@@ -6,7 +6,7 @@
 
 import { execFileSync } from 'child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'fs';
-import { join, basename } from 'path';
+import { join, basename, resolve, isAbsolute, sep } from 'path';
 import { HttpError } from 'wasp/server';
 import {
   fromCycloneDX,
@@ -25,10 +25,44 @@ export interface NormalizedComponent {
 
 const runtimeTempRoot = process.env.VIBESCAN_RUNTIME_TMP_DIR
   ?? join(process.cwd(), 'test-results', 'runtime-temp');
+const defaultTrustedScanInputRoot = join(runtimeTempRoot, 'scan-inputs');
 
 function ensureRuntimeTempRoot() {
   mkdirSync(runtimeTempRoot, { recursive: true });
   return runtimeTempRoot;
+}
+
+function ensureTrustedScanInputRoot() {
+  const root = process.env.VIBESCAN_SCAN_INPUT_DIR ?? defaultTrustedScanInputRoot;
+  mkdirSync(root, { recursive: true });
+  return root;
+}
+
+export function resolveTrustedScanInputPath(inputRef: string): string {
+  const trimmed = inputRef.trim();
+  if (!trimmed) {
+    throw new HttpError(422, 'invalid_input_reference', {
+      detail: 'Input reference cannot be empty',
+    });
+  }
+
+  const root = resolve(ensureTrustedScanInputRoot());
+  const candidate = isAbsolute(trimmed) ? resolve(trimmed) : resolve(root, trimmed);
+  const safeRoot = root.endsWith(sep) ? root : `${root}${sep}`;
+
+  if (candidate !== root && !candidate.startsWith(safeRoot)) {
+    throw new HttpError(422, 'unsafe_input_reference', {
+      detail: 'SBOM and ZIP inputs must live under the trusted scan input root',
+    });
+  }
+
+  if (!existsSync(candidate)) {
+    throw new HttpError(422, 'input_not_found', {
+      detail: `Input file does not exist: ${trimmed}`,
+    });
+  }
+
+  return candidate;
 }
 
 export function buildCycloneDxSbom(components: NormalizedComponent[]) {
@@ -109,6 +143,56 @@ export function validateGitHubUrl(url: string): { owner: string; repo: string } 
     owner: match[1],
     repo: match[2],
   };
+}
+
+function normalizeScanInputType(inputType: string): 'github' | 'sbom' | 'source_zip' {
+  switch (inputType) {
+    case 'github':
+    case 'github_app':
+    case 'ci_plugin':
+      return 'github';
+    case 'sbom':
+    case 'sbom_upload':
+      return 'sbom';
+    case 'source_zip':
+      return 'source_zip';
+    default:
+      throw new HttpError(422, 'unsupported_scan_input', {
+        detail: `Unsupported scan input type: ${inputType}`,
+      });
+  }
+}
+
+export async function loadScanArtifacts(inputType: string, inputRef: string): Promise<{
+  components: NormalizedComponent[];
+  sbomRaw: Record<string, unknown>;
+}> {
+  switch (normalizeScanInputType(inputType)) {
+    case 'github': {
+      validateGitHubUrl(inputRef);
+      const components = await normalizeComponents(await cloneGitHubAndScanWithSyft(inputRef));
+      return {
+        components,
+        sbomRaw: buildCycloneDxSbom(components),
+      };
+    }
+    case 'sbom': {
+      const rawText = readFileSync(resolveTrustedScanInputPath(inputRef), 'utf8').trim();
+      const sbomResult = validateAndExtractSBOM(rawText);
+      const components = await normalizeComponents(sbomResult.components);
+      return {
+        components,
+        sbomRaw: JSON.parse(rawText) as Record<string, unknown>,
+      };
+    }
+    case 'source_zip': {
+      const components = await extractZipAndScanWithSyft(resolveTrustedScanInputPath(inputRef));
+      return {
+        components,
+        sbomRaw: buildCycloneDxSbom(components),
+      };
+    }
+  }
 }
 
 /**

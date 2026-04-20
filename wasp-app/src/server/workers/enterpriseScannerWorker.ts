@@ -9,7 +9,7 @@ import { normalizeCodescoringFindings } from '../operations/scans/normalizeFindi
 import { scanWithCodescoring } from '../lib/scanners/codescoringApiClient.js';
 import { emitWebhookEvent, buildWebhookPayload } from '../services/webhookEventEmitter.js';
 import type { ScanJob } from '../queues/jobContract.js';
-import type { NormalizedComponent } from '../services/inputAdapterService.js';
+import { loadScanArtifacts, type NormalizedComponent } from '../services/inputAdapterService.js';
 
 const prisma = new PrismaClient();
 
@@ -39,7 +39,21 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
       ? (scan.components as unknown as NormalizedComponent[])
       : ([] as NormalizedComponent[]);
 
-    if (components.length === 0) {
+    let hydratedComponents = components;
+    if (hydratedComponents.length === 0) {
+      const hydrated = await loadScanArtifacts(scan.inputType, scan.inputRef);
+      hydratedComponents = hydrated.components;
+
+      await prisma.scan.update({
+        where: { id: scanId },
+        data: {
+          components: hydratedComponents as unknown as Prisma.InputJsonValue,
+          sbomRaw: hydrated.sbomRaw as unknown as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    if (hydratedComponents.length === 0) {
       console.log(`[Enterprise Scanner] No components to scan for ${scanId}`);
     }
 
@@ -47,8 +61,8 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
     const startTime = Date.now();
     let codescoringFindings: any[] = [];
 
-    if (components.length > 0) {
-      codescoringFindings = await scanWithCodescoring(components, scanId);
+    if (hydratedComponents.length > 0) {
+      codescoringFindings = await scanWithCodescoring(hydratedComponents, scanId);
     }
 
     const durationMs = Date.now() - startTime;
@@ -57,7 +71,7 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
 
     // Convert to Codescoring format for normalization
     const codescoringOutput = {
-      components: components.map(comp => ({
+      components: hydratedComponents.map(comp => ({
         name: comp.name,
         version: comp.version,
         vulnerabilities: codescoringFindings
