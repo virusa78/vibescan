@@ -324,7 +324,7 @@ model RemediationPromptUsage {
   findingId                 String          @map("finding_id") @db.Uuid
   regionAtCall              String          @map("region_at_call")
   policySnapshot            Json            @map("policy_snapshot")
-  requestKey                String          @map("request_key")
+  requestKey                String          @default(dbgenerated("gen_random_uuid()")) @map("request_key")
   promptType                String          @map("prompt_type")
   provider                  String
   status                    RemediationPromptStatus @default(accepted)
@@ -351,8 +351,11 @@ model AiFixPrompt {
   scanId                    String          @map("scan_id") @db.Uuid
   userId                    String          @map("user_id") @db.Uuid
   vulnerabilityId           String          @map("vulnerability_id")
+  requestKey                String          @default(dbgenerated("gen_random_uuid()")) @map("request_key")
   
   promptText                String          @map("prompt_text")
+  promptType                String          @default("patch") @map("prompt_type")
+  provider                  String          @default("local")
   modelName                 String?         @map("model_name")
   responsePayload           Json?           @map("response_payload")
   status                    String          @default("generated")
@@ -360,6 +363,7 @@ model AiFixPrompt {
   scan                      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
   user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, requestKey])
   @@map("ai_fix_prompts")
 }
 

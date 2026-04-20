@@ -256,6 +256,12 @@ action submitScan {
   auth: true
 }
 
+action generateCveRemediation {
+  fn: import { generateCveRemediation } from "@src/server/operations/remediation/generateCveRemediation",
+  entities: [User, Scan, Finding, AiFixPrompt, RemediationPromptUsage, RegionPolicy, UserPolicyOverride],
+  auth: true
+}
+
 // Phase 2: Wasp-only HTTP API routes for scan operations
 // POST /api/v1/scans - Submit a new scan
 api submitScanApi {
