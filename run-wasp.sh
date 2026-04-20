@@ -27,14 +27,24 @@ cleanup_dev_ports() {
   done
 }
 
+detect_server_ip() {
+  local server_ip
+  server_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  if [[ -z "${server_ip:-}" ]]; then
+    server_ip="127.0.0.1"
+  fi
+  printf '%s' "$server_ip"
+}
+
 cd "$WASP_DIR"
 cleanup_dev_ports
+SERVER_IP="$(detect_server_ip)"
 export PORT="${PORT:-3555}"
-export WASP_SERVER_URL="${WASP_SERVER_URL:-http://192.168.1.17:3555}"
-export WASP_WEB_CLIENT_URL="${WASP_WEB_CLIENT_URL:-http://192.168.1.17:3000}"
-export REACT_APP_API_URL="${REACT_APP_API_URL:-http://192.168.1.17:3555}"
-export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-http://192.168.1.17:3555}"
-export VITE_API_PROXY_TARGET="${VITE_API_PROXY_TARGET:-http://192.168.1.17:3555}"
+export WASP_SERVER_URL="${WASP_SERVER_URL:-http://${SERVER_IP}:3555}"
+export WASP_WEB_CLIENT_URL="${WASP_WEB_CLIENT_URL:-http://${SERVER_IP}:3000}"
+export REACT_APP_API_URL="${REACT_APP_API_URL:-http://${SERVER_IP}:3000}"
+export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-http://${SERVER_IP}:3000}"
+export VITE_API_PROXY_TARGET="${VITE_API_PROXY_TARGET:-http://${SERVER_IP}:3555}"
 export SKIP_EMAIL_VERIFICATION_IN_DEV="${SKIP_EMAIL_VERIFICATION_IN_DEV:-true}"
 if [[ ! -f .wasp/out/db/schema.prisma ]]; then
   wasp clean

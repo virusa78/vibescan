@@ -7,29 +7,14 @@
 The easiest way to start VibeScan:
 
 ```bash
-./scripts/start.sh
+./run.sh
 ```
 
 This will:
-1. Start all Docker services (PostgreSQL, Redis, MinIO, Backend API)
-2. Configure the frontend with the correct server IP
-3. Start the frontend development server
+1. Start Docker services (PostgreSQL, Redis, MinIO)
+2. Configure the Wasp client with the current host IP
+3. Start the Wasp dev stack (backend + frontend)
 4. Display access URLs and demo credentials
-
-### Option 1.1: Full local dev runner (port cleanup + session restart)
-
-If you want a single command that clears previous dev sessions, frees occupied ports,
-starts infra, and launches backend + frontend with logs:
-
-```bash
-./scripts/dev-up.sh
-```
-
-Stop everything started by it:
-
-```bash
-./scripts/dev-up.sh --stop
-```
 
 ### Option 2: Manual Start
 
@@ -38,10 +23,10 @@ Stop everything started by it:
 docker compose up -d
 ```
 
-**Start frontend:**
+**Start the Wasp dev stack:**
 ```bash
-cd vibescan-ui
-npm run dev
+cd wasp-app
+PORT=3555 wasp start
 ```
 
 ## Access URLs
@@ -50,9 +35,9 @@ After starting, you'll see output like:
 
 ```
 🌐 Access URLs:
-   Frontend:  http://192.168.1.15:3000
-   Backend:   http://192.168.1.15:3555
-   MinIO:     http://192.168.1.15:9001 (console)
+   Frontend:  http://<host-ip>:3000
+   Backend:   http://<host-ip>:3555
+   MinIO:     http://localhost:9001 (console)
 ```
 
 **Use the Frontend URL** shown in your terminal (not localhost if accessing remotely).
@@ -78,7 +63,7 @@ vibescan/
 │   │   └── auth/            # Auth forms & templates
 │   └── prisma/              # Database schema & migrations
 ├── scripts/                 # Utility scripts
-│   ├── start.sh            # Start script
+│   ├── dev-up.sh           # Compatibility alias for ./run.sh
 │   └── fill-mock-data.ts   # Mock data generator
 └── deploy/kubernetes/       # K8s manifests
 ```
@@ -107,12 +92,12 @@ npm test
 npm run build
 
 # Start backend only (without Docker)
-npx tsx src/index.ts
+cd wasp-app && PORT=3555 wasp start
 ```
 
 ### Frontend
 ```bash
-cd vibescan-ui
+cd wasp-app
 
 # Install dependencies
 npm install
@@ -247,9 +232,9 @@ Authorization: Bearer <token>
 **Problem:** Frontend can't connect to backend API.
 
 **Solution:**
-1. Check backend is running: `curl http://192.168.1.17:3555/health`
-2. Check `.env.local` has correct API URL: `cat vibescan-ui/.env.local`
-3. Restart frontend: Kill the process and run `./scripts/start.sh`
+1. Check backend is running: `curl http://<host-ip>:3555/health`
+2. Check `wasp-app/.env.local` has the correct API URL
+3. Restart the app with `./run.sh`
 
 ### ENOENT Error in Frontend
 
@@ -257,9 +242,9 @@ Authorization: Bearer <token>
 
 **Solution:**
 ```bash
-cd vibescan-ui
-rm -rf .next
-npm run dev
+cd wasp-app
+rm -rf .wasp/out
+PORT=3555 wasp start
 ```
 
 ### Docker Services Won't Start
@@ -302,8 +287,8 @@ docker compose restart vibescan
 
 **Solution:**
 ```bash
-# Use the start script which auto-detects the port
-./scripts/start.sh
+# Use the canonical start script
+./run.sh
 
 # Or manually check which port it's using
 netstat -tlnp | grep node
@@ -313,14 +298,14 @@ netstat -tlnp | grep node
 
 When accessing VibeScan from a different machine:
 
-1. **Server IP Detection:** The start script auto-detects your server's IP
-2. **Firewall:** Ensure ports 3001 (backend) and 3000 (frontend) are open
+1. **Server IP Detection:** `run.sh` auto-detects your server's IP
+2. **Firewall:** Ensure ports 3555 (backend) and 3000 (frontend) are open
 3. **Access:** Use the server IP URL shown in the startup output, not localhost
 
 Example:
 ```
-✅ http://192.168.1.15:3000  (use this)
-❌ http://192.168.1.17:3000      (won't work remotely if you use the wrong host)
+✅ http://<host-ip>:3000  (use this)
+❌ http://localhost:3000        (won't work remotely if you use the wrong host)
 ```
 
 ## Monitoring & Logs
@@ -346,7 +331,7 @@ tail -f /tmp/vibescan-frontend.log
 ### Health Checks
 ```bash
 # Backend health
-curl http://192.168.1.17:3555/health | jq '.'
+curl http://<host-ip>:3555/health | jq '.'
 
 # Expected response
 {
@@ -363,7 +348,7 @@ curl http://192.168.1.17:3555/health | jq '.'
 
 ### Run E2E Tests
 ```bash
-cd vibescan-ui
+cd wasp-app
 node e2e/menu-navigation.js
 ```
 

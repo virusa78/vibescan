@@ -104,8 +104,8 @@ start_wasp() {
   export PORT="${PORT:-3555}"
   export WASP_SERVER_URL="${WASP_SERVER_URL:-http://${server_ip}:3555}"
   export WASP_WEB_CLIENT_URL="${WASP_WEB_CLIENT_URL:-http://${server_ip}:3000}"
-  export REACT_APP_API_URL="${REACT_APP_API_URL:-http://${server_ip}:3555}"
-  export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-http://${server_ip}:3555}"
+  export REACT_APP_API_URL="${REACT_APP_API_URL:-http://${server_ip}:3000}"
+  export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-http://${server_ip}:3000}"
   export VITE_API_PROXY_TARGET="${VITE_API_PROXY_TARGET:-http://${server_ip}:3555}"
   export SKIP_EMAIL_VERIFICATION_IN_DEV="${SKIP_EMAIL_VERIFICATION_IN_DEV:-true}"
 

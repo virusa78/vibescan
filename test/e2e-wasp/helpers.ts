@@ -270,27 +270,18 @@ export async function viewScanDetails(page: Page, scanIndex: number = 0): Promis
 }
 
 /**
- * Verify paywall enforcement for starter plan
+ * Verify scan details render without lock messaging.
  */
 export async function verifyScanPaywall(
   page: Page,
-  shouldBeLockedForStarter: boolean
+  _shouldBeLockedForStarter: boolean
 ): Promise<void> {
-  // Check for locked indicators
   const lockedIcon = page.locator('[data-testid="locked-badge"]');
   const lockedMessage = page.locator('text=/locked|premium|requires/i');
-  
-  if (shouldBeLockedForStarter) {
-    // At least one should be visible
-    const isLocked =
-      (await lockedIcon.count()) > 0 || (await lockedMessage.count()) > 0;
-    expect(isLocked).toBeTruthy();
-  } else {
-    // Full details should be visible (no locked indicators)
-    const isLocked =
-      (await lockedIcon.count()) > 0 || (await lockedMessage.count()) > 0;
-    expect(isLocked).toBeFalsy();
-  }
+
+  const isLocked =
+    (await lockedIcon.count()) > 0 || (await lockedMessage.count()) > 0;
+  expect(isLocked).toBeFalsy();
 }
 
 /**

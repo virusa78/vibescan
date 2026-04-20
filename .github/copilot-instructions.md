@@ -24,7 +24,7 @@
 
 ## High-level architecture
 
-VibeScan is a Fastify API + Next.js UI system that runs a dual-scanner pipeline per scan and merges results into plan-aware reports.
+VibeScan is a Fastify API + Next.js UI system that runs a dual-scanner pipeline per scan and returns full vulnerability detail in reports.
 
 Core runtime flow:
 1. API startup (`src/index.ts`) initializes migrations, Redis, S3 buckets, BullMQ queues, and workers, then exposes both legacy and `/v1/*` routes.
@@ -42,7 +42,7 @@ State model:
 
 - **Quota invariant:** consume quota when scan is submitted, not when it completes; refund quota on cancellation/failure paths handled by orchestrator logic.
 - **Plan-tier queue priority:** `enterprise -> high`, `pro -> medium`, `starter/free_trial -> low`; priority is assigned when adding BullMQ jobs.
-- **Delta/paywall behavior:** starter plan gets free vulnerability details plus delta counts, but no enterprise/delta vulnerability details (`buildLockedView`).
+- **Visibility behavior:** all plans receive the vulnerabilities they scanned, plus delta counts and severity breakdowns.
 - **Dual route surface:** many endpoints are available in both non-versioned and `/v1/*` forms; keep behavior consistent when changing handlers.
 - **Raw-body requirement for Stripe webhook:** `src/index.ts` captures raw request body in `preParsing` for `/billing/webhook`; do not replace with parsed JSON flow.
 - **Redis alias pitfall:** TypeScript alias `@redis/*` can conflict with the `redis` package; use explicit node module imports where needed in Redis-adjacent code.

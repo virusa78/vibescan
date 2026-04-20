@@ -22,12 +22,14 @@ jest.mock("wasp/server", () => {
   return { HttpError };
 });
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { fromCycloneDX, validateCycloneDX } = require("../src/ingestion/cyclonedx-contracts");
 const {
   extractZipAndScanWithSyft,
   normalizeComponents,
   resolveTrustedScanInputPath,
   validateAndExtractSBOM,
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 } = require("../src/server/services/inputAdapterService");
 
 const repoRoot = join(process.cwd(), "..");

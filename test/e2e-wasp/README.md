@@ -14,7 +14,7 @@ This directory contains comprehensive E2E tests for the VibeScan MVP, verifying 
   - SBOM file upload and validation
   - Scan queuing and processing
   - Dashboard display of results
-  - Paywall enforcement for starter plan
+  - Full vulnerability visibility for starter plan
   - Severity breakdown display
   - Vulnerability table rendering
 
@@ -25,7 +25,7 @@ This directory contains comprehensive E2E tests for the VibeScan MVP, verifying 
   - GitHub URL validation
   - Repository cloning and component extraction
   - Dual-scanner execution (Grype + Enterprise)
-  - Pro plan full details access (no paywall)
+  - Full vulnerability visibility
   - Delta calculation between scanners
   - Performance metrics
 
@@ -59,7 +59,7 @@ This directory contains comprehensive E2E tests for the VibeScan MVP, verifying 
   14. Vulnerability table
   15. Click vulnerability for details
   16. Severity badge and CVSS score
-  17. Paywall enforcement check
+  17. Full vulnerability visibility check
   18. Navigate back to dashboard
 19. Scan in recent scans list
 20. Metrics cards updated
@@ -83,7 +83,7 @@ Reusable test helpers:
 - `uploadSbomFile()` - Upload SBOM for scanning
 - `waitForScanCompletion()` - Poll for scan status
 - `viewScanDetails()` - Navigate to scan details page
-- `verifyScanPaywall()` - Verify plan-based visibility rules
+- `verifyScanPaywall()` - Verify vulnerability details are visible
 - `verifyFindingsDisplay()` - Check findings table
 - `getSeverityCardValue()` - Extract severity metric
 - `generateTestEmail()` - Create unique test emails
@@ -172,7 +172,7 @@ npx playwright show-report
 ✅ **Error Handling**: No unhandled exceptions  
 ✅ **Database Consistency**: Data saved correctly  
 ✅ **UI Responsiveness**: No hanging states  
-✅ **Paywall Enforcement**: Plan visibility rules enforced  
+✅ **Visibility**: Vulnerability details are always visible
 ✅ **Performance**: Acceptable latency (<30s per scan)  
 ✅ **Console**: No errors or warnings  
 
@@ -208,7 +208,7 @@ test/fixtures/
 
 1. **User Isolation**: Each test creates unique email/user
 2. **Real Polling**: Tests wait for actual scan completion
-3. **Paywall Testing**: Verifies plan-based visibility rules
+3. **Visibility Testing**: Verifies vulnerability details are always visible
 4. **Error Capture**: Screenshots on failure, console logs
 5. **Performance Metrics**: Timing information logged
 6. **Reusable Helpers**: Common operations abstracted

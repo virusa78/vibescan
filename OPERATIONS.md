@@ -288,6 +288,10 @@ const { key, keyId } = await generateApiKey({
 - ⚠️ Raw API key returned **only at generation time**
 - Store securely; cannot be retrieved later
 - Used for CI/CD authentication via `Authorization: Bearer KEY`
+- For private GitHub repos and CI/CD gatekeeping, prefer a GitHub App over a PAT.
+- GitHub App setup uses an App ID, private key (.pem), and webhook secret.
+- Required permissions: Repository Contents (read), Pull Requests (read/write), Checks (read/write).
+- Use the App installation token for repo access and Checks API updates.
 
 **Error Codes**:
 - `401`: Unauthorized
@@ -489,6 +493,8 @@ const result = await submitScan({
   githubBranch: 'main'
 })
 ```
+
+GitHub scans should be authorized through the installed GitHub App, not a personal access token.
 
 **Usage - SBOM Upload**:
 ```typescript

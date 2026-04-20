@@ -5,7 +5,7 @@
  *     summary: Get full vulnerability report
  *     description: |
  *       Retrieve the report payload for a scan.
- *       Vulnerability details are included only when the plan is not locked.
+ *       Vulnerability details are always included.
  *     operationId: getReport
  *     tags:
  *       - Reports

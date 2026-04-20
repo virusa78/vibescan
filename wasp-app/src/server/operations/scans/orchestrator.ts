@@ -157,38 +157,58 @@ export async function getScanQueueStatus(scanId: string) {
 }
 
 /**
- * Cancel a scan and remove from queues
+ * Cancel a scan and remove it from queues if it is still pending or scanning.
  */
-export async function cancelScan(scanId: string) {
+export async function cancelScan(scanId: string, errorMessage?: string) {
   try {
     console.log(`[Orchestrator] Cancelling scan ${scanId}`);
 
-    // Remove from free queue
-    const freeJobs = await freeScanQueue.getJobs(['waiting', 'delayed']);
-    for (const job of freeJobs) {
-      if (job.data.scanId === scanId) {
-        await job.remove();
-        console.log(`[Orchestrator] Removed free scanner job ${job.id}`);
-      }
-    }
+    const cancelledAt = new Date();
 
-    // Remove from enterprise queue
-    const enterpriseJobs = await enterpriseScanQueue.getJobs(['waiting', 'delayed']);
-    for (const job of enterpriseJobs) {
-      if (job.data.scanId === scanId) {
-        await job.remove();
-        console.log(`[Orchestrator] Removed enterprise scanner job ${job.id}`);
-      }
-    }
-
-    // Update scan status
-    await prisma.scan.update({
-      where: { id: scanId },
+    const updatedScan = await prisma.scan.updateMany({
+      where: {
+        id: scanId,
+        status: {
+          in: ['pending', 'scanning'],
+        },
+      },
       data: {
         status: 'cancelled',
-        completedAt: new Date(),
+        completedAt: cancelledAt,
+        errorMessage: errorMessage ?? null,
       },
     });
+
+    if (updatedScan.count === 0) {
+      console.log(`[Orchestrator] Scan ${scanId} was not cancellable`);
+      return null;
+    }
+
+    try {
+      // Remove from free queue
+      const freeJobs = await freeScanQueue.getJobs(['waiting', 'delayed']);
+      for (const job of freeJobs) {
+        if (job.data.scanId === scanId) {
+          await job.remove();
+          console.log(`[Orchestrator] Removed free scanner job ${job.id}`);
+        }
+      }
+    } catch (error) {
+      console.error(`[Orchestrator] Failed to remove free queue jobs for ${scanId}:`, error);
+    }
+
+    try {
+      // Remove from enterprise queue
+      const enterpriseJobs = await enterpriseScanQueue.getJobs(['waiting', 'delayed']);
+      for (const job of enterpriseJobs) {
+        if (job.data.scanId === scanId) {
+          await job.remove();
+          console.log(`[Orchestrator] Removed enterprise scanner job ${job.id}`);
+        }
+      }
+    } catch (error) {
+      console.error(`[Orchestrator] Failed to remove enterprise queue jobs for ${scanId}:`, error);
+    }
 
     console.log(`[Orchestrator] Scan ${scanId} cancelled successfully`);
 

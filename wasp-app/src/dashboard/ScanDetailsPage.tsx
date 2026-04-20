@@ -1,6 +1,5 @@
 /**
- * ScanDetailsPage - Real-time scan status with paywall logic
- * Shows polling status, results with paywall enforcement
+ * ScanDetailsPage - Real-time scan status and full vulnerability results
  */
 
 import React, { useEffect, useState } from 'react';
@@ -8,15 +7,13 @@ import { useParams, useNavigate } from 'react-router';
 import { getScanById, useQuery } from 'wasp/client/operations';
 import { useScanPolling } from '../client/hooks/useScanPolling';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
-import { Alert } from '../client/components/ui/alert';
 import { Badge } from '../client/components/ui/badge';
-import { AlertTriangle, CheckCircle, Clock, Lock, Zap, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, Zap, ArrowLeft } from 'lucide-react';
 import { api } from 'wasp/client/api';
 
 interface Report {
   scanId: string;
   status: 'completed' | 'failed' | 'partial';
-  lockedView: boolean;
   severity_breakdown: {
     critical: number;
     high: number;
@@ -238,7 +235,6 @@ export function ScanDetailsPage() {
 
   // Completed state
   if (status === 'completed' && report) {
-    const isLocked = report.lockedView;
     const totalVulnerabilities = report.total_free + report.total_enterprise;
     const scanDetails = scanDetailsQuery.data;
     const scanResults = scanDetails?.scanResults ?? [];
@@ -277,20 +273,6 @@ export function ScanDetailsPage() {
               </div>
             )}
           </div>
-
-          {/* Paywall Warning */}
-          {isLocked && (
-            <Alert className="mb-8 border-amber-600 bg-amber-900/30">
-              <Lock className="text-amber-500" size={20} />
-              <div>
-                <h3 className="font-semibold text-amber-100">View Locked</h3>
-                <p className="text-amber-200 text-sm">
-                  Upgrade to Pro or Enterprise to view detailed vulnerability information. 
-                  Your plan includes severity counts and delta analysis.
-                </p>
-              </div>
-            </Alert>
-          )}
 
           {/* Severity Breakdown */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
@@ -397,7 +379,7 @@ export function ScanDetailsPage() {
           </div>
 
           {/* Vulnerabilities Table */}
-          {!isLocked && report.vulnerabilities && report.vulnerabilities.length > 0 ? (
+          {report.vulnerabilities && report.vulnerabilities.length > 0 ? (
             <Card className="border-slate-700 bg-slate-800/50">
               <CardHeader>
                 <CardTitle>Vulnerabilities</CardTitle>
@@ -462,27 +444,6 @@ export function ScanDetailsPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
-              </CardContent>
-            </Card>
-          ) : isLocked ? (
-            <Card className="border-slate-700 bg-slate-800/50">
-              <CardContent className="pt-6">
-                <div className="flex flex-col items-center justify-center py-12 gap-4">
-                  <Lock size={40} className="text-slate-500" />
-                  <div className="text-center">
-                    <h3 className="text-lg font-semibold text-white mb-2">Detailed Results Locked</h3>
-                    <p className="text-slate-400 mb-4">
-                      Your current plan includes vulnerability counts and delta analysis.<br />
-                      Upgrade to Pro or Enterprise to view all vulnerability details.
-                    </p>
-                    <button
-                      onClick={() => navigate('/pricing')}
-                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
-                    >
-                      View Pricing
-                    </button>
-                  </div>
                 </div>
               </CardContent>
             </Card>

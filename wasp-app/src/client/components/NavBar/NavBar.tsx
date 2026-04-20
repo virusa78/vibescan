@@ -1,4 +1,4 @@
-import { LogIn, Menu } from "lucide-react";
+import { LogIn, Menu, type LucideIcon } from "lucide-react";
 import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { Link as ReactRouterLink } from "react-router";
 import { useAuth } from "wasp/client/auth";
@@ -22,6 +22,7 @@ import { Announcement } from "./Announcement";
 export interface NavigationItem {
   name: string;
   to: string;
+  icon?: LucideIcon;
 }
 
 export default function NavBar({
@@ -222,9 +223,9 @@ function renderNavigationItems(
   setMobileMenuOpen?: Dispatch<SetStateAction<boolean>>,
 ) {
   const menuStyles = cn({
-    "block rounded-lg px-3 py-2 text-sm font-medium leading-7 text-foreground hover:bg-accent hover:text-accent-foreground transition-colors":
+    "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium leading-7 text-foreground hover:bg-accent hover:text-accent-foreground transition-colors":
       !!setMobileMenuOpen,
-    "text-sm font-normal leading-6 text-foreground duration-300 ease-in-out hover:text-primary transition-colors":
+    "flex items-center gap-2 text-sm font-normal leading-6 text-foreground duration-300 ease-in-out hover:text-primary transition-colors":
       !setMobileMenuOpen,
   });
 
@@ -237,7 +238,10 @@ function renderNavigationItems(
           onClick={setMobileMenuOpen && (() => setMobileMenuOpen(false))}
           target={item.to.startsWith("http") ? "_blank" : undefined}
         >
-          {item.name}
+          {item.icon ? (
+            <item.icon size="1rem" className="shrink-0" aria-hidden="true" />
+          ) : null}
+          <span>{item.name}</span>
         </ReactRouterLink>
       </li>
     );

@@ -6,6 +6,9 @@ export type ProfileResponse = {
   email: string;
   region: string;
   plan_tier: string;
+  subscription_status: string | null;
+  monthly_quota_used: number;
+  monthly_quota_limit: number;
   org_id: string | null;
   org_role: string | null;
 };
@@ -43,6 +46,9 @@ export async function getProfileSettings(
     email: user.email,
     region: user.region,
     plan_tier: user.plan,
+    subscription_status: user.subscriptionStatus,
+    monthly_quota_used: user.monthlyQuotaUsed,
+    monthly_quota_limit: user.monthlyQuotaLimit,
     org_id: org?.id || null,
     org_role: org?.ownerUserId === user.id ? 'owner' : org ? 'member' : null,
   };

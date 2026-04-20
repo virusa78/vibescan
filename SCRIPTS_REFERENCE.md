@@ -26,7 +26,7 @@ Full project startup
 ### `./run-wasp.sh`
 Wasp framework development
 ```bash
-npm run wasp:dev           # Same as ./run-wasp.sh
+./run-wasp.sh
 ```
 - Validates Wasp CLI
 - Starts Wasp dev server
@@ -46,32 +46,22 @@ Environment setup (one-time)
 ## 🛠️ Supporting Scripts (in ./scripts/)
 
 ### `./scripts/dev-up.sh`
-Backend + Docker only
+Compatibility alias for `./run.sh`
 ```bash
-npm run dev:up             # Start backend
-npm run dev:stop           # Stop backend
+./scripts/dev-up.sh
+./scripts/dev-up.sh --stop
 ```
 
 ### `./scripts/wasp-dev.sh`
-Wasp backend + Docker
+Wasp-only dev runner
 ```bash
-npm run wasp:up            # Start Wasp backend
-npm run wasp:down          # Stop Wasp backend
+./scripts/wasp-dev.sh
 ```
-
-### `./scripts/start.sh`
-Production-like setup
-```bash
-./scripts/start.sh
-```
-- Server IP detection
-- Production config
-- Full Docker stack
 
 ### `./scripts/run-tests.sh`
 Test runner
 ```bash
-npm test
+./scripts/run-tests.sh
 ```
 
 ### `./scripts/cleanup.sh`
@@ -89,20 +79,14 @@ Mock BlackDuck scanner for testing
 
 | Command | Purpose |
 |---------|---------|
-| `npm run dev` | Start backend API only |
-| `npm run dev:up` | Start backend + Docker |
-| `npm run dev:stop` | Stop backend |
-| `npm run wasp:dev` | Start Wasp dev server |
-| `npm run wasp:up` | Start Wasp + Docker |
-| `npm run wasp:down` | Stop Wasp |
+| `npm run dev` | Start the Wasp dev server |
+| `npm run build` | Build the Wasp app |
 | `npm run migrate` | Run migrations |
 | `npm run test` | Run all tests |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run test:e2e` | Run end-to-end tests |
-| `npm run test:e2e:wasp` | E2E tests with Wasp |
 | `npm run lint` | Run linter |
-| `npm run lint:fix` | Auto-fix linting issues |
-| `npm run seed:mock-data` | Generate mock data |
+| `npm run start` | Alias for `npm run dev` |
 
 ---
 
@@ -112,21 +96,21 @@ Mock BlackDuck scanner for testing
 ```bash
 ./run.sh
 # Access:
-# - Frontend: http://192.168.1.17:3000
-# - API: http://192.168.1.17:3555
-# - API Docs: http://192.168.1.17:3555/swagger
+# - Frontend: http://<host-ip>:3000
+# - API: http://<host-ip>:3555
+# - API Docs: http://<host-ip>:3555/swagger
 ```
 
 ### Backend Only
 ```bash
-npm run dev:up
-# Access: http://192.168.1.17:3555
+cd wasp-app && PORT=3555 wasp start
+# Access: http://<host-ip>:3555
 ```
 
 ### Wasp Development
 ```bash
-npm run wasp:dev
-# Access: http://192.168.1.17:3000
+./run-wasp.sh
+# Access: http://<host-ip>:3000
 # Wasp code: wasp-app/src/**
 ```
 

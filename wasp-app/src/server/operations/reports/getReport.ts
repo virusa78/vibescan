@@ -25,7 +25,7 @@ interface GetReportResponse {
   total_free: number;
   total_enterprise: number;
   delta_count: number;
-  vulnerabilities?: any[]; // Only if not locked
+  vulnerabilities: any[];
 }
 
 /**
@@ -48,15 +48,6 @@ function calculateSeverityBreakdown(findings: Finding[]): SeverityBreakdown {
   }
 
   return breakdown;
-}
-
-/**
- * Determine if user's plan should have a locked view (counts only)
- */
-function isLockedView(planAtSubmission: string | null): boolean {
-  if (!planAtSubmission) return true; // Default to locked for safety
-  const plan = (planAtSubmission || '').toLowerCase();
-  return plan === 'starter' || plan === 'free_trial';
 }
 
 export const getReport = async (rawArgs: any, context: any): Promise<GetReportResponse> => {
@@ -93,9 +84,7 @@ export const getReport = async (rawArgs: any, context: any): Promise<GetReportRe
     throw new HttpError(403, "Unauthorized");
   }
 
-  // Determine paywall enforcement based on the plan at submission
-  // Use actual user.plan from DB for current tier verification
-  const lockedView = isLockedView(scan.planAtSubmission);
+  const lockedView = false;
 
   // Get findings and categorize by source
   const findings = scan.findings || [];
@@ -119,11 +108,7 @@ export const getReport = async (rawArgs: any, context: any): Promise<GetReportRe
     total_free,
     total_enterprise,
     delta_count,
-  };
-
-  // Only include vulnerability details if NOT locked
-  if (!lockedView) {
-    response.vulnerabilities = findings.map(f => ({
+    vulnerabilities: findings.map(f => ({
       id: f.id,
       cveId: f.cveId,
       packageName: f.packageName,
@@ -135,8 +120,8 @@ export const getReport = async (rawArgs: any, context: any): Promise<GetReportRe
       source: f.source,
       filePath: f.filePath,
       status: f.status,
-    }));
-  }
+    })),
+  };
 
   return response;
 };

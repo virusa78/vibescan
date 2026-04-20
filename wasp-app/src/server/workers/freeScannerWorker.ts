@@ -20,10 +20,24 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
     console.log(`[Free Scanner] Starting scan ${scanId} for user ${userId}`);
 
     // Update scan status to scanning
-    await prisma.scan.update({
-      where: { id: scanId },
+    const startedScan = await prisma.scan.updateMany({
+      where: {
+        id: scanId,
+        status: {
+          in: ['pending', 'scanning'],
+        },
+      },
       data: { status: 'scanning' },
     });
+
+    if (startedScan.count === 0) {
+      console.log(`[Free Scanner] Scan ${scanId} is no longer active, skipping`);
+      return {
+        status: 'skipped',
+        findingsCount: 0,
+        scanResultId: null,
+      };
+    }
 
     // Fetch scan from database to get components
     const scan = await prisma.scan.findUnique({
@@ -168,30 +182,36 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       
       if (allExpectedComplete) {
         // All expected scanners completed, mark as done
-        const completedScan = await prisma.scan.update({
-          where: { id: scanId },
+        const completedAt = new Date();
+        const completedScan = await prisma.scan.updateMany({
+          where: {
+            id: scanId,
+            status: 'scanning',
+          },
           data: {
             status: 'done',
-            completedAt: new Date(),
+            completedAt,
           },
         });
 
-        // Emit webhook event for scan completion
-        try {
-          await emitWebhookEvent({
-            scanId: scanId,
-            eventType: 'scan_complete',
-            userId: userId,
-            payload: buildWebhookPayload('scan_complete', scanId, userId, {
-              status: 'done',
-              completedAt: completedScan.completedAt,
-              findingsCount: normalizedFindings.length,
-            }),
-            timestamp: new Date(),
-          });
-        } catch (webhookError) {
-          console.error(`[Free Scanner] Failed to emit webhook for scan ${scanId}:`, webhookError);
-          // Don't fail the scan if webhook emission fails
+        if (completedScan.count > 0) {
+          // Emit webhook event for scan completion
+          try {
+            await emitWebhookEvent({
+              scanId: scanId,
+              eventType: 'scan_complete',
+              userId: userId,
+              payload: buildWebhookPayload('scan_complete', scanId, userId, {
+                status: 'done',
+                completedAt,
+                findingsCount: normalizedFindings.length,
+              }),
+              timestamp: completedAt,
+            });
+          } catch (webhookError) {
+            console.error(`[Free Scanner] Failed to emit webhook for scan ${scanId}:`, webhookError);
+            // Don't fail the scan if webhook emission fails
+          }
         }
       }
     }
@@ -247,27 +267,33 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       }
 
       // Update scan status
-      const updatedScan = await prisma.scan.update({
-        where: { id: scanId },
+      const updatedAt = new Date();
+      const updatedScan = await prisma.scan.updateMany({
+        where: {
+          id: scanId,
+          status: 'scanning',
+        },
         data: statusUpdate,
       });
 
-      // Emit webhook event for error or partial completion
-      try {
-        const eventType = statusUpdate.status === 'error' ? 'scan_failed' : 'scan_complete';
-        await emitWebhookEvent({
-          scanId: scanId,
-          eventType: eventType,
-          userId: userId,
-          payload: buildWebhookPayload(eventType, scanId, userId, {
-            status: updatedScan.status,
-            errorMessage: statusUpdate.errorMessage,
-          }),
-          timestamp: new Date(),
-        });
-      } catch (webhookError) {
-        console.error(`[Free Scanner] Failed to emit webhook for scan ${scanId}:`, webhookError);
-        // Don't fail if webhook emission fails
+      if (updatedScan.count > 0) {
+        // Emit webhook event for error or partial completion
+        try {
+          const eventType = statusUpdate.status === 'error' ? 'scan_failed' : 'scan_complete';
+          await emitWebhookEvent({
+            scanId: scanId,
+            eventType: eventType,
+            userId: userId,
+            payload: buildWebhookPayload(eventType, scanId, userId, {
+              status: statusUpdate.status,
+              errorMessage: statusUpdate.errorMessage,
+            }),
+            timestamp: updatedAt,
+          });
+        } catch (webhookError) {
+          console.error(`[Free Scanner] Failed to emit webhook for scan ${scanId}:`, webhookError);
+          // Don't fail if webhook emission fails
+        }
       }
     }
 

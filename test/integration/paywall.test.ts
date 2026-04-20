@@ -1,6 +1,6 @@
 /**
- * Integration tests for paywall logic in getReport operation
- * Tests that different plan tiers get appropriate report views
+ * Integration tests for report visibility in getReport operation
+ * Tests that every plan tier receives full vulnerability details
  */
 
 import { prisma } from 'wasp/server';
@@ -12,7 +12,7 @@ const createMockContext = (userId: string) => ({
   entities: { Scan: prisma.scan, Finding: prisma.finding, ScanDelta: prisma.scanDelta },
 });
 
-describe('Paywall Logic in getReport', () => {
+describe('Report Visibility in getReport', () => {
   let userId: string;
   let scanId: string;
 
@@ -32,8 +32,8 @@ describe('Paywall Logic in getReport', () => {
     await prisma.user.deleteMany({ where: { id: userId } });
   });
 
-  describe('Starter Plan Paywall', () => {
-    it('should return locked view for starter plan', async () => {
+  describe('Starter Plan Visibility', () => {
+    it('should return full details for starter plan', async () => {
       // Create a scan with starter plan
       const scan = await prisma.scan.create({
         data: {
@@ -76,9 +76,10 @@ describe('Paywall Logic in getReport', () => {
       const context = createMockContext(userId);
       const report = await getReport({ scanId: scan.id }, context);
 
-      // Verify paywall
-      expect(report.lockedView).toBe(true);
-      expect(report.vulnerabilities).toBeUndefined();
+      // Verify full visibility
+      expect(report.lockedView).toBe(false);
+      expect(report.vulnerabilities).toBeDefined();
+      expect(report.vulnerabilities).toHaveLength(2);
       expect(report.severity_breakdown).toBeDefined();
       expect(report.severity_breakdown.critical).toBe(1);
       expect(report.severity_breakdown.high).toBe(1);
@@ -197,8 +198,8 @@ describe('Paywall Logic in getReport', () => {
     });
   });
 
-  describe('Free Trial Plan Paywall', () => {
-    it('should return locked view for free_trial plan', async () => {
+  describe('Free Trial Plan Visibility', () => {
+    it('should return full details for free_trial plan', async () => {
       // Create a scan with free_trial plan
       const scan = await prisma.scan.create({
         data: {
@@ -228,9 +229,10 @@ describe('Paywall Logic in getReport', () => {
       const context = createMockContext(userId);
       const report = await getReport({ scanId: scan.id }, context);
 
-      // Verify paywall
-      expect(report.lockedView).toBe(true);
-      expect(report.vulnerabilities).toBeUndefined();
+      // Verify full visibility
+      expect(report.lockedView).toBe(false);
+      expect(report.vulnerabilities).toBeDefined();
+      expect(report.vulnerabilities).toHaveLength(1);
       expect(report.severity_breakdown.medium).toBe(1);
       expect(report.total_free).toBe(1);
 

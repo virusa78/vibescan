@@ -1,4 +1,4 @@
-import { type User, type Scan, type Finding } from "wasp/entities";
+import { type User } from "wasp/entities";
 import { HttpError, prisma } from "wasp/server";
 import * as z from "zod";
 import { ensureArgsSchemaOrThrowHttpError } from "../server/validation";
@@ -169,7 +169,17 @@ export const getRecentScans = async (
 
   const scans = await prisma.scan.findMany({
     where: { userId: user.id },
-    include: { findings: true },
+    select: {
+      id: true,
+      inputRef: true,
+      status: true,
+      createdAt: true,
+      findings: {
+        select: {
+          severity: true,
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
     take: limit,
   });

@@ -11,7 +11,7 @@ A SaaS vulnerability scanning platform that provides dual-scanner architecture (
 - **Dual-Scanner Architecture**: Run both free (Grype) and enterprise (Codescoring/BlackDuck) scanners in parallel
 - **Delta Comparison**: Identify vulnerabilities found only by enterprise scanner
 - **Tiered Pricing**: free_trial, starter, pro, enterprise plans with regional discounts
-- **GitHub Integration**: Automatic scanning on push/PR events
+- **GitHub Integration**: GitHub App-based automatic scanning on push/PR events with Checks
 - **Webhook Notifications**: HMAC-SHA256 signed webhook delivery with exponential backoff
 - **API Keys**: Bcrypt-hashed storage for CI/CD integration
 - **Source Code Isolation**: Docker containers with --network=none, --read-only, --user=nobody
@@ -109,9 +109,9 @@ cd wasp-app && PORT=3555 wasp start
 ```
 
 The script will:
-- Start Docker services (PostgreSQL, Redis, MinIO, Backend API)
-- Configure the frontend with your server's IP address
-- Start the frontend development server
+- Start Docker services (PostgreSQL, Redis, MinIO)
+- Configure the Wasp client with your server's IP address
+- Start the Wasp dev stack
 - Display access URLs and demo credentials
 
 ### Manual Setup
@@ -149,8 +149,8 @@ DEMO_MONTHS=3 RESET_DEMO_DATA=true npm run seed:mock-data
 
 **Step 5: Configure API URL for remote access**
 ```bash
-# Replace 192.168.1.15 with your server's IP
-echo "REACT_APP_API_URL=http://192.168.1.15:3555" > .env.local
+# Replace <host-ip> with your server's IP
+echo "REACT_APP_API_URL=http://<host-ip>:3555" > .env.local
 ```
 
 Then access the frontend at the URL shown in your terminal.
@@ -159,14 +159,14 @@ Then access the frontend at the URL shown in your terminal.
    ```
 
 5. Access the API:
-   - API: http://192.168.1.17:3555
-   - Swagger UI: http://192.168.1.17:3555/docs (dev mode)
+   - API: http://<host-ip>:3555
+   - Swagger UI: http://<host-ip>:3555/docs (dev mode)
 
 ### Local Development
 
 **Dev port convention (fixed):**
-- Frontend: `http://192.168.1.17:3000`
-- Backend API: `http://192.168.1.17:3555`
+- Frontend: `http://<host-ip>:3000`
+- Backend API: `http://<host-ip>:3555`
 
 1. Install dependencies:
    ```bash
@@ -195,7 +195,7 @@ If you are unsure where to change a setting, use this map:
 | Setting | File | Notes |
 |---------|------|-------|
 | Backend port and backend base URL | `wasp-app/.env.server` | `PORT`, `WASP_SERVER_URL`; keep them on the same host/IP. |
-| Browser-facing auth/API URL | `wasp-app/.env.local` | `REACT_APP_API_URL`, `NEXT_PUBLIC_API_URL`; point these at the backend IP/port so auth and client API calls do not self-target the frontend. |
+| Browser-facing auth/API URL | `wasp-app/.env.local` | `REACT_APP_API_URL`, `NEXT_PUBLIC_API_URL`; point these at the frontend origin so the Wasp client API stays same-origin through the Vite proxy. |
 | Vite dev proxy target | `wasp-app/.env.local` | `VITE_API_PROXY_TARGET`; used by the frontend dev server to reach the backend. |
 | Dev proxy from the Vite frontend to the backend | `wasp-app/vite.config.ts` | Proxies `/api/v1`, `/operations`, `/auth`, `/health`, and `/docs`. |
 | Swagger/OpenAPI server URL | `wasp-app/src/server/swaggerHandlers.ts` | Uses `WASP_SERVER_URL` when generating docs. |
@@ -316,12 +316,12 @@ npm run lint:fix
 - tears down only services/processes started by the test setup
 
 Default endpoints (used when `API_URL`/`FRONTEND_URL` are not set):
-- API: `http://192.168.1.17:3555` (health endpoint)
-- Frontend: `http://192.168.1.17:3000` (login page)
+- API: `http://<host-ip>:3555` (health endpoint)
+- Frontend: `http://<host-ip>:3000` (login page)
 
 Override endpoints when needed:
 ```bash
-API_URL=http://192.168.1.17:3555 FRONTEND_URL=http://192.168.1.17:3000 npm run test:e2e
+API_URL=http://<host-ip>:3555 FRONTEND_URL=http://<host-ip>:3000 npm run test:e2e
 ```
 
 If you are accessing the app from another device on your LAN, set the same host/IP in `wasp-app/.env.server` and `wasp-app/.env.local` instead of loopback defaults.

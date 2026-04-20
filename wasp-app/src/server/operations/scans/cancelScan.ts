@@ -2,6 +2,8 @@ import type { Scan } from 'wasp/entities';
 import { HttpError } from 'wasp/server';
 import * as z from 'zod';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation';
+import { cancelScan as cancelScanJobs } from './orchestrator.js';
+import { quotaService } from '../../services/quotaService.js';
 
 const cancelScanInputSchema = z.object({
   scan_id: z.string().uuid(),
@@ -42,26 +44,16 @@ export async function cancelScan(rawArgs: any, context: any): Promise<ActionResp
     });
   }
 
-  await context.entities.Scan.update({
-    where: { id: scan.id },
-    data: {
-      status: 'cancelled',
-      completedAt: new Date(),
-    },
-  });
-
-  const user = await context.entities.User.findUnique({
-    where: { id: context.user.id },
-  });
-
-  if (user && user.monthlyQuotaUsed > 0) {
-    await context.entities.User.update({
-      where: { id: context.user.id },
-      data: {
-        monthlyQuotaUsed: Math.max(0, user.monthlyQuotaUsed - 1),
-      },
+  const cancelled = await cancelScanJobs(scan.id);
+  if (!cancelled) {
+    throw new HttpError(400, `Cannot cancel scan in '${scan.status}' state`, {
+      error: 'invalid_scan_state',
+      current_state: scan.status,
+      allowed_states: cancellableStates,
     });
   }
+
+  await quotaService.refundQuota(context.user.id, scan.id, 'manual_scan_cancelled');
 
   return {
     success: true,

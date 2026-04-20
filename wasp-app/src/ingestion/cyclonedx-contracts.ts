@@ -115,7 +115,7 @@ export interface ParsedCycloneDxDocument {
   _rawFields?: Record<string, unknown>;
 }
 
-export interface ValidationIssue extends CycloneDXIssue {}
+export type ValidationIssue = CycloneDXIssue;
 
 export interface ValidationMetadata {
   schemaVersion: CycloneDXSpecVersion | "unknown";

@@ -67,7 +67,6 @@ export async function getScan(rawArgs: any, context: any): Promise<ScanDetailRes
 
   const deltaBySeverity = scanDelta?.deltaBySeverity || {};
   const deltaCount = scanDelta?.deltaCount || 0;
-  const isLocked = scanDelta?.isLocked || false;
 
   return {
     scan: {
@@ -88,7 +87,7 @@ export async function getScan(rawArgs: any, context: any): Promise<ScanDetailRes
     delta_summary: {
       delta_count: deltaCount,
       delta_by_severity: deltaBySeverity as Record<string, number>,
-      is_locked: isLocked,
+      is_locked: false,
     },
     status: scan.status,
   };

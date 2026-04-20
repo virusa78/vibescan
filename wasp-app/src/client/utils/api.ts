@@ -1,7 +1,7 @@
-const API_BASE_URL = (import.meta.env.REACT_APP_API_URL || "http://192.168.1.17:3555").replace(
-  /\/$/,
-  "",
-);
+const API_BASE_URL = (
+  import.meta.env.REACT_APP_API_URL ||
+  window.location.origin
+).replace(/\/$/, "");
 
 export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;

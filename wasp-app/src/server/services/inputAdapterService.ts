@@ -289,7 +289,7 @@ function parsePackageJsonManifest(filePath: string): NormalizedComponent[] {
 
   try {
     parsed = JSON.parse(readFileSync(filePath, 'utf8'));
-  } catch (error) {
+  } catch {
     console.warn(`[InputAdapter] Skipping invalid package.json at ${filePath}`);
     return [];
   }

@@ -111,10 +111,10 @@ test("SBOM Upload E2E - Register and scan with starter plan", async ({
     await viewScanDetails(page, 0);
     console.log("✓ Scan details page loaded");
     
-    // Test 1.7: Verify paywall enforcement (starter plan should see counts only)
-    console.log("🔒 Checking paywall enforcement");
-    await verifyScanPaywall(page, true); // Starter plan should be locked
-    console.log("✓ Paywall enforcement verified");
+    // Test 1.7: Verify full vulnerability visibility
+    console.log("🔓 Checking full vulnerability visibility");
+    await verifyScanPaywall(page, true);
+    console.log("✓ Full vulnerability visibility verified");
     
     // Test 1.8: Verify severity breakdown visible
     console.log("📊 Checking severity breakdown");

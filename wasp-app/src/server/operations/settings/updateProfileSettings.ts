@@ -54,6 +54,9 @@ export async function updateProfileSettings(
     email: user.email,
     region: user.region,
     plan_tier: user.plan,
+    subscription_status: user.subscriptionStatus,
+    monthly_quota_used: user.monthlyQuotaUsed,
+    monthly_quota_limit: user.monthlyQuotaLimit,
     org_id: org?.id || null,
     org_role: org?.ownerUserId === user.id ? 'owner' : org ? 'member' : null,
   };

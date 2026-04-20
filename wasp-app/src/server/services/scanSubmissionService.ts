@@ -3,6 +3,7 @@ import { HttpError, prisma } from "wasp/server";
 import { quotaService } from "./quotaService.js";
 import { validateGitHubUrl } from "./inputAdapterService.js";
 import { initializeWorkers } from "../queues/config.js";
+import { startScanTimeoutSweeper } from "./scanTimeoutService.js";
 import { orchestrateScan } from "../operations/scans/orchestrator.js";
 
 export type ScanInputType = "github" | "sbom" | "source_zip";
@@ -68,7 +69,7 @@ export async function submitScanSubmission(
         totalEnterpriseCount: 0,
         deltaCount: 0,
         deltaBySeverity: {},
-        isLocked: planAtSubmission === "free_trial" || planAtSubmission === "starter",
+        isLocked: false,
       },
     });
 
@@ -82,6 +83,7 @@ export async function submitScanSubmission(
 
   try {
     await initializeWorkers();
+    startScanTimeoutSweeper();
     await orchestrateScan({
       scanId: createdScanId,
       userId: input.userId,

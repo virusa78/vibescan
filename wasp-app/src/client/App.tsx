@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { Outlet, useLocation } from "react-router";
+import { Navigate, Outlet, useLocation } from "react-router";
 import { routes } from "wasp/client/router";
 import { useAuth } from "wasp/client/auth";
 import { Toaster } from "../client/components/ui/toaster";
@@ -8,10 +8,8 @@ import { useTokenRefresh } from "./hooks/useTokenRefresh";
 import "./theme-init";
 import "./Main.css";
 import NavBar from "./components/NavBar/NavBar";
-import {
-  appNavigationItems,
-  marketingNavigationItems,
-} from "./components/NavBar/constants";
+import { getAuthRedirectPath } from "./utils/routeGuard";
+import { appNavigationItems, marketingNavigationItems } from "./components/NavBar/constants";
 import CookieConsentBanner from "./components/cookie-consent/Banner";
 
 /**
@@ -25,17 +23,26 @@ export default function App() {
   // Initialize token refresh on mount
   useTokenRefresh();
 
-  // Redirect root path based on auth status
-  useEffect(() => {
-    if (!isAuthLoading && location.pathname === "/") {
-      if (user) {
-        // Authenticated: go to dashboard
-        window.location.href = "/dashboard";
-      } else {
-        // Anonymous: go straight to login so the auth flow is visible immediately
-        window.location.href = "/login";
-      }
+  const redirectPath = useMemo(() => {
+    if (isAuthLoading) {
+      return null;
     }
+
+    return getAuthRedirectPath({
+      pathname: location.pathname,
+      isAuthenticated: Boolean(user),
+      publicRoutes: [
+        routes.LandingPageRoute.to,
+        routes.PricingPageRoute.to,
+        routes.LoginRoute.to,
+        routes.SignupRoute.to,
+        routes.RequestPasswordResetRoute.to,
+        routes.PasswordResetRoute.to,
+        routes.EmailVerificationRoute.to,
+      ],
+      dashboardRoute: routes.DashboardRoute.to,
+      loginRoute: routes.LoginRoute.to,
+    });
   }, [location.pathname, user, isAuthLoading]);
 
   const isMarketingPage = useMemo(() => {
@@ -50,9 +57,17 @@ export default function App() {
     : appNavigationItems;
 
   const shouldDisplayAppNavBar = useMemo(() => {
+    const isAuthPage = [
+      routes.LoginRoute.build(),
+      routes.SignupRoute.build(),
+      routes.RequestPasswordResetRoute.build(),
+      routes.PasswordResetRoute.build(),
+      routes.EmailVerificationRoute.build(),
+    ].includes(location.pathname);
+
     return (
-      location.pathname !== routes.LoginRoute.build() &&
-      location.pathname !== routes.SignupRoute.build()
+      !isAuthPage &&
+      !location.pathname.startsWith("/admin")
     );
   }, [location]);
 
@@ -77,6 +92,10 @@ export default function App() {
       }
     }
   }, [location]);
+
+  if (redirectPath) {
+    return <Navigate to={redirectPath} replace />;
+  }
 
   return (
     <>

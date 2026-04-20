@@ -316,8 +316,8 @@ async function main() {
         // Insert delta record using the shared diff engine
         const delta = computeDelta(vulns, enterpriseVulns);
 
-        // Lock enterprise-only findings for starter plan
-        const isLocked = user.plan === 'starter' || user.plan === 'free_trial';
+        // Detailed vulnerability data is always visible
+        const isLocked = false;
 
         await pool.query(
           `INSERT INTO scan_deltas (scan_id, total_free_count, total_enterprise_count, delta_count, delta_by_severity, is_locked)

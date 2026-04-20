@@ -1,7 +1,7 @@
-import type { Scan, ScanResult } from 'wasp/entities';
 import { HttpError } from 'wasp/server';
 import * as z from 'zod';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation';
+import { mapRecentScans } from './recentScanMapper';
 
 const getRecentScansInputSchema = z.object({
   limit: z.number().min(1).max(20).default(10),
@@ -38,37 +38,23 @@ export async function getRecentScans(rawArgs: any, context: any): Promise<Recent
     },
     orderBy: { createdAt: 'desc' },
     take: args.limit,
-    include: {
-      scanResults: {
+    select: {
+      id: true,
+      status: true,
+      inputType: true,
+      inputRef: true,
+      planAtSubmission: true,
+      createdAt: true,
+      completedAt: true,
+      _count: {
         select: {
-          vulnerabilities: true,
+          findings: true,
         },
       },
     },
   });
 
-  // Map scans and count vulnerabilities
-  const recentScans: RecentScan[] = scans.map((scan: any) => {
-    let vulnerabilityCount = 0;
-    
-    // Count vulnerabilities from all scan results
-    for (const result of scan.scanResults) {
-      if (Array.isArray(result.vulnerabilities)) {
-        vulnerabilityCount += result.vulnerabilities.length;
-      }
-    }
-
-    return {
-      id: scan.id,
-      status: scan.status,
-      inputType: scan.inputType,
-      inputRef: scan.inputRef,
-      planAtSubmission: scan.planAtSubmission,
-      created_at: scan.createdAt,
-      completed_at: scan.completedAt,
-      vulnerability_count: vulnerabilityCount,
-    };
-  });
+  const recentScans = mapRecentScans(scans);
 
   return {
     scans: recentScans,

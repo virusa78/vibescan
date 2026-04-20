@@ -90,7 +90,7 @@ React component re-renders
 **4. Report Generation**
 - User requests report via `getReport()` query
 - Operation fetches Scan, Findings, ScanDelta
-- Applies paywall rules (starter = counts only)
+- Returns full vulnerability details for every plan
 - Computes delta (enterprise vs free findings)
 - Returns structured report JSON
 

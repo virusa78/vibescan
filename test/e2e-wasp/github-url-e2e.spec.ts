@@ -84,36 +84,12 @@ test("GitHub URL E2E - Register with pro plan and scan GitHub repo", async ({
     await submitButton.click();
     console.log("✓ GitHub URL scan submitted");
     
-    // Test 2.4: Wait for scan completion
+    // Test 2.4: Wait for scan completion with timeout
     console.log("⏳ Waiting for GitHub repo scan to complete...");
-    await page.waitForTimeout(5000);
-    
-    let scanCompleted = false;
-    let pollAttempts = 0;
-    const maxPolls = 60;
-    
-    while (pollAttempts < maxPolls && !scanCompleted) {
-      await page.reload({ waitUntil: "networkidle" });
-      
-      const scanRows = page.locator('[data-testid="scan-row"]');
-      const scanCount = await scanRows.count();
-      
-      if (scanCount > 0) {
-        const statusElement = scanRows.nth(0).locator('[data-testid="scan-status"]');
-        const status = await statusElement.textContent();
-        
-        console.log(`  Poll ${pollAttempts + 1}: Scan status = ${status}`);
-        
-        if (status?.includes("completed") || status?.includes("done")) {
-          scanCompleted = true;
-          console.log("✓ GitHub scan completed!");
-          break;
-        }
-      }
-      
-      pollAttempts++;
-      await page.waitForTimeout(2000);
-    }
+    const waitStart = Date.now();
+    await waitForScanCompletion(page, 180_000, 5_000);
+    const elapsedSeconds = Math.ceil((Date.now() - waitStart) / 1000);
+    console.log(`✓ GitHub scan completed in ${elapsedSeconds}s`);
     
     // Test 2.5: Verify results appear
     const dashboardScans = page.locator('[data-testid="scan-row"]');
@@ -124,10 +100,10 @@ test("GitHub URL E2E - Register with pro plan and scan GitHub repo", async ({
     console.log("👁️ Viewing scan details");
     await viewScanDetails(page, 0);
     
-    // Test 2.7: Verify pro plan sees FULL details (not locked)
-    console.log("🔓 Verifying pro plan has full access");
-    await verifyScanPaywall(page, false); // Pro plan should NOT be locked
-    console.log("✓ Pro plan sees full vulnerability details");
+    // Test 2.7: Verify full vulnerability visibility
+    console.log("🔓 Verifying full vulnerability visibility");
+    await verifyScanPaywall(page, false);
+    console.log("✓ Full vulnerability details visible");
     
     // Test 2.8: Verify both scanners executed
     console.log("🔍 Checking for dual-scanner results");
@@ -156,8 +132,7 @@ test("GitHub URL E2E - Register with pro plan and scan GitHub repo", async ({
     // Test 2.11: Performance check (time from submission to display should be reasonable)
     console.log("⏱️ Performance check");
     // This is captured in the polling time above
-    console.log(`✓ Scan completed in ${pollAttempts * 2} seconds`);
-    expect(pollAttempts * 2).toBeLessThan(180); // Less than 3 minutes
+    expect(elapsedSeconds).toBeLessThan(180); // Less than 3 minutes
     
     // Test 2.12: Verify no errors
     expect(consoleErrors).toEqual([]);

@@ -133,7 +133,7 @@ export const schemas = {
         description: 'Delta vulnerabilities broken down by severity',
         example: { critical: 2, high: 5, medium: 8 },
       },
-      is_locked: { type: 'boolean', description: 'True if user cannot see delta details (locked plan)' },
+      is_locked: { type: 'boolean', description: 'Always false; delta details are always visible' },
     },
   },
 
@@ -331,7 +331,7 @@ export const schemas = {
         type: 'string',
         enum: ['completed', 'failed', 'partial'],
       },
-      lockedView: { type: 'boolean', description: 'True if plan restricts vulnerability details' },
+      lockedView: { type: 'boolean', description: 'Always false; detailed vulnerability data is always returned' },
       severity_breakdown: { $ref: '#/components/schemas/SeverityBreakdown' },
       total_free: { type: 'integer', description: 'Total free scanner findings' },
       total_enterprise: { type: 'integer', description: 'Total enterprise scanner findings' },
@@ -339,7 +339,7 @@ export const schemas = {
       vulnerabilities: {
         type: 'array',
         items: { $ref: '#/components/schemas/Vulnerability' },
-        description: 'Full findings list (only when lockedView=false)',
+        description: 'Full findings list',
       },
     },
   },
