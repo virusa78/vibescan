@@ -1,4 +1,4 @@
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import {
   getProfileSettings,
   updateProfileSettings,
@@ -10,17 +10,18 @@ import {
 import { resolveRequestUser } from '../../services/requestAuth';
 import { parseJsonBodyWithLimit, enforceRateLimit, getRateLimitKey } from '../../http/requestGuards';
 import { sendOperationError } from '../../http/httpErrors';
+import type { HandlerContext, HandlerRequest } from '../../http/handlerTypes';
 
 export async function getProfileSettingsApiHandler(
-  request: Request,
+  request: HandlerRequest,
   response: Response,
-  context: any
+  context: HandlerContext
 ) {
   try {
     const result = await getProfileSettings(
       {},
       {
-        user: await resolveRequestUser(request as any, context),
+        user: await resolveRequestUser(request, context),
         entities: context.entities,
       }
     );
@@ -32,13 +33,13 @@ export async function getProfileSettingsApiHandler(
 }
 
 export async function updateProfileSettingsApiHandler(
-  request: Request,
+  request: HandlerRequest,
   response: Response,
-  context: any
+  context: HandlerContext
 ) {
   try {
     const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
-    const user = await resolveRequestUser(request as any, context);
+    const user = await resolveRequestUser(request, context);
     await enforceRateLimit({
       key: getRateLimitKey('settings-profile', user?.id || request.ip || 'anonymous'),
       limit: 20,
@@ -57,15 +58,15 @@ export async function updateProfileSettingsApiHandler(
 }
 
 export async function getNotificationSettingsApiHandler(
-  request: Request,
+  request: HandlerRequest,
   response: Response,
-  context: any
+  context: HandlerContext
 ) {
   try {
     const result = await getNotificationSettings(
       {},
       {
-        user: await resolveRequestUser(request as any, context),
+        user: await resolveRequestUser(request, context),
         entities: context.entities,
       }
     );
@@ -77,13 +78,13 @@ export async function getNotificationSettingsApiHandler(
 }
 
 export async function updateNotificationSettingsApiHandler(
-  request: Request,
+  request: HandlerRequest,
   response: Response,
-  context: any
+  context: HandlerContext
 ) {
   try {
     const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
-    const user = await resolveRequestUser(request as any, context);
+    const user = await resolveRequestUser(request, context);
     await enforceRateLimit({
       key: getRateLimitKey('settings-notifications', user?.id || request.ip || 'anonymous'),
       limit: 20,

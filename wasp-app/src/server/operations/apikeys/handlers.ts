@@ -1,4 +1,4 @@
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import {
   generateAPIKey,
   listAPIKeys,
@@ -9,15 +9,16 @@ import {
 import { resolveRequestUser } from '../../services/requestAuth';
 import { parseJsonBodyWithLimit, enforceRateLimit, getRateLimitKey } from '../../http/requestGuards';
 import { sendOperationError } from '../../http/httpErrors';
+import type { HandlerContext, HandlerRequest } from '../../http/handlerTypes';
 
 export async function generateAPIKeyApiHandler(
-  request: Request,
+  request: HandlerRequest,
   response: Response,
-  context: any
+  context: HandlerContext
 ) {
   try {
     const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
-    const user = await resolveRequestUser(request as any, context);
+    const user = await resolveRequestUser(request, context);
     await enforceRateLimit({
       key: getRateLimitKey('apikey-generate', user?.id || request.ip || 'anonymous'),
       limit: 10,
@@ -36,15 +37,15 @@ export async function generateAPIKeyApiHandler(
 }
 
 export async function listAPIKeysApiHandler(
-  request: Request,
+  request: HandlerRequest,
   response: Response,
-  context: any
+  context: HandlerContext
 ) {
   try {
     const result = await listAPIKeys(
       {},
       {
-        user: await resolveRequestUser(request as any, context),
+        user: await resolveRequestUser(request, context),
         entities: context.entities,
       }
     );
@@ -56,16 +57,16 @@ export async function listAPIKeysApiHandler(
 }
 
 export async function getAPIKeyDetailsApiHandler(
-  request: Request,
+  request: HandlerRequest,
   response: Response,
-  context: any
+  context: HandlerContext
 ) {
   try {
     const keyId = request.params.keyId;
     const result = await getAPIKeyDetails(
       { keyId },
       {
-        user: await resolveRequestUser(request as any, context),
+        user: await resolveRequestUser(request, context),
         entities: context.entities,
       }
     );
@@ -77,16 +78,16 @@ export async function getAPIKeyDetailsApiHandler(
 }
 
 export async function revokeAPIKeyApiHandler(
-  request: Request,
+  request: HandlerRequest,
   response: Response,
-  context: any
+  context: HandlerContext
 ) {
   try {
     const keyId = request.params.keyId;
     const result = await revokeAPIKey(
       { keyId },
       {
-        user: await resolveRequestUser(request as any, context),
+        user: await resolveRequestUser(request, context),
         entities: context.entities,
       }
     );

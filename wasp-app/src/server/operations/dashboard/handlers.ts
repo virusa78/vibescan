@@ -1,4 +1,4 @@
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import {
   getDashboardMetrics,
   getRecentScans,
@@ -10,10 +10,7 @@ import {
 } from './index';
 import { resolveRequestUser } from '../../services/requestAuth';
 import { sendOperationError } from '../../http/httpErrors';
-
-type OperationContext = {
-  entities: Record<string, unknown>;
-};
+import type { HandlerContext, HandlerRequest } from '../../http/handlerTypes';
 
 type DashboardTimeRange = '7d' | '30d' | 'all';
 
@@ -26,13 +23,13 @@ function normalizeTimeRange(value: string | string[] | undefined): DashboardTime
 }
 
 export async function getDashboardMetricsApiHandler(
-  request: Request,
+  request: HandlerRequest,
   response: Response,
-  context: OperationContext
+  context: HandlerContext
 ) {
   try {
     const timeRange = normalizeTimeRange(request.query.time_range as string | string[] | undefined);
-    const user = await resolveRequestUser(request as any, context);
+    const user = await resolveRequestUser(request, context);
     const args: GetDashboardMetricsInput = { time_range: timeRange };
     const result = await getDashboardMetrics(args, { user, entities: context.entities });
     response.status(200).json(result);
@@ -42,14 +39,14 @@ export async function getDashboardMetricsApiHandler(
 }
 
 export async function getRecentScansApiHandler(
-  request: Request,
+  request: HandlerRequest,
   response: Response,
-  context: OperationContext
+  context: HandlerContext
 ) {
   try {
     const limitParam = request.query.limit as string | string[] | undefined;
     const limit = limitParam ? parseInt(Array.isArray(limitParam) ? limitParam[0] : limitParam) : 10;
-    const user = await resolveRequestUser(request as any, context);
+    const user = await resolveRequestUser(request, context);
     const args: GetRecentScansInput = { limit: Math.min(Math.max(limit, 1), 20) };
     const result = await getRecentScans(args, { user, entities: context.entities });
     response.status(200).json(result);
@@ -59,13 +56,13 @@ export async function getRecentScansApiHandler(
 }
 
 export async function getSeverityBreakdownApiHandler(
-  request: Request,
+  request: HandlerRequest,
   response: Response,
-  context: OperationContext
+  context: HandlerContext
 ) {
   try {
     const timeRange = normalizeTimeRange(request.query.time_range as string | string[] | undefined);
-    const user = await resolveRequestUser(request as any, context);
+    const user = await resolveRequestUser(request, context);
     const args: GetSeverityBreakdownInput = { time_range: timeRange };
     const result = await getSeverityBreakdown(args, { user, entities: context.entities });
     response.status(200).json(result);
@@ -75,12 +72,12 @@ export async function getSeverityBreakdownApiHandler(
 }
 
 export async function getQuotaStatusApiHandler(
-  request: Request,
+  request: HandlerRequest,
   response: Response,
-  context: OperationContext
+  context: HandlerContext
 ) {
   try {
-    const user = await resolveRequestUser(request as any, context);
+    const user = await resolveRequestUser(request, context);
     const result = await getQuotaStatus({}, { user, entities: context.entities });
     response.status(200).json(result);
   } catch (error) {

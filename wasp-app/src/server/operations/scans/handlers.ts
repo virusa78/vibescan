@@ -1,4 +1,4 @@
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import {
   submitScan,
   listScans,
@@ -14,27 +14,14 @@ import {
 import { resolveRequestUser } from '../../services/requestAuth';
 import { enforceRateLimit, getRateLimitKey, parseJsonBodyWithLimit } from '../../http/requestGuards';
 import { sendOperationError } from '../../http/httpErrors';
+import type { HandlerContext, HandlerRequest } from '../../http/handlerTypes';
 
-type AuthenticatedRequest = Request & {
-  user?: {
-    id: string;
-  } | null;
-};
-
-type OperationContext = {
-  user?: {
-    id: string;
-  } | null;
-  entities: Record<string, unknown>;
-};
-
-export async function submitScanApiHandler(request: Request, response: Response, context: OperationContext) {
+export async function submitScanApiHandler(request: HandlerRequest, response: Response, context: HandlerContext) {
   try {
     let body: unknown = {};
     body = parseJsonBodyWithLimit(request.body);
 
-    const authRequest = request as AuthenticatedRequest;
-    const user = await resolveRequestUser(authRequest, context);
+    const user = await resolveRequestUser(request, context);
     await enforceRateLimit({
       key: getRateLimitKey('scan-submit', user?.id || request.ip || 'anonymous'),
       limit: 20,
@@ -51,7 +38,7 @@ export async function submitScanApiHandler(request: Request, response: Response,
   }
 }
 
-export async function listScansApiHandler(request: Request, response: Response, context: OperationContext) {
+export async function listScansApiHandler(request: HandlerRequest, response: Response, context: HandlerContext) {
   try {
     const limitParam = request.query.limit as string | string[] | undefined;
     const offsetParam = request.query.offset as string | string[] | undefined;
@@ -73,8 +60,7 @@ export async function listScansApiHandler(request: Request, response: Response, 
       created_to: createdTo,
     };
 
-    const authRequest = request as AuthenticatedRequest;
-    const user = await resolveRequestUser(authRequest, context);
+    const user = await resolveRequestUser(request, context);
     const result = await listScans(args, {
       user,
       entities: context.entities,
@@ -86,14 +72,13 @@ export async function listScansApiHandler(request: Request, response: Response, 
   }
 }
 
-export async function getScanApiHandler(request: Request, response: Response, context: OperationContext) {
+export async function getScanApiHandler(request: HandlerRequest, response: Response, context: HandlerContext) {
   try {
     const args: GetScanInput = {
       scan_id: String(request.params.scanId),
     };
 
-    const authRequest = request as AuthenticatedRequest;
-    const user = await resolveRequestUser(authRequest, context);
+    const user = await resolveRequestUser(request, context);
     const result = await getScan(args, {
       user,
       entities: context.entities,
@@ -105,14 +90,13 @@ export async function getScanApiHandler(request: Request, response: Response, co
   }
 }
 
-export async function cancelScanApiHandler(request: Request, response: Response, context: OperationContext) {
+export async function cancelScanApiHandler(request: HandlerRequest, response: Response, context: HandlerContext) {
   try {
     const args: CancelScanInput = {
       scan_id: String(request.params.scanId),
     };
 
-    const authRequest = request as AuthenticatedRequest;
-    const user = await resolveRequestUser(authRequest, context);
+    const user = await resolveRequestUser(request, context);
     const result = await cancelScan(args, {
       user,
       entities: context.entities,
@@ -124,7 +108,7 @@ export async function cancelScanApiHandler(request: Request, response: Response,
   }
 }
 
-export async function getScanStatsApiHandler(request: Request, response: Response, context: OperationContext) {
+export async function getScanStatsApiHandler(request: HandlerRequest, response: Response, context: HandlerContext) {
   try {
     const timeRangeParam = request.query.time_range as string | string[] | undefined;
     const timeRange = Array.isArray(timeRangeParam) ? timeRangeParam[0] : (timeRangeParam || '30d');
@@ -133,8 +117,7 @@ export async function getScanStatsApiHandler(request: Request, response: Respons
       time_range: timeRange,
     };
 
-    const authRequest = request as AuthenticatedRequest;
-    const user = await resolveRequestUser(authRequest, context);
+    const user = await resolveRequestUser(request, context);
     const result = await getScanStats(args, {
       user,
       entities: context.entities,

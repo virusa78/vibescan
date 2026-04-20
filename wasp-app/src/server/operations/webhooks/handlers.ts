@@ -1,13 +1,14 @@
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { createWebhook, listWebhooks, getWebhook, updateWebhook, deleteWebhook } from './index';
 import { resolveRequestUser } from '../../services/requestAuth';
 import { parseJsonBodyWithLimit, enforceRateLimit, getRateLimitKey } from '../../http/requestGuards';
 import { sendOperationError } from '../../http/httpErrors';
+import type { HandlerContext, HandlerRequest } from '../../http/handlerTypes';
 
-export async function createWebhookApiHandler(request: Request, response: Response, context: any) {
+export async function createWebhookApiHandler(request: HandlerRequest, response: Response, context: HandlerContext) {
   try {
     const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
-    const user = await resolveRequestUser(request as any, context);
+    const user = await resolveRequestUser(request, context);
     await enforceRateLimit({
       key: getRateLimitKey('webhook-create', user?.id || request.ip || 'anonymous'),
       limit: 20,
@@ -25,10 +26,10 @@ export async function createWebhookApiHandler(request: Request, response: Respon
   }
 }
 
-export async function listWebhooksApiHandler(_request: Request, response: Response, context: any) {
+export async function listWebhooksApiHandler(_request: HandlerRequest, response: Response, context: HandlerContext) {
   try {
     const result = await listWebhooks(undefined, {
-      user: await resolveRequestUser(_request as any, context),
+      user: await resolveRequestUser(_request, context),
       entities: context.entities,
     });
 
@@ -38,12 +39,12 @@ export async function listWebhooksApiHandler(_request: Request, response: Respon
   }
 }
 
-export async function getWebhookApiHandler(request: Request, response: Response, context: any) {
+export async function getWebhookApiHandler(request: HandlerRequest, response: Response, context: HandlerContext) {
   try {
     const result = await getWebhook(
       { webhookId: String(request.params.webhookId) },
       {
-        user: await resolveRequestUser(request as any, context),
+        user: await resolveRequestUser(request, context),
         entities: context.entities,
       },
     );
@@ -54,10 +55,10 @@ export async function getWebhookApiHandler(request: Request, response: Response,
   }
 }
 
-export async function updateWebhookApiHandler(request: Request, response: Response, context: any) {
+export async function updateWebhookApiHandler(request: HandlerRequest, response: Response, context: HandlerContext) {
   try {
     const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
-    const user = await resolveRequestUser(request as any, context);
+    const user = await resolveRequestUser(request, context);
     await enforceRateLimit({
       key: getRateLimitKey('webhook-update', user?.id || request.ip || 'anonymous'),
       limit: 30,
@@ -81,9 +82,9 @@ export async function updateWebhookApiHandler(request: Request, response: Respon
   }
 }
 
-export async function deleteWebhookApiHandler(request: Request, response: Response, context: any) {
+export async function deleteWebhookApiHandler(request: HandlerRequest, response: Response, context: HandlerContext) {
   try {
-    const user = await resolveRequestUser(request as any, context);
+    const user = await resolveRequestUser(request, context);
     await enforceRateLimit({
       key: getRateLimitKey('webhook-delete', user?.id || request.ip || 'anonymous'),
       limit: 20,
