@@ -3,6 +3,7 @@ import * as z from 'zod';
 import * as bcrypt from 'bcrypt';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation';
 import { generateRandomKey } from '../../utils/keyGenerator';
+import { generateApiKeyPrefix } from '../../../shared/apiKey';
 
 const generateAPIKeySchema = z.object({
   name: z.string().min(1).max(255),
@@ -49,14 +50,15 @@ export async function generateAPIKey(
 
   // Store in database
   const apiKey = await prisma.apiKey.create({
-    data: {
-      userId: context.user.id,
-      name: args.name,
-      keyHash: keyHash,
-      expiresAt: expiresAt,
-      lastUsedAt: null,
-      enabled: true,
-    },
+      data: {
+        userId: context.user.id,
+        name: args.name,
+        keyHash: keyHash,
+        keyPrefix: generateApiKeyPrefix(rawKey),
+        expiresAt: expiresAt,
+        lastUsedAt: null,
+        enabled: true,
+      },
   });
 
   // Return response with raw key (shown only once!)

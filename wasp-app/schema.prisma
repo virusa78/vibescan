@@ -115,6 +115,7 @@ model ApiKey {
   
   userId                    String          @map("user_id") @db.Uuid
   name                      String
+  keyPrefix                 String?         @map("key_prefix")
   keyHash                   String          @map("key_hash")
   lastUsedAt                DateTime?       @map("last_used_at")
   enabled                   Boolean         @default(true)
@@ -122,6 +123,7 @@ model ApiKey {
   user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, keyHash])
+  @@index([keyPrefix])
   @@map("api_keys")
 }
 

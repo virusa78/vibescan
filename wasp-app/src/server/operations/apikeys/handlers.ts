@@ -1,4 +1,3 @@
-import { HttpError } from 'wasp/server';
 import type { Request, Response } from 'express';
 import {
   generateAPIKey,
@@ -6,17 +5,10 @@ import {
   getAPIKeyDetails,
   revokeAPIKey,
   type GenerateAPIKeyInput,
-  type GetAPIKeyDetailsInput,
-  type RevokeAPIKeyInput,
 } from './index';
-
-function handleOperationError(error: any, response: Response) {
-  if (error instanceof HttpError) {
-    response.status(error.statusCode).json({ error: error.message });
-  } else {
-    response.status(500).json({ error: 'Internal server error' });
-  }
-}
+import { resolveRequestUser } from '../../services/requestAuth';
+import { parseJsonBodyWithLimit, enforceRateLimit, getRateLimitKey } from '../../http/requestGuards';
+import { sendOperationError } from '../../http/httpErrors';
 
 export async function generateAPIKeyApiHandler(
   request: Request,
@@ -24,19 +16,22 @@ export async function generateAPIKeyApiHandler(
   context: any
 ) {
   try {
-    let body: any = {};
-    if (request.body) {
-      body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
-    }
+    const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
+    const user = await resolveRequestUser(request as any, context);
+    await enforceRateLimit({
+      key: getRateLimitKey('apikey-generate', user?.id || request.ip || 'anonymous'),
+      limit: 10,
+      windowSeconds: 60,
+    });
 
     const result = await generateAPIKey(body as GenerateAPIKeyInput, {
-      user: (request as any).user,
+      user,
       entities: context.entities,
     });
 
     response.status(201).json(result);
   } catch (error) {
-    handleOperationError(error, response);
+    sendOperationError('apikey-operation', error, response);
   }
 }
 
@@ -49,14 +44,14 @@ export async function listAPIKeysApiHandler(
     const result = await listAPIKeys(
       {},
       {
-        user: (request as any).user,
+        user: await resolveRequestUser(request as any, context),
         entities: context.entities,
       }
     );
 
     response.status(200).json(result);
   } catch (error) {
-    handleOperationError(error, response);
+    sendOperationError('apikey-operation', error, response);
   }
 }
 
@@ -70,14 +65,14 @@ export async function getAPIKeyDetailsApiHandler(
     const result = await getAPIKeyDetails(
       { keyId },
       {
-        user: (request as any).user,
+        user: await resolveRequestUser(request as any, context),
         entities: context.entities,
       }
     );
 
     response.status(200).json(result);
   } catch (error) {
-    handleOperationError(error, response);
+    sendOperationError('apikey-operation', error, response);
   }
 }
 
@@ -91,13 +86,13 @@ export async function revokeAPIKeyApiHandler(
     const result = await revokeAPIKey(
       { keyId },
       {
-        user: (request as any).user,
+        user: await resolveRequestUser(request as any, context),
         entities: context.entities,
       }
     );
 
     response.status(200).json(result);
   } catch (error) {
-    handleOperationError(error, response);
+    sendOperationError('apikey-operation', error, response);
   }
 }

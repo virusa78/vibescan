@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import { randomUUID } from "crypto";
+import { parseJsonBodyWithLimit, enforceRateLimit, getRateLimitKey } from "./http/requestGuards";
 
 function getBackendBaseUrl(request: Request): string {
   if (process.env.WASP_SERVER_URL) {
@@ -24,20 +26,12 @@ async function proxyAuthRequest(
   targetPath: "/auth/signup" | "/auth/login",
 ) {
   try {
-    let body = {};
-    if (request.body) {
-      try {
-        body = typeof request.body === "string"
-          ? JSON.parse(request.body)
-          : request.body;
-      } catch (parseError) {
-        // Return 400 for invalid JSON
-        return response.status(400).json({
-          error: "validation_error",
-          message: "Invalid JSON in request body",
-        });
-      }
-    }
+    const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
+    await enforceRateLimit({
+      key: getRateLimitKey(`auth-${targetPath.split('/').pop()}`, request.ip || request.get('x-forwarded-for') || 'anonymous'),
+      limit: 10,
+      windowSeconds: 60,
+    });
 
     const upstream = await fetch(`${getBackendBaseUrl(request)}${targetPath}`, {
       method: "POST",
@@ -49,10 +43,12 @@ async function proxyAuthRequest(
 
     const payload = await upstream.text();
     response.status(upstream.status).type("application/json").send(payload);
-  } catch (error) {
+  } catch {
+    const requestId = randomUUID();
     response.status(500).json({
       error: "internal_error",
-      message: error instanceof Error ? error.message : "Auth compatibility proxy failed",
+      message: "An unexpected error occurred",
+      requestId,
     });
   }
 }

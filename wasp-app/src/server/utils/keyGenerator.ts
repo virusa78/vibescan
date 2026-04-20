@@ -1,7 +1,8 @@
 import { randomBytes } from 'crypto';
+import { API_KEY_PREFIX } from '../../shared/apiKey';
 
 /**
- * Generate a random API key in the format: sk_live_<random>
+ * Generate a random API key in the format: vsk_<random>
  * This generates a 24-character random key similar to Stripe API keys.
  */
 export function generateRandomKey(): string {
@@ -11,5 +12,5 @@ export function generateRandomKey(): string {
     .replace(/\//g, '_')
     .replace(/=/g, '');
 
-  return `sk_live_${randomPart}`;
+  return `${API_KEY_PREFIX}${randomPart}`;
 }

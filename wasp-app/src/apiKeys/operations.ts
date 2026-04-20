@@ -1,10 +1,10 @@
-import type { User, ApiKey } from 'wasp/entities';
+import type { ApiKey } from 'wasp/entities';
 import { HttpError } from 'wasp/server';
 import { v4 as uuidv4 } from 'uuid';
 import * as bcrypt from 'bcrypt';
+import { generateApiKeyPrefix, API_KEY_PREFIX } from '../shared/apiKey';
 
 const BCRYPT_ROUNDS = 10;
-const API_KEY_PREFIX = 'vsk_';
 const API_KEY_LENGTH = 32; // length of random part
 
 /**
@@ -31,6 +31,7 @@ export async function generateApiKey(
       userId: context.user.id,
       name: args.name.trim(),
       keyHash,
+      keyPrefix: generateApiKeyPrefix(rawKey),
       enabled: true,
     },
   });
@@ -91,7 +92,7 @@ export async function revokeApiKey(
   }
 
   if (apiKey.userId !== context.user.id) {
-    throw new HttpError(403, 'Cannot revoke API key belonging to another user');
+      throw new HttpError(404, 'API key not found');
   }
 
   // Delete the key

@@ -3,22 +3,7 @@ import * as crypto from 'crypto';
 import * as z from 'zod';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation.js';
 import { encryptWebhookSecret } from '../../utils/webhookEncryption.js';
-
-/**
- * Check if a hostname is a private IP address or reserved endpoint
- */
-function isPrivateIP(hostname: string): boolean {
-  const privatePatterns = [
-    /^localhost$/i,
-    /^127\./, // 127.0.0.0/8
-    /^10\./, // 10.0.0.0/8
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./, // 172.16.0.0/12
-    /^192\.168\./, // 192.168.0.0/16
-    /^169\.254\./, // 169.254.0.0/16 (link-local)
-    /^169\.254\.169\.254/, // AWS metadata
-  ];
-  return privatePatterns.some(pattern => pattern.test(hostname));
-}
+import { validateWebhookTargetUrl } from '../../../shared/webhookTarget';
 
 const createWebhookInputSchema = z.object({
   url: z.string().url('Invalid webhook URL'),
@@ -50,20 +35,13 @@ export async function createWebhook(
 
   const args = ensureArgsSchemaOrThrowHttpError(createWebhookInputSchema, rawArgs);
 
-  // Validate URL is accessible (basic check)
   let url: URL;
   try {
-    url = new URL(args.url);
-    if (!['http:', 'https:'].includes(url.protocol)) {
-      throw new Error('Invalid protocol');
-    }
-  } catch {
-    throw new HttpError(400, 'Invalid webhook URL: must be a valid HTTP(S) URL');
-  }
-
-  // Reject private IP addresses and internal networks
-  if (isPrivateIP(url.hostname)) {
-    throw new HttpError(400, 'Webhook URLs must not point to private networks');
+    url = await validateWebhookTargetUrl(args.url, {
+      allowLocalHttp: process.env.NODE_ENV !== 'production',
+    });
+  } catch (error) {
+    throw new HttpError(400, error instanceof Error ? error.message : 'Invalid webhook URL');
   }
 
   // Generate signing secret (32 bytes = 256 bits for SHA256)
@@ -81,7 +59,7 @@ export async function createWebhook(
     const webhook = await context.entities.Webhook.create({
       data: {
         userId: context.user.id,
-        url: args.url,
+        url: url.toString(),
         events: args.events,
         signingSecretEncrypted,
         enabled: true,

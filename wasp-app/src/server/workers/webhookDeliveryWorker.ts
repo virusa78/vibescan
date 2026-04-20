@@ -9,11 +9,20 @@ import * as https from 'https';
 import { PrismaClient } from '@prisma/client';
 import { signWebhookPayload } from '../services/webhookSigner.js';
 import type { DeliveryQueueJob } from '../services/webhookEventEmitter.js';
+import { validateWebhookTargetUrl } from '../../shared/webhookTarget';
 
 const prisma = new PrismaClient();
 
 const DELIVERY_TIMEOUT = 30000; // 30 seconds
 const MAX_RETRIES = 5;
+
+function safeTarget(targetUrl: string): string {
+  try {
+    return new URL(targetUrl).hostname;
+  } catch {
+    return 'invalid-url';
+  }
+}
 
 /**
  * HTTP client factory to handle both http and https
@@ -58,49 +67,16 @@ function httpRequest(url: string, options: any, data: string): Promise<{ status:
 export async function webhookDeliveryWorker(job: any): Promise<any> {
   const data: DeliveryQueueJob = job.data;
   const { webhookId, scanId, eventType, payload, payloadHash, targetUrl, signingSecretEncrypted } = data;
+  const targetHost = safeTarget(targetUrl);
   
   // Use BullMQ's attemptsMade to get actual attempt number (0-based, so add 1)
   const attemptNumber = (job.attemptsMade || 0) + 1;
 
   console.log(
-    `[WebhookWorker] Processing delivery job: webhook=${webhookId}, scan=${scanId}, attempt=${attemptNumber}`
+    `[WebhookWorker] Processing delivery job: webhook=${webhookId}, scan=${scanId}, target=${targetHost}, attempt=${attemptNumber}`
   );
 
   try {
-    // Generate signature
-    const { signature } = signWebhookPayload(payload, signingSecretEncrypted);
-
-    // Prepare headers
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-Vibescan-Signature': `sha256=${signature}`,
-      'X-Vibescan-Event': eventType,
-      'X-Vibescan-Timestamp': new Date().toISOString(),
-    };
-
-    // Make HTTP request
-    let httpStatus = 500;
-    let responseBody = '';
-
-    try {
-      const response = await httpRequest(targetUrl, {
-        method: 'POST',
-        headers,
-      }, payload);
-
-      httpStatus = response.status;
-      responseBody = response.body;
-    } catch (error) {
-      // Network error or timeout
-      console.warn(
-        `[WebhookWorker] HTTP error for ${targetUrl}: ${error instanceof Error ? error.message : String(error)}`
-      );
-      httpStatus = 0;
-      responseBody = error instanceof Error ? error.message : String(error);
-    }
-
-    // Update WebhookDelivery record with targeted update (not updateMany)
-    // This ensures atomicity and prevents accidental bulk updates
     const deliveryRecord = await prisma.webhookDelivery.findFirst({
       where: {
         webhookId,
@@ -112,6 +88,41 @@ export async function webhookDeliveryWorker(job: any): Promise<any> {
     if (!deliveryRecord) {
       console.warn(`[WebhookWorker] Delivery record not found for ${webhookId}/${scanId}`);
       throw new Error('Delivery record not found');
+    }
+
+    let httpStatus = 500;
+    let responseBody = '';
+
+    try {
+      await validateWebhookTargetUrl(targetUrl, {
+        allowLocalHttp: process.env.NODE_ENV !== 'production',
+      });
+
+      // Generate signature
+      const { signature } = signWebhookPayload(payload, signingSecretEncrypted);
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-Vibescan-Signature': `sha256=${signature}`,
+        'X-Vibescan-Event': eventType,
+        'X-Vibescan-Timestamp': new Date().toISOString(),
+      };
+
+      const response = await httpRequest(targetUrl, {
+        method: 'POST',
+        headers,
+      }, payload);
+
+      httpStatus = response.status;
+      responseBody = response.body;
+    } catch (error) {
+      // Network, validation, or timeout error
+      console.warn(
+        `[WebhookWorker] HTTP error for ${targetHost}: ${error instanceof Error ? error.message : String(error)}`
+      );
+      httpStatus = 0;
+      responseBody = error instanceof Error ? error.message : String(error);
     }
 
     const status = httpStatus >= 200 && httpStatus < 300 ? 'delivered' : 'failed';
@@ -129,10 +140,10 @@ export async function webhookDeliveryWorker(job: any): Promise<any> {
     });
 
     if (status === 'delivered') {
-      console.log(`[WebhookWorker] ✅ Successfully delivered webhook to ${targetUrl}`);
+      console.log(`[WebhookWorker] ✅ Successfully delivered webhook to ${targetHost}`);
       return { success: true, status: httpStatus };
     } else if (attemptNumber >= MAX_RETRIES) {
-      console.error(`[WebhookWorker] ❌ Max retries exceeded for ${targetUrl}`);
+      console.error(`[WebhookWorker] ❌ Max retries exceeded for ${targetHost}`);
       // Mark as exhausted with targeted update
       await prisma.webhookDelivery.update({
         where: { id: deliveryRecord.id },
@@ -142,7 +153,7 @@ export async function webhookDeliveryWorker(job: any): Promise<any> {
       });
       throw new Error(`Delivery failed after ${MAX_RETRIES} attempts. Last status: ${httpStatus}`);
     } else {
-      console.warn(`[WebhookWorker] ⚠️ Delivery failed with status ${httpStatus}, will retry`);
+      console.warn(`[WebhookWorker] ⚠️ Delivery failed with status ${httpStatus}, target=${targetHost}, will retry`);
       throw new Error(`Delivery failed with status ${httpStatus}. Attempt ${attemptNumber}/${MAX_RETRIES}`);
     }
   } catch (error) {

@@ -85,6 +85,17 @@ describe('Webhook Delivery Pipeline', () => {
       expect(isValid).toBe(false);
     });
 
+    it('should reject a signature with the wrong length', () => {
+      const payload = JSON.stringify({ scanId: 'test-123', event: 'scan_complete' });
+      const signingSecret = 'test-secret-key';
+      const encryptedSecret = encryptWebhookSecret(signingSecret);
+
+      const { signature } = signWebhookPayload(payload, encryptedSecret);
+      const isValid = verifyWebhookSignature(payload, signature.slice(0, -2), encryptedSecret);
+
+      expect(isValid).toBe(false);
+    });
+
     it('should reject a signature for a different payload', () => {
       const payload1 = JSON.stringify({ scanId: 'test-123', event: 'scan_complete' });
       const payload2 = JSON.stringify({ scanId: 'test-456', event: 'scan_failed' });

@@ -1,4 +1,3 @@
-import type { Webhook } from 'wasp/entities';
 import { HttpError } from 'wasp/server';
 import * as z from 'zod';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation.js';
@@ -59,7 +58,7 @@ export async function getWebhook(
     }
 
     if (webhook.userId !== context.user.id) {
-      throw new HttpError(403, 'You do not have permission to access this webhook');
+      throw new HttpError(404, 'Webhook not found');
     }
 
     // Get delivery stats

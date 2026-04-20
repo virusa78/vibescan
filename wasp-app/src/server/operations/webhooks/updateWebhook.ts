@@ -1,9 +1,9 @@
-import type { Webhook } from 'wasp/entities';
 import { HttpError } from 'wasp/server';
 import * as z from 'zod';
 import * as crypto from 'crypto';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation.js';
 import { encryptWebhookSecret } from '../../utils/webhookEncryption.js';
+import { validateWebhookTargetUrl } from '../../../shared/webhookTarget';
 
 const updateWebhookInputSchema = z.object({
   webhookId: z.string().uuid('Invalid webhook ID'),
@@ -47,25 +47,25 @@ export async function updateWebhook(
       throw new HttpError(404, 'Webhook not found');
     }
 
-    // Strict ownership boundary: user can only update their own webhooks
-    if (webhook.userId !== context.user.id) {
-      throw new HttpError(403, 'You do not have permission to update this webhook');
-    }
+      // Strict ownership boundary: user can only update their own webhooks
+      if (webhook.userId !== context.user.id) {
+      throw new HttpError(404, 'Webhook not found');
+      }
 
-    // Validate new URL if provided
+      // Validate new URL if provided
+    let validatedUrl: URL | null = null;
     if (args.url) {
       try {
-        const url = new URL(args.url);
-        if (!['http:', 'https:'].includes(url.protocol)) {
-          throw new Error('Invalid protocol');
+          validatedUrl = await validateWebhookTargetUrl(args.url, {
+            allowLocalHttp: process.env.NODE_ENV !== 'production',
+          });
+        } catch (err) {
+          throw new HttpError(400, err instanceof Error ? err.message : 'Invalid webhook URL');
         }
-      } catch (err) {
-        throw new HttpError(400, 'Invalid webhook URL: must be a valid HTTP(S) URL');
       }
-    }
 
     const updateData: any = {};
-    if (args.url) updateData.url = args.url;
+    if (validatedUrl) updateData.url = validatedUrl.toString();
     if (args.events) updateData.events = args.events;
     if (args.enabled !== undefined) updateData.enabled = args.enabled;
 
@@ -74,7 +74,6 @@ export async function updateWebhook(
       const newSecret = crypto.randomBytes(32).toString('hex');
       const newSecretEncrypted = encryptWebhookSecret(newSecret);
       updateData.signingSecretEncrypted = newSecretEncrypted;
-      console.log(`[Webhook] Rotated signing secret for webhook ${args.webhookId}`);
     }
 
     const updatedWebhook = await context.entities.Webhook.update({

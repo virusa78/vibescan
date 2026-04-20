@@ -1,4 +1,3 @@
-import { HttpError } from 'wasp/server';
 import type { Request, Response } from 'express';
 import {
   submitScan,
@@ -12,6 +11,9 @@ import {
   type CancelScanInput,
   type GetScanStatsInput,
 } from './index';
+import { resolveRequestUser } from '../../services/requestAuth';
+import { enforceRateLimit, getRateLimitKey, parseJsonBodyWithLimit } from '../../http/requestGuards';
+import { sendOperationError } from '../../http/httpErrors';
 
 type AuthenticatedRequest = Request & {
   user?: {
@@ -26,29 +28,26 @@ type OperationContext = {
   entities: Record<string, unknown>;
 };
 
-type HttpErrorWithData = Error & {
-  statusCode?: number;
-  data?: {
-    error?: string;
-  };
-};
-
 export async function submitScanApiHandler(request: Request, response: Response, context: OperationContext) {
   try {
     let body: unknown = {};
-    if (request.body) {
-      body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
-    }
+    body = parseJsonBodyWithLimit(request.body);
 
     const authRequest = request as AuthenticatedRequest;
+    const user = await resolveRequestUser(authRequest, context);
+    await enforceRateLimit({
+      key: getRateLimitKey('scan-submit', user?.id || request.ip || 'anonymous'),
+      limit: 20,
+      windowSeconds: 60,
+    });
     const result = await submitScan(body as SubmitScanInput, {
-      user: authRequest.user,
+      user,
       entities: context.entities,
     });
 
     response.status(201).json(result);
   } catch (error) {
-    handleOperationError(error, response);
+    sendOperationError('scan-operation', error, response);
   }
 }
 
@@ -75,14 +74,15 @@ export async function listScansApiHandler(request: Request, response: Response, 
     };
 
     const authRequest = request as AuthenticatedRequest;
+    const user = await resolveRequestUser(authRequest, context);
     const result = await listScans(args, {
-      user: authRequest.user,
+      user,
       entities: context.entities,
     });
 
     response.status(200).json(result);
   } catch (error) {
-    handleOperationError(error, response);
+    sendOperationError('scan-operation', error, response);
   }
 }
 
@@ -93,14 +93,15 @@ export async function getScanApiHandler(request: Request, response: Response, co
     };
 
     const authRequest = request as AuthenticatedRequest;
+    const user = await resolveRequestUser(authRequest, context);
     const result = await getScan(args, {
-      user: authRequest.user,
+      user,
       entities: context.entities,
     });
 
     response.status(200).json(result);
   } catch (error) {
-    handleOperationError(error, response);
+    sendOperationError('scan-operation', error, response);
   }
 }
 
@@ -111,14 +112,15 @@ export async function cancelScanApiHandler(request: Request, response: Response,
     };
 
     const authRequest = request as AuthenticatedRequest;
+    const user = await resolveRequestUser(authRequest, context);
     const result = await cancelScan(args, {
-      user: authRequest.user,
+      user,
       entities: context.entities,
     });
 
     response.status(200).json(result);
   } catch (error) {
-    handleOperationError(error, response);
+    sendOperationError('scan-operation', error, response);
   }
 }
 
@@ -132,59 +134,14 @@ export async function getScanStatsApiHandler(request: Request, response: Respons
     };
 
     const authRequest = request as AuthenticatedRequest;
+    const user = await resolveRequestUser(authRequest, context);
     const result = await getScanStats(args, {
-      user: authRequest.user,
+      user,
       entities: context.entities,
     });
 
     response.status(200).json(result);
   } catch (error) {
-    handleOperationError(error, response);
-  }
-}
-
-function handleOperationError(error: unknown, response: Response) {
-  if (error instanceof HttpError) {
-    const statusCode = error.statusCode || 500;
-    const message = error.message || 'Internal server error';
-    const data = (error as HttpErrorWithData).data;
-
-    response.status(statusCode).json({
-      error: data?.error || getErrorCode(statusCode),
-      message,
-      ...(data && { details: data }),
-    });
-    return;
-  }
-
-  if (error instanceof SyntaxError) {
-    response.status(400).json({
-      error: 'validation_error',
-      message: 'Invalid JSON in request body',
-    });
-    return;
-  }
-
-  console.error('Unexpected error in scan operation:', error);
-  response.status(500).json({
-    error: 'internal_error',
-    message: 'An unexpected error occurred',
-  });
-}
-
-function getErrorCode(statusCode: number): string {
-  switch (statusCode) {
-    case 400:
-      return 'bad_request';
-    case 401:
-      return 'unauthorized';
-    case 403:
-      return 'forbidden';
-    case 404:
-      return 'not_found';
-    case 429:
-      return 'too_many_requests';
-    default:
-      return 'internal_error';
+    sendOperationError('scan-operation', error, response);
   }
 }

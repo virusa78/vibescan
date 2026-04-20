@@ -41,7 +41,7 @@ export async function getAPIKeyDetails(
 
   // Verify ownership
   if (apiKey.userId !== context.user.id) {
-    throw new HttpError(403, 'Access denied');
+    throw new HttpError(404, 'API key not found');
   }
 
   // Determine status

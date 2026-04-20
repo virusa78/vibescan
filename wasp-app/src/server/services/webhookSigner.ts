@@ -58,7 +58,14 @@ export function verifyWebhookSignature(
 ): boolean {
   try {
     const { signature: computedSignature } = signWebhookPayload(payload, signingSecretEncrypted);
-    return computedSignature === signature;
+    const received = Buffer.from(signature, 'hex');
+    const computed = Buffer.from(computedSignature, 'hex');
+
+    if (received.length !== computed.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(received, computed);
   } catch {
     return false;
   }

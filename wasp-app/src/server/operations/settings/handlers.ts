@@ -1,4 +1,3 @@
-import { HttpError } from 'wasp/server';
 import type { Request, Response } from 'express';
 import {
   getProfileSettings,
@@ -8,14 +7,9 @@ import {
   type UpdateProfileSettingsInput,
   type UpdateNotificationSettingsInput,
 } from './index';
-
-function handleOperationError(error: any, response: Response) {
-  if (error instanceof HttpError) {
-    response.status(error.statusCode).json({ error: error.message });
-  } else {
-    response.status(500).json({ error: 'Internal server error' });
-  }
-}
+import { resolveRequestUser } from '../../services/requestAuth';
+import { parseJsonBodyWithLimit, enforceRateLimit, getRateLimitKey } from '../../http/requestGuards';
+import { sendOperationError } from '../../http/httpErrors';
 
 export async function getProfileSettingsApiHandler(
   request: Request,
@@ -26,14 +20,14 @@ export async function getProfileSettingsApiHandler(
     const result = await getProfileSettings(
       {},
       {
-        user: (request as any).user,
+        user: await resolveRequestUser(request as any, context),
         entities: context.entities,
       }
     );
 
     response.status(200).json(result);
   } catch (error) {
-    handleOperationError(error, response);
+    sendOperationError('settings-operation', error, response);
   }
 }
 
@@ -43,19 +37,22 @@ export async function updateProfileSettingsApiHandler(
   context: any
 ) {
   try {
-    let body: any = {};
-    if (request.body) {
-      body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
-    }
+    const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
+    const user = await resolveRequestUser(request as any, context);
+    await enforceRateLimit({
+      key: getRateLimitKey('settings-profile', user?.id || request.ip || 'anonymous'),
+      limit: 20,
+      windowSeconds: 60,
+    });
 
     const result = await updateProfileSettings(body as UpdateProfileSettingsInput, {
-      user: (request as any).user,
+      user,
       entities: context.entities,
     });
 
     response.status(200).json(result);
   } catch (error) {
-    handleOperationError(error, response);
+    sendOperationError('settings-operation', error, response);
   }
 }
 
@@ -68,14 +65,14 @@ export async function getNotificationSettingsApiHandler(
     const result = await getNotificationSettings(
       {},
       {
-        user: (request as any).user,
+        user: await resolveRequestUser(request as any, context),
         entities: context.entities,
       }
     );
 
     response.status(200).json(result);
   } catch (error) {
-    handleOperationError(error, response);
+    sendOperationError('settings-operation', error, response);
   }
 }
 
@@ -85,21 +82,24 @@ export async function updateNotificationSettingsApiHandler(
   context: any
 ) {
   try {
-    let body: any = {};
-    if (request.body) {
-      body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
-    }
+    const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
+    const user = await resolveRequestUser(request as any, context);
+    await enforceRateLimit({
+      key: getRateLimitKey('settings-notifications', user?.id || request.ip || 'anonymous'),
+      limit: 20,
+      windowSeconds: 60,
+    });
 
     const result = await updateNotificationSettings(
       body as UpdateNotificationSettingsInput,
       {
-        user: (request as any).user,
+        user,
         entities: context.entities,
       }
     );
 
     response.status(200).json(result);
   } catch (error) {
-    handleOperationError(error, response);
+    sendOperationError('settings-operation', error, response);
   }
 }

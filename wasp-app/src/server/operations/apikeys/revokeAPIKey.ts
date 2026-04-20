@@ -36,7 +36,7 @@ export async function revokeAPIKey(
 
   // Verify ownership
   if (apiKey.userId !== context.user.id) {
-    throw new HttpError(403, 'Access denied');
+    throw new HttpError(404, 'API key not found');
   }
 
   // Mark as revoked (disabled)
@@ -47,6 +47,6 @@ export async function revokeAPIKey(
 
   return {
     success: true,
-    message: `API key '${apiKey.name}' has been revoked successfully`,
+    message: 'API key revoked successfully',
   };
 }
