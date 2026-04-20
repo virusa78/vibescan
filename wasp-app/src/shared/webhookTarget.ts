@@ -2,6 +2,7 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 
 export type WebhookTargetValidationOptions = {
+  allowHttp?: boolean;
   allowLocalHttp?: boolean;
   lookup?: (
     hostname: string,
@@ -50,10 +51,15 @@ export async function validateWebhookTargetUrl(
   options: WebhookTargetValidationOptions = {},
 ): Promise<URL> {
   const url = new URL(value);
+  const allowHttp = options.allowHttp ?? false;
   const allowLocalHttp = options.allowLocalHttp ?? false;
   const loopbackHost = isLoopbackHostname(url.hostname);
 
   if (url.protocol !== 'https:') {
+    if (allowHttp) {
+      return url;
+    }
+
     if (!(allowLocalHttp && url.protocol === 'http:' && loopbackHost)) {
       throw new Error('Webhook URLs must use https');
     }

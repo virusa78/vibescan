@@ -1,6 +1,6 @@
 import { prisma } from 'wasp/server';
 import * as bcrypt from 'bcrypt';
-import { generateApiKeyPrefix, isApiKeyToken } from '../../shared/apiKey';
+import { generateApiKeyPrefix, isApiKeyToken, LEGACY_API_KEY_PREFIX } from '../../shared/apiKey';
 
 type RequestLike = {
   headers: Record<string, string | string[] | undefined>;
@@ -31,18 +31,34 @@ async function authenticateBearerApiKey(authorization: string | undefined): Prom
     return null;
   }
 
-  const prefix = generateApiKeyPrefix(token);
-  const candidates = await prisma.apiKey.findMany({
-    where: {
-      keyPrefix: prefix,
-      enabled: true,
-    },
-    include: {
-      user: {
-        select: { id: true },
-      },
-    },
-  });
+  const isLegacyKey = token.startsWith(LEGACY_API_KEY_PREFIX);
+  const prefixCandidates = isLegacyKey
+    ? []
+    : await prisma.apiKey.findMany({
+        where: {
+          keyPrefix: generateApiKeyPrefix(token),
+          enabled: true,
+        },
+        include: {
+          user: {
+            select: { id: true },
+          },
+        },
+      });
+
+  const candidates = prefixCandidates.length > 0
+    ? prefixCandidates
+    : await prisma.apiKey.findMany({
+        where: {
+          keyPrefix: null,
+          enabled: true,
+        },
+        include: {
+          user: {
+            select: { id: true },
+          },
+        },
+      });
 
   for (const candidate of candidates) {
     if (candidate.expiresAt && candidate.expiresAt.getTime() < Date.now()) {

@@ -94,9 +94,9 @@ export async function webhookDeliveryWorker(job: any): Promise<any> {
     let responseBody = '';
 
     try {
-      await validateWebhookTargetUrl(targetUrl, {
-        allowLocalHttp: process.env.NODE_ENV !== 'production',
-      });
+    await validateWebhookTargetUrl(targetUrl, {
+      allowHttp: true,
+    });
 
       // Generate signature
       const { signature } = signWebhookPayload(payload, signingSecretEncrypted);

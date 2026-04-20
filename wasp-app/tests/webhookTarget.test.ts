@@ -35,4 +35,13 @@ describe('Webhook target validation', () => {
 
     expect(result.hostname).toBe('localhost');
   });
+
+  it('allows stored http endpoints when explicitly grandfathered', async () => {
+    const result = await validateWebhookTargetUrl('http://example.com/webhook', {
+      allowHttp: true,
+      lookup: async () => [{ address: '93.184.216.34', family: 4 }],
+    });
+
+    expect(result.protocol).toBe('http:');
+  });
 });

@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { randomUUID } from "crypto";
 import { parseJsonBodyWithLimit, enforceRateLimit, getRateLimitKey } from "./http/requestGuards";
+import { sendOperationError } from "./http/httpErrors";
 
 function getBackendBaseUrl(request: Request): string {
   if (process.env.WASP_SERVER_URL) {
@@ -43,13 +43,8 @@ async function proxyAuthRequest(
 
     const payload = await upstream.text();
     response.status(upstream.status).type("application/json").send(payload);
-  } catch {
-    const requestId = randomUUID();
-    response.status(500).json({
-      error: "internal_error",
-      message: "An unexpected error occurred",
-      requestId,
-    });
+  } catch (error) {
+    sendOperationError("auth-compat", error, response);
   }
 }
 
