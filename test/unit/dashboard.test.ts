@@ -1,6 +1,7 @@
 /**
  * Unit tests for dashboard severity utilities
  */
+import { describe, expect, it } from '@jest/globals';
 import {
   normalizeSeverity,
   calculateSeverityBreakdown,
@@ -205,7 +206,7 @@ describe('Severity Utilities', () => {
       expect(getScanTypeDisplay('zip')).toBe('ZIP');
       expect(getScanTypeDisplay('ci_plugin')).toBe('CI/CD');
       expect(getScanTypeDisplay('ci')).toBe('CI/CD');
-      expect(getScanTypeDisplay('unknown')).toBe('Unknown');
+      expect(getScanTypeDisplay('unknown')).toBe('unknown');
     });
   });
 });

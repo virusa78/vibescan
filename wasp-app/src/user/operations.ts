@@ -17,7 +17,7 @@ const updateUserAdminByIdInputSchema = z.object({
 export const updateIsUserAdminById = async (
   rawArgs: unknown,
   context: AuthContext
-): Promise<User> => {
+): Promise<void> => {
   const { id, isAdmin } = ensureArgsSchemaOrThrowHttpError(
     updateUserAdminByIdInputSchema,
     rawArgs,
@@ -37,7 +37,7 @@ export const updateIsUserAdminById = async (
     );
   }
 
-  return prisma.user.update({
+  await prisma.user.update({
     where: { id },
     data: { isAdmin },
   });
@@ -166,7 +166,7 @@ const updateUserSettingsSchema = z.object({
 export const updateUserSettings = async (
   rawArgs: unknown,
   context: AuthContext
-): Promise<User> => {
+): Promise<void> => {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -189,7 +189,7 @@ export const updateUserSettings = async (
     updateData.language = args.language;
   }
 
-  return prisma.user.update({
+  await prisma.user.update({
     where: { id: context.user.id },
     data: updateData,
   });

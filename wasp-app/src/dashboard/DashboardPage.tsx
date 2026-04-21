@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
 import { BarChart3, Bug, TrendingUp, Zap } from 'lucide-react';
 import { MetricCard } from '../client/components/common/MetricCard';
 import { ScanTable } from '../client/components/common/ScanTable';
@@ -8,11 +7,6 @@ import { EmptyState } from '../client/components/common/EmptyState';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
 import { useAsyncState } from '../client/hooks/useAsyncState';
 import { api } from 'wasp/client/api';
-import {
-  getStatusBadge,
-  getScanTypeDisplay,
-  formatRelativeTime,
-} from '../client/utils/severity';
 
 interface Scan {
   id: string;
@@ -34,10 +28,30 @@ interface SeverityBreakdown {
   total: number;
 }
 
+type DashboardTimeRange = '7d' | '30d' | 'all';
+
+interface TrendBucket {
+  bucket_start: string;
+  scans: number;
+  findings: number;
+  delta: number;
+}
+
+interface TrendSeriesResponse {
+  time_range: DashboardTimeRange;
+  granularity: 'day' | 'week';
+  buckets: TrendBucket[];
+  totals: {
+    scans: number;
+    findings: number;
+    delta: number;
+  };
+}
+
 export default function DashboardPage() {
-  const navigate = useNavigate();
   const [scans, setScans] = useState<Scan[]>([]);
   const { isLoading, error, run } = useAsyncState(true);
+  const [timeRange, setTimeRange] = useState<DashboardTimeRange>('30d');
   const [severity, setSeverity] = useState<SeverityBreakdown>({
     critical: 0,
     high: 0,
@@ -52,6 +66,7 @@ export default function DashboardPage() {
     percentage: number;
     monthly_reset_date?: string;
   } | null>(null);
+  const [trends, setTrends] = useState<TrendSeriesResponse | null>(null);
 
   // Load data from API
   useEffect(() => {
@@ -79,14 +94,20 @@ export default function DashboardPage() {
         setScans(formattedScans);
 
         // Fetch additional data from API
-        const [quotaRes, severityRes] = await Promise.all([
+        const [quotaRes, severityRes, trendsRes] = await Promise.all([
           api.get('/api/v1/dashboard/quota'),
-          api.get('/api/v1/dashboard/severity-breakdown'),
+          api.get('/api/v1/dashboard/severity-breakdown', {
+            params: { time_range: timeRange },
+          }),
+          api.get('/api/v1/dashboard/trends', {
+            params: { time_range: timeRange },
+          }),
         ]);
 
         setQuota(quotaRes.data);
 
         setSeverity(severityRes.data);
+        setTrends(trendsRes.data);
       },
       {
         errorMessage: 'Failed to load dashboard',
@@ -95,7 +116,7 @@ export default function DashboardPage() {
         },
       },
     );
-  }, [run]);
+  }, [run, timeRange]);
 
   // Calculate metrics
   const metrics = useMemo(() => {
@@ -173,12 +194,40 @@ export default function DashboardPage() {
     },
   ];
 
+  const visibleTrendBuckets = useMemo(
+    () => (trends?.buckets ?? []).slice(-12),
+    [trends],
+  );
+  const maxTrendValue = useMemo(() => {
+    return visibleTrendBuckets.reduce((max, bucket) => {
+      return Math.max(max, bucket.scans, bucket.findings, bucket.delta);
+    }, 1);
+  }, [visibleTrendBuckets]);
+
   return (
     <div className="p-8 lg:p-10">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-foreground text-4xl font-bold tracking-tight mb-2">Dashboard</h1>
-        <p className="text-muted-foreground">Monitor your vulnerability scans and security metrics</p>
+      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-foreground text-4xl font-bold tracking-tight mb-2">Dashboard</h1>
+          <p className="text-muted-foreground">Monitor your vulnerability scans and security metrics</p>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-md border border-border/60 bg-card/40 p-1">
+          {(['7d', '30d', 'all'] as DashboardTimeRange[]).map((range) => (
+            <button
+              key={range}
+              type="button"
+              className={`rounded px-3 py-1 text-xs font-medium transition ${
+                timeRange === range
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setTimeRange(range)}
+            >
+              {range.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Error State */}
@@ -208,6 +257,59 @@ export default function DashboardPage() {
           />
         ))}
       </div>
+
+      {/* Trend Series */}
+      <Card className="border-border/50 bg-card/50 backdrop-blur-sm mb-8">
+        <CardHeader>
+          <CardTitle className="text-sm">
+            Security Trends ({(trends?.granularity ?? 'day').toUpperCase()} buckets)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-2">
+              <div className="h-4 bg-muted rounded animate-pulse" />
+              <div className="h-4 bg-muted rounded animate-pulse" />
+              <div className="h-4 bg-muted rounded animate-pulse" />
+            </div>
+          ) : visibleTrendBuckets.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No trend data available for selected range.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {visibleTrendBuckets.map((bucket) => {
+                const label = new Date(bucket.bucket_start).toLocaleDateString();
+                const scansWidth = Math.round((bucket.scans / maxTrendValue) * 100);
+                const findingsWidth = Math.round((bucket.findings / maxTrendValue) * 100);
+                const deltaWidth = Math.round((bucket.delta / maxTrendValue) * 100);
+
+                return (
+                  <div key={bucket.bucket_start} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className="text-foreground">
+                        scans {bucket.scans} · findings {bucket.findings} · delta {bucket.delta}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="h-2 rounded bg-border/30">
+                        <div className="h-2 rounded bg-blue-500/80" style={{ width: `${scansWidth}%` }} />
+                      </div>
+                      <div className="h-2 rounded bg-border/30">
+                        <div className="h-2 rounded bg-red-500/80" style={{ width: `${findingsWidth}%` }} />
+                      </div>
+                      <div className="h-2 rounded bg-border/30">
+                        <div className="h-2 rounded bg-amber-500/80" style={{ width: `${deltaWidth}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Charts & Sidebar Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">

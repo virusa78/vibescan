@@ -5,6 +5,7 @@
 
 import { initializeWorkers, closeWorkers } from './queues/index';
 import { startScanTimeoutSweeper, stopScanTimeoutSweeper } from './services/scanTimeoutService.js';
+import { startScannerHealthMonitor, stopScannerHealthMonitor } from './services/scannerHealthMonitor.js';
 
 let initialized = false;
 
@@ -20,6 +21,7 @@ export async function initializeServer() {
     // Initialize workers
     await initializeWorkers();
     startScanTimeoutSweeper();
+    startScannerHealthMonitor();
 
     initialized = true;
     console.log('✅ Server initialization complete');
@@ -41,6 +43,7 @@ export async function shutdownServer() {
     // Close workers
     await closeWorkers();
     await stopScanTimeoutSweeper();
+    stopScannerHealthMonitor();
 
     initialized = false;
     console.log('✅ Server shutdown complete');

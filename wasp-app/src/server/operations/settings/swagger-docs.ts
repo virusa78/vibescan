@@ -67,6 +67,14 @@
  *     security:
  *       - bearerAuth: []
  *       - apiKeyAuth: []
+ *     parameters:
+ *       - name: project_key
+ *         in: query
+ *         required: false
+ *         schema:
+ *           type: string
+ *           default: default
+ *         description: Project identifier for project-scoped notification preferences.
  *     responses:
  *       200:
  *         description: Notification settings retrieved successfully
@@ -83,7 +91,8 @@
  *     summary: Update user notification settings
  *     description: |
  *       Update the authenticated user's notification preferences.
- *       Supports email notifications, vulnerability alerts, and digest options.
+ *       Supports email notifications, vulnerability alerts, digest options,
+ *       and project-scoped preferences via `project_key`.
  *     operationId: updateNotificationSettings
  *     tags:
  *       - Settings
@@ -103,6 +112,61 @@
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/NotificationSettingsResponse'
+ *       400:
+ *         description: Invalid input or validation error
+ *       401:
+ *         description: User not authenticated
+ *       404:
+ *         description: User not found
+ *
+ * /api/v1/settings/scanner-access:
+ *   get:
+ *     summary: Get scanner access settings
+ *     description: |
+ *       Retrieve the authenticated user's scanner access state and latest
+ *       health status for remote Johnny and Snyk runtimes.
+ *     operationId: getScannerAccessSettings
+ *     tags:
+ *       - Settings
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Scanner access settings retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ScannerAccessResponse'
+ *       401:
+ *         description: User not authenticated
+ *       404:
+ *         description: User not found
+ *
+ *   post:
+ *     summary: Update scanner access settings
+ *     description: |
+ *       Attach or clear the authenticated user's Snyk API key.
+ *       Sending an empty value clears the stored key.
+ *     operationId: updateScannerAccessSettings
+ *     tags:
+ *       - Settings
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateScannerAccessRequest'
+ *     responses:
+ *       200:
+ *         description: Scanner access settings updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ScannerAccessResponse'
  *       400:
  *         description: Invalid input or validation error
  *       401:
