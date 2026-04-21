@@ -4,6 +4,7 @@
  */
 
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
+import { isJohnnyRemoteConfigured, runJohnnyScanViaSsh } from './codescoringJohnnyRuntime.js';
 
 export interface CodescoringFinding {
   cveId: string;
@@ -245,29 +246,97 @@ function generateMockFindings(components: NormalizedComponent[]): CodescoringFin
 /**
  * Parse Codescoring API response into normalized findings
  */
-function parseCodescoringResponse(apiResponse: any): CodescoringFinding[] {
-  if (!apiResponse || !apiResponse.vulnerabilities || !Array.isArray(apiResponse.vulnerabilities)) {
-    return [];
-  }
-
+export function parseCodescoringResponse(apiResponse: any): CodescoringFinding[] {
   const findings: CodescoringFinding[] = [];
 
-  for (const vuln of apiResponse.vulnerabilities) {
-    const finding: CodescoringFinding = {
-      cveId: vuln.cveId || vuln.id || 'UNKNOWN',
+  const appendFinding = (vuln: any, packageName: string, version: string) => {
+    findings.push({
+      cveId: vuln.cveId || vuln.id || vuln.vulnerabilityId || 'UNKNOWN',
       severity: (vuln.severity || 'info').toLowerCase() as any,
-      package: vuln.packageName || vuln.component || 'unknown',
-      version: vuln.version || 'unknown',
-      fixedVersion: vuln.fixedVersion,
+      package: packageName,
+      version,
+      fixedVersion: vuln.fixedVersion || vuln.fix?.versions?.[0],
       description: vuln.description || '',
-      cvssScore: parseFloat(vuln.cvssScore || '0') || 0,
+      cvssScore: parseFloat(vuln.cvssScore || vuln.cvss?.baseScore || '0') || 0,
       source: 'enterprise',
-    };
+    });
+  };
 
-    findings.push(finding);
+  if (apiResponse && Array.isArray(apiResponse.vulnerabilities)) {
+    for (const vuln of apiResponse.vulnerabilities) {
+      appendFinding(vuln, vuln.packageName || vuln.component || 'unknown', vuln.version || 'unknown');
+    }
+    return findings;
+  }
+
+  if (apiResponse && Array.isArray(apiResponse.components)) {
+    for (const component of apiResponse.components) {
+      const componentName = component?.name || 'unknown';
+      const componentVersion = component?.version || 'unknown';
+      const vulnerabilities = Array.isArray(component?.vulnerabilities) ? component.vulnerabilities : [];
+
+      for (const vuln of vulnerabilities) {
+        appendFinding(vuln, componentName, componentVersion);
+      }
+    }
+    return findings;
+  }
+
+  if (apiResponse && Array.isArray(apiResponse.matches)) {
+    for (const match of apiResponse.matches) {
+      const vuln = match?.vulnerability || {};
+      const artifact = match?.artifact || {};
+      appendFinding(vuln, artifact.name || 'unknown', artifact.version || 'unknown');
+    }
   }
 
   return findings;
+}
+
+async function runCodescoringApiScan(
+  components: NormalizedComponent[],
+  scanId: string,
+  apiKey: string,
+  apiUrl: string,
+): Promise<CodescoringFinding[]> {
+  let projectId: string | null = null;
+
+  try {
+    const client = new CodescoringApiClient(apiKey, apiUrl);
+    const projectName = `scan-${scanId}-${Date.now()}`;
+
+    projectId = await client.createProject(projectName);
+    console.log(`[Codescoring] Created project ${projectId}`);
+
+    await client.uploadSbom(projectId, components);
+    console.log(`[Codescoring] Uploaded SBOM to project ${projectId}`);
+
+    const startTime = Date.now();
+    await client.pollProjectStatus(projectId);
+    const durationMs = Date.now() - startTime;
+    console.log(`[Codescoring] Scan completed in ${durationMs}ms`);
+
+    const apiResponse = await client.getVulnerabilities(projectId);
+    const findings = parseCodescoringResponse(apiResponse);
+    console.log(`[Codescoring] Found ${findings.length} vulnerabilities`);
+
+    await client.deleteProject(projectId);
+
+    return findings;
+  } catch (error) {
+    console.error('[Codescoring] Scan failed:', error);
+
+    if (projectId) {
+      try {
+        const client = new CodescoringApiClient(apiKey, apiUrl);
+        await client.deleteProject(projectId);
+      } catch (cleanupError) {
+        console.error('[Codescoring] Failed to cleanup project:', cleanupError);
+      }
+    }
+
+    throw error;
+  }
 }
 
 /**
@@ -283,64 +352,52 @@ export async function scanWithCodescoring(
   scanId: string,
   timeoutMs: number = 300000
 ): Promise<CodescoringFinding[]> {
+  const runtimeMode = (process.env.CODESCORING_RUNTIME?.trim().toLowerCase() || 'auto') as 'auto' | 'ssh' | 'api' | 'mock';
   const apiKey = process.env.CODESCORING_API_KEY;
   const apiUrl = process.env.CODESCORING_API_URL || 'https://api.codescoring.example.com';
+  const sshConfigured = isJohnnyRemoteConfigured();
 
-  // Use mock mode if API key not configured
-  if (!apiKey) {
-    console.log('[Codescoring] Using mock Codescoring results (real API not configured)');
+  if (runtimeMode === 'mock') {
+    console.log('[Codescoring] Using mock Codescoring results (runtime forced to mock)');
     return generateMockFindings(components);
   }
 
-  let projectId: string | null = null;
-
-  try {
-    const client = new CodescoringApiClient(apiKey, apiUrl);
-    const projectName = `scan-${scanId}-${Date.now()}`;
-
-    // Create project
-    projectId = await client.createProject(projectName);
-    console.log(`[Codescoring] Created project ${projectId}`);
-
-    // Upload SBOM
-    await client.uploadSbom(projectId, components);
-    console.log(`[Codescoring] Uploaded SBOM to project ${projectId}`);
-
-    // Poll for completion
-    const startTime = Date.now();
-    await client.pollProjectStatus(projectId);
-    const durationMs = Date.now() - startTime;
-    console.log(`[Codescoring] Scan completed in ${durationMs}ms`);
-
-    // Get vulnerabilities
-    const apiResponse = await client.getVulnerabilities(projectId);
-    const findings = parseCodescoringResponse(apiResponse);
-    console.log(`[Codescoring] Found ${findings.length} vulnerabilities`);
-
-    // Cleanup
-    await client.deleteProject(projectId);
-
-    return findings;
-  } catch (error) {
-    console.error('[Codescoring] Scan failed:', error);
-
-    // Attempt cleanup on error
-    if (projectId) {
-      try {
-        const client = new CodescoringApiClient(apiKey, apiUrl);
-        await client.deleteProject(projectId);
-      } catch (cleanupError) {
-        console.error('[Codescoring] Failed to cleanup project:', cleanupError);
-      }
+  if (runtimeMode === 'ssh' || (runtimeMode === 'auto' && sshConfigured)) {
+    if (!sshConfigured) {
+      throw new Error('CodeScoring Johnny SSH runtime is not configured');
     }
 
-    throw error;
+    try {
+      const rawOutput = runJohnnyScanViaSsh(components, scanId, timeoutMs);
+      const parsedOutput = rawOutput.trim().length > 0 ? JSON.parse(rawOutput) : { vulnerabilities: [] };
+      const findings = parseCodescoringResponse(parsedOutput);
+      console.log(`[Codescoring] Johnny SSH scan returned ${findings.length} vulnerabilities`);
+      return findings;
+    } catch (error) {
+      console.error('[Codescoring] Johnny SSH scan failed:', error);
+      if (runtimeMode === 'ssh') {
+        throw error;
+      }
+    }
   }
+
+  if (runtimeMode === 'api' || (runtimeMode === 'auto' && apiKey)) {
+    if (!apiKey) {
+      if (runtimeMode === 'api') {
+        throw new Error('CodeScoring API runtime is not configured');
+      }
+    } else {
+      return runCodescoringApiScan(components, scanId, apiKey, apiUrl);
+    }
+  }
+
+  console.log('[Codescoring] Using mock Codescoring results');
+  return generateMockFindings(components);
 }
 
 /**
  * Check if Codescoring API is configured
  */
 export function isCodescoringConfigured(): boolean {
-  return !!process.env.CODESCORING_API_KEY;
+  return !!process.env.CODESCORING_API_KEY || !!process.env.CODESCORING_SSH_HOST;
 }

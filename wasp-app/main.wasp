@@ -498,6 +498,20 @@ api updateNotificationSettingsApi {
   entities: [User],
   httpRoute: (POST, "/api/v1/settings/notifications")
 }
+
+// GET /api/v1/settings/scanner-access - Get scanner access settings and health
+api getScannerAccessSettingsApi {
+  fn: import { getScannerAccessSettingsApiHandler } from "@src/server/operations/settings/handlers",
+  entities: [User],
+  httpRoute: (GET, "/api/v1/settings/scanner-access")
+}
+
+// POST /api/v1/settings/scanner-access - Update scanner access settings
+api updateScannerAccessSettingsApi {
+  fn: import { updateScannerAccessSettingsApiHandler } from "@src/server/operations/settings/handlers",
+  entities: [User],
+  httpRoute: (POST, "/api/v1/settings/scanner-access")
+}
 //#endregion Settings
 
 api swaggerSpec {

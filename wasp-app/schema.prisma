@@ -62,6 +62,7 @@ model User {
   // Profile fields
   displayName               String?         @map("display_name")
   isAdmin                   Boolean         @default(false)
+  snykApiKeyEncrypted       Bytes?          @map("snyk_api_key_encrypted")
 
   // Billing fields
   plan                      PlanTier        @default(free_trial)

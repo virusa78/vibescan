@@ -31,18 +31,18 @@ interface UpdateUserStripeCustomerIdArgs {
 export function updateUserStripeCustomerId(
   { userId, stripeCustomerId }: UpdateUserStripeCustomerIdArgs,
   prismaUserDelegate: PrismaClient["user"],
-): Promise<User> {
+): Promise<void> {
   return prismaUserDelegate.update({
     where: { id: userId },
     data: { stripeCustomerId },
-  });
+  }).then(() => undefined);
 }
 
 // Legacy alias for backwards compatibility
 export function updateUserPaymentProcessorUserId(
   { userId, paymentProcessorUserId }: { userId: User["id"]; paymentProcessorUserId: string },
   prismaUserDelegate: PrismaClient["user"],
-): Promise<User> {
+): Promise<void> {
   return updateUserStripeCustomerId({ userId, stripeCustomerId: paymentProcessorUserId }, prismaUserDelegate);
 }
 
@@ -56,12 +56,12 @@ interface UpdateUserSubscriptionArgs {
 export function updateUserSubscription(
   { stripeCustomerId, plan, subscriptionStatus }: UpdateUserSubscriptionArgs,
   userDelegate: PrismaClient["user"],
-): Promise<User> {
+): Promise<void> {
   return userDelegate.update({
     where: { stripeCustomerId },
     data: {
       subscriptionStatus,
       plan: plan as any,
     },
-  });
+  }).then(() => undefined);
 }
