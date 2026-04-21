@@ -45,12 +45,30 @@
  *     parameters:
  *       - name: limit
  *         in: query
- *         description: Maximum number of recent scans to return (1-20)
+ *         description: Maximum number of recent scans to return (1-50)
  *         schema:
  *           type: integer
  *           minimum: 1
- *           maximum: 20
+ *           maximum: 50
  *           default: 10
+ *       - name: status
+ *         in: query
+ *         description: Optional status filter (comma-separated values)
+ *         schema:
+ *           type: string
+ *           example: pending,scanning,done
+ *       - name: q
+ *         in: query
+ *         description: Optional fuzzy search by target, CVE, or scan ID
+ *         schema:
+ *           type: string
+ *           example: CVE-2024-1234
+ *       - name: sort
+ *         in: query
+ *         description: Optional sort descriptors as `field:direction`, comma-separated
+ *         schema:
+ *           type: string
+ *           example: submitted:desc,findings:desc
  *     responses:
  *       200:
  *         description: List of recent scans
@@ -110,6 +128,42 @@
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/QuotaStatusResponse'
+ *       401:
+ *         description: User not authenticated
+ *
+ * /api/v1/dashboard/trends:
+ *   get:
+ *     summary: Get dashboard trend series
+ *     description: |
+ *       Retrieve time-series trend buckets for scans, findings, and delta values.
+ *       Supports configurable time range and optional granularity.
+ *     operationId: getTrendSeries
+ *     tags:
+ *       - Dashboard
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - name: time_range
+ *         in: query
+ *         description: Time range for aggregation
+ *         schema:
+ *           type: string
+ *           enum: ['7d', '30d', 'all']
+ *           default: '30d'
+ *       - name: granularity
+ *         in: query
+ *         description: Optional bucket size override
+ *         schema:
+ *           type: string
+ *           enum: ['day', 'week']
+ *     responses:
+ *       200:
+ *         description: Trend series response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TrendSeriesResponse'
  *       401:
  *         description: User not authenticated
  */

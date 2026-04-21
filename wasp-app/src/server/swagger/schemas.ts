@@ -648,6 +648,46 @@ export const schemas = {
     },
   },
 
+  TrendBucket: {
+    type: 'object',
+    properties: {
+      bucket_start: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Start timestamp of the aggregation bucket (UTC)',
+      },
+      scans: { type: 'integer', description: 'Number of scans in bucket' },
+      findings: { type: 'integer', description: 'Number of active findings in bucket' },
+      delta: { type: 'integer', description: 'Sum of delta findings in bucket' },
+    },
+  },
+
+  TrendSeriesResponse: {
+    type: 'object',
+    properties: {
+      time_range: {
+        type: 'string',
+        enum: ['7d', '30d', 'all'],
+      },
+      granularity: {
+        type: 'string',
+        enum: ['day', 'week'],
+      },
+      buckets: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TrendBucket' },
+      },
+      totals: {
+        type: 'object',
+        properties: {
+          scans: { type: 'integer' },
+          findings: { type: 'integer' },
+          delta: { type: 'integer' },
+        },
+      },
+    },
+  },
+
   // ============================================
   // Profile Settings
   // ============================================

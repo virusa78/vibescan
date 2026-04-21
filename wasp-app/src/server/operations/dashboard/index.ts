@@ -6,3 +6,9 @@ export {
   type SeverityBreakdownResponse,
 } from './getSeverityBreakdown';
 export { getQuotaStatus, type QuotaStatusResponse } from './getQuotaStatus';
+export {
+  getTrendSeries,
+  type GetTrendSeriesInput,
+  type TrendSeriesResponse,
+  type TrendGranularity,
+} from './getTrendSeries';

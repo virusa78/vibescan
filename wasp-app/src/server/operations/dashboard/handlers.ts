@@ -4,15 +4,25 @@ import {
   getRecentScans,
   getSeverityBreakdown,
   getQuotaStatus,
+  getTrendSeries,
   type GetDashboardMetricsInput,
   type GetRecentScansInput,
   type GetSeverityBreakdownInput,
+  type GetTrendSeriesInput,
+  type TrendGranularity,
 } from './index';
 import { resolveRequestUser } from '../../services/requestAuth';
 import { sendOperationError } from '../../http/httpErrors';
 import type { HandlerContext, HandlerRequest } from '../../http/handlerTypes';
 
 type DashboardTimeRange = '7d' | '30d' | 'all';
+type DashboardScanStatus = 'pending' | 'scanning' | 'done' | 'error' | 'cancelled';
+type DashboardSortField = 'submitted' | 'target' | 'type' | 'status' | 'findings';
+type DashboardSortDirection = 'asc' | 'desc';
+
+const allowedStatuses = new Set<DashboardScanStatus>(['pending', 'scanning', 'done', 'error', 'cancelled']);
+const allowedSortFields = new Set<DashboardSortField>(['submitted', 'target', 'type', 'status', 'findings']);
+const allowedSortDirections = new Set<DashboardSortDirection>(['asc', 'desc']);
 
 function normalizeTimeRange(value: string | string[] | undefined): DashboardTimeRange {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -20,6 +30,59 @@ function normalizeTimeRange(value: string | string[] | undefined): DashboardTime
     return raw;
   }
   return '30d';
+}
+
+function normalizeGranularity(value: string | string[] | undefined): TrendGranularity | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === 'day' || raw === 'week') {
+    return raw;
+  }
+  return undefined;
+}
+
+function normalizeStatuses(value: string | string[] | undefined): DashboardScanStatus[] {
+  if (!value) {
+    return [];
+  }
+
+  const raw = Array.isArray(value) ? value : [value];
+  return Array.from(
+    new Set(
+      raw
+        .flatMap((item) => item.split(','))
+        .map((item) => item.trim())
+        .filter((item): item is DashboardScanStatus => allowedStatuses.has(item as DashboardScanStatus)),
+    ),
+  );
+}
+
+function normalizeSort(
+  value: string | string[] | undefined,
+): Array<{ field: DashboardSortField; direction: DashboardSortDirection }> {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw) {
+    return [{ field: 'submitted', direction: 'desc' }];
+  }
+
+  const parsed = raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [fieldRaw, directionRaw] = entry.split(':');
+      const field = fieldRaw?.trim() as DashboardSortField | undefined;
+      const direction = directionRaw?.trim() as DashboardSortDirection | undefined;
+      if (!field || !direction) {
+        return null;
+      }
+      if (!allowedSortFields.has(field) || !allowedSortDirections.has(direction)) {
+        return null;
+      }
+      return { field, direction };
+    })
+    .filter((value): value is { field: DashboardSortField; direction: DashboardSortDirection } => value !== null);
+
+  return parsed.length > 0 ? parsed : [{ field: 'submitted', direction: 'desc' }];
 }
 
 export async function getDashboardMetricsApiHandler(
@@ -45,9 +108,20 @@ export async function getRecentScansApiHandler(
 ) {
   try {
     const limitParam = request.query.limit as string | string[] | undefined;
-    const limit = limitParam ? parseInt(Array.isArray(limitParam) ? limitParam[0] : limitParam) : 10;
+    const statusParam = request.query.status as string | string[] | undefined;
+    const searchParam = request.query.q as string | string[] | undefined;
+    const sortParam = request.query.sort as string | string[] | undefined;
+
+    const limit = limitParam ? parseInt(Array.isArray(limitParam) ? limitParam[0] : limitParam, 10) : 10;
     const user = await resolveRequestUser(request, context);
-    const args: GetRecentScansInput = { limit: Math.min(Math.max(limit, 1), 20) };
+    const args: GetRecentScansInput = {
+      limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 50) : 10,
+      status: normalizeStatuses(statusParam),
+      sort: normalizeSort(sortParam),
+      ...((Array.isArray(searchParam) ? searchParam[0] : searchParam)?.trim()
+        ? { q: (Array.isArray(searchParam) ? searchParam[0] : searchParam)?.trim() }
+        : {}),
+    };
     const result = await getRecentScans(args, { user, entities: context.entities });
     response.status(200).json(result);
   } catch (error) {
@@ -79,6 +153,26 @@ export async function getQuotaStatusApiHandler(
   try {
     const user = await resolveRequestUser(request, context);
     const result = await getQuotaStatus({}, { user, entities: context.entities });
+    response.status(200).json(result);
+  } catch (error) {
+    sendOperationError('dashboard-operation', error, response);
+  }
+}
+
+export async function getTrendSeriesApiHandler(
+  request: HandlerRequest,
+  response: Response,
+  context: HandlerContext
+) {
+  try {
+    const timeRange = normalizeTimeRange(request.query.time_range as string | string[] | undefined);
+    const granularity = normalizeGranularity(request.query.granularity as string | string[] | undefined);
+    const user = await resolveRequestUser(request, context);
+    const args: GetTrendSeriesInput = {
+      time_range: timeRange,
+      ...(granularity ? { granularity } : {}),
+    };
+    const result = await getTrendSeries(args, { user, entities: context.entities });
     response.status(200).json(result);
   } catch (error) {
     sendOperationError('dashboard-operation', error, response);
