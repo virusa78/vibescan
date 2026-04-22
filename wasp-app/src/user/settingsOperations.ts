@@ -14,17 +14,32 @@ const updateUserSettingsInputSchema = z.object({
   region: z.enum(["IN", "PK", "OTHER"]).optional(),
 });
 
+type PublicUserSettings = {
+  id: string;
+  displayName: string | null;
+  timezone: string | null;
+  language: string | null;
+  region: string;
+};
+
 // Get current user profile/settings
 export const getUserSettings = async (
   _args: unknown,
   context: AuthContext
-): Promise<User | null> => {
+): Promise<PublicUserSettings | null> => {
   if (!context.user) {
     throw new HttpError(401, "User not authenticated");
   }
 
   return prisma.user.findUnique({
     where: { id: context.user.id },
+    select: {
+      id: true,
+      displayName: true,
+      timezone: true,
+      language: true,
+      region: true,
+    },
   });
 };
 
@@ -32,7 +47,7 @@ export const getUserSettings = async (
 export const updateUserSettings = async (
   rawArgs: unknown,
   context: AuthContext
-): Promise<User> => {
+): Promise<void> => {
   if (!context.user) {
     throw new HttpError(401, "User not authenticated");
   }
@@ -42,7 +57,7 @@ export const updateUserSettings = async (
     rawArgs,
   );
 
-  return prisma.user.update({
+  await prisma.user.update({
     where: { id: context.user.id },
     data: {
       displayName: args.displayName,

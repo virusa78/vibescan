@@ -4,8 +4,11 @@ import {
   updateProfileSettings,
   getNotificationSettings,
   updateNotificationSettings,
+  getScannerAccessSettings,
+  updateScannerAccessSettings,
   type UpdateProfileSettingsInput,
   type UpdateNotificationSettingsInput,
+  type UpdateScannerAccessSettingsInput,
 } from './index';
 import { resolveRequestUser } from '../../services/requestAuth';
 import { parseJsonBodyWithLimit, enforceRateLimit, getRateLimitKey } from '../../http/requestGuards';
@@ -63,8 +66,12 @@ export async function getNotificationSettingsApiHandler(
   context: HandlerContext
 ) {
   try {
+    const projectKeyParam = request.query.project_key as string | string[] | undefined;
+    const projectKey = Array.isArray(projectKeyParam) ? projectKeyParam[0] : projectKeyParam;
     const result = await getNotificationSettings(
-      {},
+      {
+        project_key: projectKey,
+      },
       {
         user: await resolveRequestUser(request, context),
         entities: context.entities,
@@ -93,6 +100,54 @@ export async function updateNotificationSettingsApiHandler(
 
     const result = await updateNotificationSettings(
       body as UpdateNotificationSettingsInput,
+      {
+        user,
+        entities: context.entities,
+      }
+    );
+
+    response.status(200).json(result);
+  } catch (error) {
+    sendOperationError('settings-operation', error, response);
+  }
+}
+
+export async function getScannerAccessSettingsApiHandler(
+  request: HandlerRequest,
+  response: Response,
+  context: HandlerContext
+) {
+  try {
+    const result = await getScannerAccessSettings(
+      {},
+      {
+        user: await resolveRequestUser(request, context),
+        entities: context.entities,
+      }
+    );
+
+    response.status(200).json(result);
+  } catch (error) {
+    sendOperationError('settings-operation', error, response);
+  }
+}
+
+export async function updateScannerAccessSettingsApiHandler(
+  request: HandlerRequest,
+  response: Response,
+  context: HandlerContext
+) {
+  try {
+    const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
+    const user = await resolveRequestUser(request, context);
+    await enforceRateLimit({
+      key: getRateLimitKey('settings-scanner-access', user?.id || request.ip || 'anonymous'),
+      limit: 20,
+      windowSeconds: 60,
+    });
+
+    const result = await updateScannerAccessSettings(
+      body as UpdateScannerAccessSettingsInput,
       {
         user,
         entities: context.entities,

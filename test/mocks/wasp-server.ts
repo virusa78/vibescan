@@ -16,6 +16,29 @@ export const prisma = {
         findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         update: jest.fn() as jest.MockedFunction<() => Promise<any>>,
     },
+    aiFixPrompt: {
+        findFirst: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        findUnique: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        count: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        create: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+    },
+    finding: {
+        findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        findUnique: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+    },
+    projectNotificationSetting: {
+        findUnique: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        upsert: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+    },
+    scan: {
+        findUnique: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        findFirst: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        count: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+    },
+    scanDelta: {
+        findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+    },
     user: {
         findUnique: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         update: jest.fn() as jest.MockedFunction<() => Promise<any>>,

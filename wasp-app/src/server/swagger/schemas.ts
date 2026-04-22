@@ -215,6 +215,47 @@ export const schemas = {
     },
   },
 
+  ScannerHealthSnapshot: {
+    type: 'object',
+    properties: {
+      kind: { type: 'string', enum: ['johnny', 'snyk'] },
+      configured: { type: 'boolean' },
+      healthy: { type: 'boolean', nullable: true },
+      checkedAt: { type: 'string', format: 'date-time', nullable: true },
+      healthyAt: { type: 'string', format: 'date-time', nullable: true },
+      host: { type: 'string', nullable: true },
+      probeDirectory: { type: 'string', nullable: true },
+      probeCommand: { type: 'string', nullable: true },
+      error: { type: 'string', nullable: true },
+    },
+  },
+
+  ScannerAccessResponse: {
+    type: 'object',
+    properties: {
+      snyk_api_key_attached: { type: 'boolean' },
+      snyk_api_key_preview: { type: 'string', nullable: true },
+      scanner_health: {
+        type: 'object',
+        properties: {
+          johnny: { $ref: '#/components/schemas/ScannerHealthSnapshot' },
+          snyk: { $ref: '#/components/schemas/ScannerHealthSnapshot' },
+        },
+      },
+    },
+  },
+
+  UpdateScannerAccessRequest: {
+    type: 'object',
+    properties: {
+      snyk_api_key: {
+        type: 'string',
+        nullable: true,
+        description: 'User-owned Snyk API key. Empty or null clears the stored key.',
+      },
+    },
+  },
+
   // ============================================
   // Error Responses
   // ============================================
@@ -380,6 +421,37 @@ export const schemas = {
       },
       reason: { type: 'string', description: 'Human-readable result message' },
       criticalIssues: { type: 'integer', description: 'Number of critical vulnerabilities' },
+    },
+  },
+
+  LatestRemediationPayload: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      requestKey: { type: 'string' },
+      promptType: { type: 'string', enum: ['quick_fix', 'patch', 'verification'] },
+      provider: { type: 'string', enum: ['local', 'openai'] },
+      modelName: { type: 'string', nullable: true },
+      createdAt: { type: 'string', format: 'date-time' },
+      responsePayload: {
+        type: 'object',
+        description: 'Structured remediation guidance payload',
+      },
+    },
+  },
+
+  LatestRemediationResponse: {
+    type: 'object',
+    properties: {
+      scanId: { type: 'string', format: 'uuid' },
+      findingId: { type: 'string', format: 'uuid' },
+      has_remediation: { type: 'boolean' },
+      remediation: {
+        oneOf: [
+          { $ref: '#/components/schemas/LatestRemediationPayload' },
+          { type: 'null' },
+        ],
+      },
     },
   },
 
@@ -648,6 +720,46 @@ export const schemas = {
     },
   },
 
+  TrendBucket: {
+    type: 'object',
+    properties: {
+      bucket_start: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Start timestamp of the aggregation bucket (UTC)',
+      },
+      scans: { type: 'integer', description: 'Number of scans in bucket' },
+      findings: { type: 'integer', description: 'Number of active findings in bucket' },
+      delta: { type: 'integer', description: 'Sum of delta findings in bucket' },
+    },
+  },
+
+  TrendSeriesResponse: {
+    type: 'object',
+    properties: {
+      time_range: {
+        type: 'string',
+        enum: ['7d', '30d', 'all'],
+      },
+      granularity: {
+        type: 'string',
+        enum: ['day', 'week'],
+      },
+      buckets: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TrendBucket' },
+      },
+      totals: {
+        type: 'object',
+        properties: {
+          scans: { type: 'integer' },
+          findings: { type: 'integer' },
+          delta: { type: 'integer' },
+        },
+      },
+    },
+  },
+
   // ============================================
   // Profile Settings
   // ============================================
@@ -699,6 +811,11 @@ export const schemas = {
   NotificationSettingsResponse: {
     type: 'object',
     properties: {
+      project_key: {
+        type: 'string',
+        description: 'Project identifier that these preferences belong to',
+        example: 'default',
+      },
       email_on_scan_complete: {
         type: 'boolean',
         description: 'Receive email when scan completes',
@@ -721,6 +838,11 @@ export const schemas = {
   UpdateNotificationSettingsRequest: {
     type: 'object',
     properties: {
+      project_key: {
+        type: 'string',
+        description: 'Project identifier for project-scoped notification settings',
+        example: 'owner/repo',
+      },
       email_on_scan_complete: {
         type: 'boolean',
         description: 'Receive email when scan completes',

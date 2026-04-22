@@ -320,6 +320,13 @@ api getSeverityBreakdownApi {
   httpRoute: (GET, "/api/v1/dashboard/severity-breakdown")
 }
 
+// GET /api/v1/dashboard/trends - Get trend series for scans/findings/delta
+api getDashboardTrendsApi {
+  fn: import { getTrendSeriesApiHandler } from "@src/server/operations/dashboard/handlers",
+  entities: [User, Scan, Finding, ScanDelta],
+  httpRoute: (GET, "/api/v1/dashboard/trends")
+}
+
 // GET /api/v1/dashboard/quota - Get quota status
 api getQuotaStatusApi {
   fn: import { getQuotaStatusApiHandler } from "@src/server/operations/dashboard/handlers",
@@ -490,6 +497,20 @@ api updateNotificationSettingsApi {
   fn: import { updateNotificationSettingsApiHandler } from "@src/server/operations/settings/handlers",
   entities: [User],
   httpRoute: (POST, "/api/v1/settings/notifications")
+}
+
+// GET /api/v1/settings/scanner-access - Get scanner access settings and health
+api getScannerAccessSettingsApi {
+  fn: import { getScannerAccessSettingsApiHandler } from "@src/server/operations/settings/handlers",
+  entities: [User],
+  httpRoute: (GET, "/api/v1/settings/scanner-access")
+}
+
+// POST /api/v1/settings/scanner-access - Update scanner access settings
+api updateScannerAccessSettingsApi {
+  fn: import { updateScannerAccessSettingsApiHandler } from "@src/server/operations/settings/handlers",
+  entities: [User],
+  httpRoute: (POST, "/api/v1/settings/scanner-access")
 }
 //#endregion Settings
 
