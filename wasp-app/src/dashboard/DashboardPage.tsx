@@ -1,16 +1,29 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { BarChart3, Bug, TrendingUp, Zap } from 'lucide-react';
+import { api } from 'wasp/client/api';
+import { toast } from '../client/hooks/use-toast';
 import { MetricCard } from '../client/components/common/MetricCard';
 import { ScanTable } from '../client/components/common/ScanTable';
 import { SeverityChart } from '../client/components/common/SeverityChart';
 import { EmptyState } from '../client/components/common/EmptyState';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
 import { useAsyncState } from '../client/hooks/useAsyncState';
-import { api } from 'wasp/client/api';
+import {
+  type DashboardSortDirection,
+  type DashboardSortField,
+  type DashboardStatus,
+  buildDashboardSearch,
+  normalizeStatusValue,
+  parseDashboardSearch,
+} from './urlState';
+import { isEditableTarget } from '../client/utils/keyboard';
+
+type DashboardTimeRange = '7d' | '30d' | 'all';
 
 interface Scan {
   id: string;
-  status: string;
+  status: DashboardStatus;
   inputType: string;
   inputRef: string;
   createdAt: Date;
@@ -27,8 +40,6 @@ interface SeverityBreakdown {
   info: number;
   total: number;
 }
-
-type DashboardTimeRange = '7d' | '30d' | 'all';
 
 interface TrendBucket {
   bucket_start: string;
@@ -48,7 +59,54 @@ interface TrendSeriesResponse {
   };
 }
 
+interface RecentScanApiRecord {
+  id: string;
+  status: string;
+  inputType: string;
+  inputRef: string;
+  createdAt?: string | number | Date;
+  created_at?: string | number | Date;
+  completedAt?: string | number | Date | null;
+  completed_at?: string | number | Date | null;
+  vulnerability_count?: number;
+  findingsCount?: number;
+  planAtSubmission?: string;
+  plan_at_submission?: string;
+}
+
+function normalizeScanStatus(raw: string): DashboardStatus {
+  const normalized = normalizeStatusValue(raw);
+  return normalized ?? 'pending';
+}
+
+function normalizeStatusCounts(rawCounts: Partial<Record<string, number>> | null | undefined): Record<DashboardStatus, number> {
+  const counts: Record<DashboardStatus, number> = {
+    pending: 0,
+    scanning: 0,
+    done: 0,
+    error: 0,
+    cancelled: 0,
+  };
+
+  if (!rawCounts) {
+    return counts;
+  }
+
+  for (const [key, value] of Object.entries(rawCounts)) {
+    const normalized = normalizeStatusValue(key);
+    if (!normalized) continue;
+    counts[normalized] += Number.isFinite(value) ? Number(value) : 0;
+  }
+
+  return counts;
+}
+
 export default function DashboardPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const parsedSearch = useMemo(() => parseDashboardSearch(location.search), [location.search]);
+
   const [scans, setScans] = useState<Scan[]>([]);
   const { isLoading, error, run } = useAsyncState(true);
   const [timeRange, setTimeRange] = useState<DashboardTimeRange>('30d');
@@ -60,6 +118,13 @@ export default function DashboardPage() {
     info: 0,
     total: 0,
   });
+  const [statusCounts, setStatusCounts] = useState<Record<DashboardStatus, number>>({
+    pending: 0,
+    scanning: 0,
+    done: 0,
+    error: 0,
+    cancelled: 0,
+  });
   const [quota, setQuota] = useState<{
     used: number;
     limit: number;
@@ -67,33 +132,108 @@ export default function DashboardPage() {
     monthly_reset_date?: string;
   } | null>(null);
   const [trends, setTrends] = useState<TrendSeriesResponse | null>(null);
+  const [searchInputValue, setSearchInputValue] = useState(parsedSearch.query);
+  const [totalCount, setTotalCount] = useState(0);
+  const [filteredCount, setFilteredCount] = useState(0);
+  const [refreshTick, setRefreshTick] = useState(0);
 
-  // Load data from API
+  useEffect(() => {
+    if (parsedSearch.isValid) return;
+
+    navigate(
+      {
+        pathname: location.pathname,
+        search: parsedSearch.normalizedSearch,
+      },
+      { replace: true },
+    );
+  }, [location.pathname, navigate, parsedSearch.isValid, parsedSearch.normalizedSearch]);
+
+  useEffect(() => {
+    setSearchInputValue(parsedSearch.query);
+  }, [parsedSearch.query]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const nextQuery = searchInputValue.trim();
+      if (nextQuery === parsedSearch.query) {
+        return;
+      }
+
+      const nextSearch = buildDashboardSearch(
+        parsedSearch.sortField,
+        parsedSearch.sortDirection,
+        parsedSearch.statuses,
+        nextQuery,
+      );
+
+      navigate({ pathname: location.pathname, search: nextSearch }, { replace: true });
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [
+    location.pathname,
+    navigate,
+    parsedSearch.query,
+    parsedSearch.sortDirection,
+    parsedSearch.sortField,
+    parsedSearch.statuses,
+    searchInputValue,
+  ]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== '/' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+
+      event.preventDefault();
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   useEffect(() => {
     run(
       async () => {
-        // Fetch scans from API
-        const scansRes = await api.get('/api/v1/dashboard/recent-scans?limit=10');
+        const scansRes = await api.get('/api/v1/dashboard/recent-scans', {
+          params: {
+            limit: 10,
+            sort: `${parsedSearch.sortField}:${parsedSearch.sortDirection}`,
+            ...(parsedSearch.statuses.length > 0 ? { status: parsedSearch.statuses.join(',') } : {}),
+            ...(parsedSearch.query ? { q: parsedSearch.query } : {}),
+          },
+        });
+
         const scansData = scansRes.data;
-        const formattedScans = (scansData.scans || []).map((scan: any) => {
+        const formattedScans = ((scansData.scans || []) as RecentScanApiRecord[]).map((scan) => {
           const createdAtValue = scan.createdAt ?? scan.created_at ?? Date.now();
           const completedAtValue = scan.completedAt ?? scan.completed_at;
 
           return {
-          id: scan.id,
-          status: scan.status,
-          inputType: scan.inputType,
-          inputRef: scan.inputRef,
-          createdAt: new Date(createdAtValue),
-          completedAt: completedAtValue ? new Date(completedAtValue) : null,
-          findingsCount: scan.vulnerability_count ?? scan.findingsCount ?? 0,
-          planAtSubmission: scan.planAtSubmission ?? scan.plan_at_submission,
+            id: scan.id,
+            status: normalizeScanStatus(scan.status),
+            inputType: scan.inputType,
+            inputRef: scan.inputRef,
+            createdAt: new Date(createdAtValue),
+            completedAt: completedAtValue ? new Date(completedAtValue) : null,
+            findingsCount: scan.vulnerability_count ?? scan.findingsCount ?? 0,
+            planAtSubmission: scan.planAtSubmission ?? scan.plan_at_submission,
           };
         });
 
         setScans(formattedScans);
+        setStatusCounts(normalizeStatusCounts(scansData.status_counts));
+        setTotalCount(Number(scansData.total_count ?? 0));
+        setFilteredCount(Number(scansData.filtered_count ?? formattedScans.length));
 
-        // Fetch additional data from API
         const [quotaRes, severityRes, trendsRes] = await Promise.all([
           api.get('/api/v1/dashboard/quota'),
           api.get('/api/v1/dashboard/severity-breakdown', {
@@ -105,7 +245,6 @@ export default function DashboardPage() {
         ]);
 
         setQuota(quotaRes.data);
-
         setSeverity(severityRes.data);
         setTrends(trendsRes.data);
       },
@@ -116,24 +255,21 @@ export default function DashboardPage() {
         },
       },
     );
-  }, [run, timeRange]);
+  }, [parsedSearch.query, parsedSearch.sortDirection, parsedSearch.sortField, parsedSearch.statuses, refreshTick, run, timeRange]);
 
-  // Calculate metrics
   const metrics = useMemo(() => {
-    const completed = scans.filter(s => s.status === 'done' || s.status === 'completed');
-    const totalVulnerabilities = completed.reduce((sum, s) => sum + (s.findingsCount || 0), 0);
-    const running = scans.filter(s =>
-      ['pending', 'scanning', 'running', 'queued'].includes(s.status.toLowerCase())
-    ).length;
+    const completed = scans.filter((scan) => scan.status === 'done');
+    const totalVulnerabilities = completed.reduce((sum, scan) => sum + (scan.findingsCount || 0), 0);
+    const running = scans.filter((scan) => scan.status === 'pending' || scan.status === 'scanning').length;
 
     const avgSeverity =
       severity.critical > 0
         ? 'Critical'
         : severity.high > 0
-        ? 'High'
-        : severity.medium > 0
-        ? 'Medium'
-        : 'Low';
+          ? 'High'
+          : severity.medium > 0
+            ? 'Medium'
+            : 'Low';
 
     return {
       totalScans: completed.length,
@@ -143,10 +279,13 @@ export default function DashboardPage() {
     };
   }, [scans, severity]);
 
-  // Format scans for table
+  const scansById = useMemo(() => {
+    return new Map(scans.map((scan) => [scan.id, scan]));
+  }, [scans]);
+
   const tableScans = useMemo(
     () =>
-      scans.map(scan => ({
+      scans.map((scan) => ({
         id: scan.id,
         status: scan.status,
         inputType: scan.inputType,
@@ -154,7 +293,7 @@ export default function DashboardPage() {
         created_at: scan.createdAt.toISOString(),
         vulnerability_count: scan.findingsCount || 0,
       })),
-    [scans]
+    [scans],
   );
 
   const statCards = [
@@ -198,15 +337,82 @@ export default function DashboardPage() {
     () => (trends?.buckets ?? []).slice(-12),
     [trends],
   );
+
   const maxTrendValue = useMemo(() => {
     return visibleTrendBuckets.reduce((max, bucket) => {
       return Math.max(max, bucket.scans, bucket.findings, bucket.delta);
     }, 1);
   }, [visibleTrendBuckets]);
 
+  const handleSortChange = (field: DashboardSortField) => {
+    const nextDirection: DashboardSortDirection =
+      field === parsedSearch.sortField && parsedSearch.sortDirection === 'asc' ? 'desc' : 'asc';
+    const nextSearch = buildDashboardSearch(field, nextDirection, parsedSearch.statuses, parsedSearch.query);
+    navigate({ pathname: location.pathname, search: nextSearch }, { replace: false });
+  };
+
+  const handleToggleStatus = (status: DashboardStatus) => {
+    const nextStatuses = parsedSearch.statuses.includes(status)
+      ? parsedSearch.statuses.filter((value) => value !== status)
+      : [...parsedSearch.statuses, status];
+
+    const nextSearch = buildDashboardSearch(parsedSearch.sortField, parsedSearch.sortDirection, nextStatuses, parsedSearch.query);
+    navigate({ pathname: location.pathname, search: nextSearch }, { replace: false });
+  };
+
+  const handleRefresh = () => {
+    setRefreshTick((previous) => previous + 1);
+  };
+
+  const handleCancelScan = async (scanId: string) => {
+    try {
+      await api.delete(`/api/v1/scans/${scanId}`);
+      toast({ title: 'Scan cancelled', description: scanId });
+      handleRefresh();
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Cancel failed', description: scanId, variant: 'destructive' });
+    }
+  };
+
+  const handleRerunScan = async (scanId: string) => {
+    const sourceScan = scansById.get(scanId);
+    if (!sourceScan || !sourceScan.inputRef || !sourceScan.inputType) {
+      toast({ title: 'Cannot re-run', description: 'Missing source input for this scan', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      await api.post('/api/v1/scans', {
+        inputRef: sourceScan.inputRef,
+        inputType: sourceScan.inputType,
+      });
+
+      toast({ title: 'Re-run queued', description: sourceScan.inputRef });
+      handleRefresh();
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Re-run failed', description: sourceScan.inputRef, variant: 'destructive' });
+    }
+  };
+
+  const handleCopyScanId = async (scanId: string) => {
+    try {
+      await navigator.clipboard.writeText(scanId);
+      toast({ title: 'Scan ID copied', description: scanId });
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Copy failed', description: scanId, variant: 'destructive' });
+    }
+  };
+
+  const hasAnyScans = useMemo(
+    () => Object.values(statusCounts).reduce((sum, count) => sum + count, 0) > 0,
+    [statusCounts],
+  );
+
   return (
     <div className="p-8 lg:p-10">
-      {/* Header */}
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-foreground text-4xl font-bold tracking-tight mb-2">Dashboard</h1>
@@ -223,6 +429,8 @@ export default function DashboardPage() {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => setTimeRange(range)}
+              aria-pressed={timeRange === range}
+              aria-label={`Set time range ${range.toUpperCase()}`}
             >
               {range.toUpperCase()}
             </button>
@@ -230,12 +438,11 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Error State */}
       {error && (
         <div className="mb-6 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-600">
           {error}
           <button
-            onClick={() => window.location.reload()}
+            onClick={handleRefresh}
             className="ml-3 underline hover:no-underline"
           >
             Retry
@@ -243,9 +450,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {statCards.map(stat => (
+        {statCards.map((stat) => (
           <MetricCard
             key={stat.label}
             label={stat.label}
@@ -258,7 +464,6 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Trend Series */}
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm mb-8">
         <CardHeader>
           <CardTitle className="text-sm">
@@ -273,9 +478,7 @@ export default function DashboardPage() {
               <div className="h-4 bg-muted rounded animate-pulse" />
             </div>
           ) : visibleTrendBuckets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No trend data available for selected range.
-            </p>
+            <p className="text-sm text-muted-foreground">No trend data available for selected range.</p>
           ) : (
             <div className="space-y-3">
               {visibleTrendBuckets.map((bucket) => {
@@ -311,16 +514,12 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Charts & Sidebar Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Severity Chart */}
         <div className="lg:col-span-2">
           <SeverityChart data={severity} loading={isLoading} />
         </div>
 
-        {/* Right Sidebar */}
         <div className="space-y-6">
-          {/* Quota Card */}
           <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-sm">Quota Usage</CardTitle>
@@ -328,8 +527,8 @@ export default function DashboardPage() {
             <CardContent className="space-y-3">
               {isLoading ? (
                 <div className="space-y-2">
-                  <div className="h-4 bg-muted rounded animate-pulse"></div>
-                  <div className="h-2 bg-muted rounded animate-pulse"></div>
+                  <div className="h-4 bg-muted rounded animate-pulse" />
+                  <div className="h-2 bg-muted rounded animate-pulse" />
                 </div>
               ) : quota ? (
                 <>
@@ -346,7 +545,7 @@ export default function DashboardPage() {
                       <div
                         className="bg-primary rounded-full h-2 transition-all"
                         style={{ width: `${Math.min(quota.percentage, 100)}%` }}
-                      ></div>
+                      />
                     </div>
                   </div>
                   {quota.monthly_reset_date && (
@@ -359,7 +558,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Severity Summary Card */}
           <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-sm">Severity Counts</CardTitle>
@@ -393,8 +591,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent Scans Table or Empty State */}
-      {scans.length === 0 && !isLoading ? (
+      {!hasAnyScans && !isLoading ? (
         <EmptyState
           title="No scans yet"
           description="Submit your first vulnerability scan to see results here"
@@ -405,7 +602,21 @@ export default function DashboardPage() {
         <ScanTable
           scans={tableScans}
           loading={isLoading}
-          onRefresh={() => window.location.reload()}
+          onRefresh={handleRefresh}
+          sortField={parsedSearch.sortField}
+          sortDirection={parsedSearch.sortDirection}
+          onSortChange={handleSortChange}
+          statusFilters={parsedSearch.statuses}
+          statusCounts={statusCounts}
+          onToggleStatus={handleToggleStatus}
+          searchQuery={searchInputValue}
+          onSearchQueryChange={setSearchInputValue}
+          searchInputRef={searchInputRef}
+          filteredCount={filteredCount}
+          totalCount={totalCount}
+          onCancelScan={handleCancelScan}
+          onRerunScan={handleRerunScan}
+          onCopyScanId={handleCopyScanId}
         />
       )}
     </div>
