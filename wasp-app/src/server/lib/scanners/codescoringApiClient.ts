@@ -1,9 +1,14 @@
 /**
- * Codescoring/BlackDuck API Client - Handles enterprise vulnerability scanning
- * Supports both real API and mock mode for MVP testing
+ * Codescoring/Johnny Scanner - Handles enterprise vulnerability scanning via SSH.
+ * The Johnny CLI on the remote machine handles the actual scanner logic and API communication.
+ * Local configuration only requires SSH host, user, and private key.
  */
 
+import { execFileSync } from 'child_process';
+import { readFileSync, existsSync, mkdirSync, rmSync } from 'fs';
+import { resolve, join } from 'path';
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
+import { resolveTrustedScanInputPath } from '../../services/inputAdapterService.js';
 
 export interface CodescoringFinding {
   cveId: string;
@@ -16,187 +21,131 @@ export interface CodescoringFinding {
   source: 'enterprise';
 }
 
-interface ApiRetryConfig {
-  maxRetries: number;
-  backoffMs: number;
-  backoffMultiplier: number;
-}
-
-const DEFAULT_RETRY_CONFIG: ApiRetryConfig = {
-  maxRetries: 3,
-  backoffMs: 1000,
-  backoffMultiplier: 2,
-};
-
 /**
- * Codescoring API client
+ * SSH-based Codescoring client using 'johnny' utility
  */
-class CodescoringApiClient {
-  private apiKey: string;
-  private apiUrl: string;
-  private requestTimeoutMs: number = 30000;
+class CodescoringSshClient {
+  private host: string;
+  private user: string;
+  private keyPath: string;
 
-  constructor(apiKey: string, apiUrl: string = 'https://api.codescoring.example.com') {
-    this.apiKey = apiKey;
-    this.apiUrl = apiUrl;
+  constructor(host: string, user: string, keyPath: string) {
+    this.host = host;
+    this.user = user;
+    this.keyPath = keyPath;
   }
 
-  /**
-   * Make HTTP request with retry logic
-   */
-  private async makeRequest(
-    method: string,
-    endpoint: string,
-    body?: any,
-    retryConfig: ApiRetryConfig = DEFAULT_RETRY_CONFIG
-  ): Promise<any> {
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
-      try {
-        const url = `${this.apiUrl}${endpoint}`;
-        const headers: any = {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        };
-
-        const options: any = {
-          method,
-          headers,
-          timeout: this.requestTimeoutMs,
-        };
-
-        if (body) {
-          options.body = JSON.stringify(body);
-        }
-
-        const response = await fetch(url, options);
-
-        // Handle rate limiting with backoff
-        if (response.status === 429) {
-          if (attempt < retryConfig.maxRetries) {
-            const delay = retryConfig.backoffMs * Math.pow(retryConfig.backoffMultiplier, attempt);
-            console.log(`[Codescoring] Rate limited, retrying in ${delay}ms`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            continue;
-          }
-        }
-
-        // Handle server errors with retry
-        if (response.status >= 500) {
-          if (attempt < retryConfig.maxRetries) {
-            const delay = retryConfig.backoffMs * Math.pow(retryConfig.backoffMultiplier, attempt);
-            console.log(`[Codescoring] Server error (${response.status}), retrying in ${delay}ms`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            continue;
-          }
-        }
-
-        // Handle auth errors (don't retry)
-        if (response.status === 401 || response.status === 403) {
-          throw new Error(`Authentication failed (${response.status})`);
-        }
-
-        // Handle not found
-        if (response.status === 404) {
-          throw new Error('Project not found');
-        }
-
-        if (!response.ok) {
-          throw new Error(`API request failed with status ${response.status}`);
-        }
-
-        const data = await response.json();
-        return data;
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-
-        if (attempt < retryConfig.maxRetries) {
-          const delay = retryConfig.backoffMs * Math.pow(retryConfig.backoffMultiplier, attempt);
-          console.log(`[Codescoring] Request failed (attempt ${attempt + 1}/${retryConfig.maxRetries + 1}), retrying in ${delay}ms`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-      }
-    }
-
-    throw lastError || new Error('API request failed after all retries');
-  }
-
-  /**
-   * Create a new project for scanning
-   */
-  async createProject(projectName: string): Promise<string> {
-    console.log(`[Codescoring] Creating project: ${projectName}`);
-    const response = await this.makeRequest('POST', '/api/v3/projects', {
-      name: projectName,
-    });
-    return response.id;
-  }
-
-  /**
-   * Upload SBOM to project
-   */
-  async uploadSbom(projectId: string, components: NormalizedComponent[]): Promise<void> {
-    console.log(`[Codescoring] Uploading SBOM to project ${projectId}`);
+  private runSsh(command: string): string {
+    const args = [
+      '-o', 'BatchMode=yes',
+      '-o', 'StrictHostKeyChecking=no',
+      '-i', this.keyPath,
+      `${this.user}@${this.host}`,
+      command
+    ];
     
-    const sbomPayload = {
-      bomFormat: 'CycloneDX',
-      specVersion: '1.4',
-      version: 1,
-      components: components.map(c => ({
-        type: c.type || 'library',
-        name: c.name,
-        version: c.version,
-        purl: c.purl,
-      })),
-    };
-
-    await this.makeRequest('POST', `/api/v3/projects/${projectId}/sbom`, sbomPayload);
-  }
-
-  /**
-   * Poll project status until complete
-   */
-  async pollProjectStatus(projectId: string, maxAttempts: number = 30): Promise<void> {
-    console.log(`[Codescoring] Polling project ${projectId} status`);
-    
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const response = await this.makeRequest('GET', `/api/v3/projects/${projectId}/status`);
-      
-      if (response.status === 'completed' || response.status === 'completed_with_errors') {
-        console.log(`[Codescoring] Project scan completed`);
-        return;
-      }
-
-      if (response.status === 'failed') {
-        throw new Error(`Project scan failed: ${response.error || 'Unknown error'}`);
-      }
-
-      console.log(`[Codescoring] Status: ${response.status}, waiting...`);
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before next poll
-    }
-
-    throw new Error('Project scan polling timed out');
-  }
-
-  /**
-   * Get vulnerabilities from completed project
-   */
-  async getVulnerabilities(projectId: string): Promise<any> {
-    console.log(`[Codescoring] Fetching vulnerabilities for project ${projectId}`);
-    return this.makeRequest('GET', `/api/v3/projects/${projectId}/vulnerabilities`);
-  }
-
-  /**
-   * Delete project (cleanup)
-   */
-  async deleteProject(projectId: string): Promise<void> {
     try {
-      console.log(`[Codescoring] Deleting project ${projectId}`);
-      await this.makeRequest('DELETE', `/api/v3/projects/${projectId}`);
+      return execFileSync('ssh', args, { encoding: 'utf8', timeout: 300000 });
     } catch (error) {
-      console.error(`[Codescoring] Failed to delete project:`, error);
-      // Don't throw - cleanup errors shouldn't fail the scan
+      console.error(`[Codescoring-SSH] SSH command failed: ${command}`, error);
+      throw new Error(`SSH execution failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private runScpToRemote(localPath: string, remotePath: string) {
+    const args = [
+      '-o', 'BatchMode=yes',
+      '-o', 'StrictHostKeyChecking=no',
+      '-i', this.keyPath,
+      localPath,
+      `${this.user}@${this.host}:${remotePath}`
+    ];
+    
+    try {
+      execFileSync('scp', args, { stdio: 'ignore', timeout: 60000 });
+    } catch (error) {
+      console.error(`[Codescoring-SSH] SCP to remote failed: ${localPath} -> ${remotePath}`, error);
+      throw new Error(`SCP transfer failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private runScpFromRemote(remotePath: string, localPath: string) {
+    const args = [
+      '-o', 'BatchMode=yes',
+      '-o', 'StrictHostKeyChecking=no',
+      '-i', this.keyPath,
+      `${this.user}@${this.host}:${remotePath}`,
+      localPath
+    ];
+    
+    try {
+      execFileSync('scp', args, { stdio: 'ignore', timeout: 60000 });
+    } catch (error) {
+      console.error(`[Codescoring-SSH] SCP from remote failed: ${remotePath} -> ${localPath}`, error);
+      throw new Error(`SCP transfer failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  async scan(scanId: string, input: { inputType: string; inputRef: string }): Promise<any> {
+    const { inputType, inputRef } = input;
+    console.log(`[Codescoring-SSH] Starting remote scan ${scanId} (type: ${inputType})`);
+
+    // 1. Create remote temp directory
+    const remoteTempDir = this.runSsh('mktemp -d').trim();
+    console.log(`[Codescoring-SSH] Created remote temp dir: ${remoteTempDir}`);
+
+    try {
+      const remoteOutputFile = `${remoteTempDir}/result.json`;
+      const remoteScriptPath = `${remoteTempDir}/scan.sh`;
+      
+      // 2. Deliver the scan script to remote
+      const localScriptPath = resolve(process.cwd(), 'src', 'server', 'scripts', 'codescoring-remote-scan.sh');
+      console.log(`[Codescoring-SSH] Delivering scan script: ${localScriptPath} -> ${remoteScriptPath}`);
+      this.runScpToRemote(localScriptPath, remoteScriptPath);
+
+      // 3. Prepare remote input
+      if (inputType === 'source_zip') {
+        const localZipPath = resolveTrustedScanInputPath(inputRef);
+        const remoteZipPath = `${remoteTempDir}/source.zip`;
+        console.log(`[Codescoring-SSH] Uploading ZIP to remote: ${localZipPath}`);
+        this.runScpToRemote(localZipPath, remoteZipPath);
+      } else if (inputType === 'sbom') {
+        const localSbomPath = resolveTrustedScanInputPath(inputRef);
+        const remoteSbomPath = `${remoteTempDir}/sbom.json`;
+        console.log(`[Codescoring-SSH] Uploading SBOM to remote: ${localSbomPath}`);
+        this.runScpToRemote(localSbomPath, remoteSbomPath);
+      } else if (inputType !== 'github') {
+        throw new Error(`Unsupported input type for Codescoring-SSH: ${inputType}`);
+      }
+
+      // 4. Run the scan script on remote via SSH
+      console.log(`[Codescoring-SSH] Executing remote scan script...`);
+      this.runSsh(`bash "${remoteScriptPath}" "${inputType}" "${inputRef}" "${remoteOutputFile}"`);
+
+      // 5. Download results via SCP
+      const localResultDir = resolve(process.cwd(), '.cache', 'codescoring');
+      mkdirSync(localResultDir, { recursive: true });
+      const localResultPath = join(localResultDir, `result-${scanId}.json`);
+      
+      console.log(`[Codescoring-SSH] Downloading results to ${localResultPath}`);
+      this.runScpFromRemote(remoteOutputFile, localResultPath);
+
+      // 4. Read and parse results
+      const resultJson = readFileSync(localResultPath, 'utf8');
+      const result = JSON.parse(resultJson);
+
+      // Clean up local cache
+      try {
+        rmSync(localResultPath);
+      } catch (e) {
+        console.warn(`[Codescoring-SSH] Failed to cleanup local result file: ${localResultPath}`);
+      }
+
+      return result;
+    } finally {
+      // 5. Remote Cleanup
+      console.log(`[Codescoring-SSH] Cleaning up remote temp dir: ${remoteTempDir}`);
+      this.runSsh(`rm -rf "${remoteTempDir}"`);
     }
   }
 }
@@ -205,7 +154,6 @@ class CodescoringApiClient {
  * Generate mock Codescoring findings for MVP testing
  */
 function generateMockFindings(components: NormalizedComponent[]): CodescoringFinding[] {
-  // Return mock enterprise findings for known vulnerable packages
   const mockVulnerabilities: Record<string, CodescoringFinding[]> = {
     'lodash': [
       {
@@ -243,104 +191,113 @@ function generateMockFindings(components: NormalizedComponent[]): CodescoringFin
 }
 
 /**
- * Parse Codescoring API response into normalized findings
+ * Parse scan response into normalized findings
  */
 function parseCodescoringResponse(apiResponse: any): CodescoringFinding[] {
-  if (!apiResponse || !apiResponse.vulnerabilities || !Array.isArray(apiResponse.vulnerabilities)) {
+  if (!apiResponse) {
     return [];
   }
 
   const findings: CodescoringFinding[] = [];
 
-  for (const vuln of apiResponse.vulnerabilities) {
-    const finding: CodescoringFinding = {
-      cveId: vuln.cveId || vuln.id || 'UNKNOWN',
-      severity: (vuln.severity || 'info').toLowerCase() as any,
-      package: vuln.packageName || vuln.component || 'unknown',
-      version: vuln.version || 'unknown',
-      fixedVersion: vuln.fixedVersion,
-      description: vuln.description || '',
-      cvssScore: parseFloat(vuln.cvssScore || '0') || 0,
-      source: 'enterprise',
-    };
+  // 1. Handle CycloneDX format (produced by Johnny CLI)
+  if (apiResponse.bomFormat === 'CycloneDX') {
+    const componentsMap = new Map<string, any>();
+    
+    if (Array.isArray(apiResponse.components)) {
+      for (const comp of apiResponse.components) {
+        const ref = comp['bom-ref'] || comp.bomRef || comp.purl;
+        if (ref) {
+          componentsMap.set(ref, comp);
+        }
+      }
+    }
 
-    findings.push(finding);
+    if (Array.isArray(apiResponse.vulnerabilities)) {
+      for (const vuln of apiResponse.vulnerabilities) {
+        const affects = Array.isArray(vuln.affects) ? vuln.affects : [];
+        const rating = Array.isArray(vuln.ratings) ? vuln.ratings[0] : null;
+        
+        for (const affect of affects) {
+          const ref = affect.ref;
+          const comp = componentsMap.get(ref);
+          
+          findings.push({
+            cveId: vuln.id || vuln.bomRef || 'UNKNOWN',
+            severity: (rating?.severity || 'info').toLowerCase() as any,
+            package: comp?.name || 'unknown',
+            version: comp?.version || 'unknown',
+            fixedVersion: Array.isArray(vuln.fixes) ? vuln.fixes[0]?.version : undefined,
+            description: vuln.description || '',
+            cvssScore: parseFloat(rating?.score || '0') || 0,
+            source: 'enterprise',
+          });
+        }
+      }
+    }
+    return findings;
+  }
+
+  // 2. Handle Legacy API format
+  if (Array.isArray(apiResponse.vulnerabilities)) {
+    for (const vuln of apiResponse.vulnerabilities) {
+      findings.push({
+        cveId: vuln.cveId || vuln.id || 'UNKNOWN',
+        severity: (vuln.severity || 'info').toLowerCase() as any,
+        package: vuln.packageName || vuln.component || 'unknown',
+        version: vuln.version || 'unknown',
+        fixedVersion: vuln.fixedVersion,
+        description: vuln.description || '',
+        cvssScore: parseFloat(vuln.cvssScore || '0') || 0,
+        source: 'enterprise',
+      });
+    }
   }
 
   return findings;
 }
 
 /**
- * Main function: Scan components with Codescoring API
- * Falls back to mock if API key not configured
+ * Main function: Scan components with Codescoring (SSH mode with Johnny CLI)
+ * Falls back to mock if SSH not configured
  * @param components Normalized components to scan
  * @param scanId Unique scan ID
- * @param timeoutMs Timeout in milliseconds
+ * @param input Input details (inputType, inputRef)
  * @returns Array of vulnerabilities found
  */
 export async function scanWithCodescoring(
   components: NormalizedComponent[],
   scanId: string,
-  timeoutMs: number = 300000
+  input?: { inputType: string; inputRef: string }
 ): Promise<CodescoringFinding[]> {
-  const apiKey = process.env.CODESCORING_API_KEY;
-  const apiUrl = process.env.CODESCORING_API_URL || 'https://api.codescoring.example.com';
+  const host = process.env.CODESCORING_SSH_HOST;
+  const user = process.env.CODESCORING_SSH_USER;
+  const keyPath = process.env.CODESCORING_SSH_KEY_PATH;
 
-  // Use mock mode if API key not configured
-  if (!apiKey) {
-    console.log('[Codescoring] Using mock Codescoring results (real API not configured)');
+  // Use mock mode if SSH not configured
+  if (!host || !user || !keyPath || !input) {
+    console.log('[Codescoring] Using mock Codescoring results (SSH details or scan input missing)');
     return generateMockFindings(components);
   }
 
-  let projectId: string | null = null;
-
   try {
-    const client = new CodescoringApiClient(apiKey, apiUrl);
-    const projectName = `scan-${scanId}-${Date.now()}`;
-
-    // Create project
-    projectId = await client.createProject(projectName);
-    console.log(`[Codescoring] Created project ${projectId}`);
-
-    // Upload SBOM
-    await client.uploadSbom(projectId, components);
-    console.log(`[Codescoring] Uploaded SBOM to project ${projectId}`);
-
-    // Poll for completion
-    const startTime = Date.now();
-    await client.pollProjectStatus(projectId);
-    const durationMs = Date.now() - startTime;
-    console.log(`[Codescoring] Scan completed in ${durationMs}ms`);
-
-    // Get vulnerabilities
-    const apiResponse = await client.getVulnerabilities(projectId);
-    const findings = parseCodescoringResponse(apiResponse);
-    console.log(`[Codescoring] Found ${findings.length} vulnerabilities`);
-
-    // Cleanup
-    await client.deleteProject(projectId);
+    const client = new CodescoringSshClient(host, user, keyPath);
+    const rawResult = await client.scan(scanId, input);
+    
+    // Parse scan findings from johnny output (CycloneDX format)
+    const findings = parseCodescoringResponse(rawResult);
+    console.log(`[Codescoring] Found ${findings.length} vulnerabilities from Johnny`);
 
     return findings;
   } catch (error) {
-    console.error('[Codescoring] Scan failed:', error);
-
-    // Attempt cleanup on error
-    if (projectId) {
-      try {
-        const client = new CodescoringApiClient(apiKey, apiUrl);
-        await client.deleteProject(projectId);
-      } catch (cleanupError) {
-        console.error('[Codescoring] Failed to cleanup project:', cleanupError);
-      }
-    }
-
+    console.error('[Codescoring-SSH] Remote scan failed:', error);
     throw error;
   }
 }
 
 /**
- * Check if Codescoring API is configured
+ * Check if Codescoring SSH is configured
  */
 export function isCodescoringConfigured(): boolean {
-  return !!process.env.CODESCORING_API_KEY;
+  return !!(process.env.CODESCORING_SSH_HOST && process.env.CODESCORING_SSH_USER && process.env.CODESCORING_SSH_KEY_PATH);
 }

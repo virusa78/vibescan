@@ -1,7 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams } from "react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
 import { Button } from "../client/components/ui/button";
+import { Input } from "../client/components/ui/input";
+import { Label } from "../client/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../client/components/ui/select";
 import { AlertCircle, FileText, ShieldCheck } from "lucide-react";
 import { useAsyncState } from "../client/hooks/useAsyncState";
 import { api } from "wasp/client/api";
@@ -47,6 +56,13 @@ export default function ReportsPage() {
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [ciDecision, setCiDecision] = useState<CiDecision | null>(null);
   const [pdfStatus, setPdfStatus] = useState<string | null>(null);
+
+  // UI: filters & sorting
+  const [searchQuery, setSearchQuery] = useState("");
+  const [severityFilter, setSeverityFilter] = useState<"all" | "critical" | "high" | "medium" | "low" | "info">("all");
+  const [sortBy, setSortBy] = useState<"newest" | "severity" | "package" | "cve">("newest");
+  const [remediationLoading, setRemediationLoading] = useState<Record<string, boolean>>({});
+  const [remediationTimestamp, setRemediationTimestamp] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     if (!scanId) {
@@ -106,6 +122,27 @@ export default function ReportsPage() {
 
   const findings = report?.findings ?? [];
   const sev = summary?.severity ?? {};
+
+  const filteredFindings = useMemo(() => {
+    const list = (findings || []).slice();
+    const q = searchQuery.trim().toLowerCase();
+    let res = list.filter((f) => {
+      if (severityFilter !== "all" && (f.severity ?? "").toLowerCase() !== severityFilter) return false;
+      if (!q) return true;
+      return (f.cveId ?? f.cve ?? "").toLowerCase().includes(q) || (f.packageName ?? f.description ?? "").toLowerCase().includes(q);
+    });
+
+    if (sortBy === "severity") {
+      const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4, unknown: 5 };
+      res.sort((a, b) => (order[(a.severity ?? "unknown").toLowerCase()] - order[(b.severity ?? "unknown").toLowerCase()]));
+    } else if (sortBy === "package") {
+      res.sort((a, b) => ((a.packageName ?? "").localeCompare(b.packageName ?? "")));
+    } else if (sortBy === "cve") {
+      res.sort((a, b) => ((a.cveId ?? a.cve ?? "").localeCompare(b.cveId ?? b.cve ?? "")));
+    }
+
+    return res;
+  }, [findings, searchQuery, severityFilter, sortBy]);
 
   return (
     <div className="p-8 lg:p-10">
@@ -176,33 +213,101 @@ export default function ReportsPage() {
       )}
 
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-        <CardHeader>
-          <CardTitle>Findings</CardTitle>
+        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle>Findings</CardTitle>
+            <p className="text-sm text-muted-foreground">Filter, search and sort findings</p>
+          </div>
+          <div className="mt-3 md:mt-0 flex items-center gap-2">
+            <Input
+              placeholder="Search by CVE or package"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-64"
+            />
+            <Select value={severityFilter} onValueChange={(val) => setSeverityFilter(val as any)}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Severity" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="critical">Critical</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="info">Info</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={(val) => setSortBy(val as any)}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Default</SelectItem>
+                <SelectItem value="severity">Severity</SelectItem>
+                <SelectItem value="package">Package</SelectItem>
+                <SelectItem value="cve">CVE</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={() => { setSearchQuery(''); setSeverityFilter('all'); setSortBy('newest'); }}>
+              Clear
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          {findings.length === 0 ? (
+          {filteredFindings.length === 0 ? (
             <div className="text-sm text-muted-foreground flex items-center gap-2">
               <AlertCircle className="w-4 h-4" />
               No findings for this scan.
             </div>
           ) : (
             <div className="space-y-2">
-              {findings.map((finding, index) => (
-                <div
-                  key={finding.id ?? `${finding.cveId ?? finding.cve ?? "finding"}-${index}`}
-                  className="rounded-md border border-border/50 p-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-mono text-sm text-foreground">{finding.cveId ?? finding.cve ?? "Unknown CVE"}</p>
-                    <span className="text-xs px-2 py-1 rounded bg-accent/60 text-foreground">
-                      {(finding.severity ?? "unknown").toUpperCase()}
-                    </span>
+              {filteredFindings.map((finding, index) => {
+                const fid = finding.id ?? `${finding.cveId ?? finding.cve ?? "finding"}-${index}`;
+                const findingId = finding.id ?? '';
+                return (
+                  <div key={fid} className="rounded-md border border-border/50 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-mono text-sm text-foreground">
+                        <a href={`/scans/${scanId}`} className="underline">{finding.cveId ?? finding.cve ?? "Unknown CVE"}</a>
+                      </p>
+                      <span className="text-xs px-2 py-1 rounded bg-accent/60 text-foreground">
+                        {(finding.severity ?? "unknown").toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {finding.packageName ?? finding.description ?? "No details"}
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button onClick={() => {
+                        try {
+                          navigator.clipboard?.writeText(`${finding.cveId ?? finding.cve ?? ''}\n${finding.packageName ?? ''}\n${finding.description ?? ''}`);
+                        } catch (e) { console.error(e); }
+                      }}>
+                        Copy
+                      </Button>
+                      <Button onClick={async () => {
+                        if (!scanId || !findingId) return;
+                        setRemediationLoading(prev => ({...prev, [fid]: true}));
+                        try {
+                          const res = await api.post(`/api/v1/reports/${scanId}/findings/${findingId}/remediation`, { promptType: 'quick_fix' });
+                          const data = res.data;
+                          setRemediationTimestamp(prev => ({...prev, [fid]: data.createdAt ?? new Date().toISOString()}));
+                        } catch (e) {
+                          console.error(e);
+                        } finally {
+                          setRemediationLoading(prev => ({...prev, [fid]: false}));
+                        }
+                      }}>
+                        {remediationLoading[fid] ? 'Generating...' : 'Generate Remediation'}
+                      </Button>
+                      {remediationTimestamp[fid] && (
+                        <span className="text-xs text-muted-foreground">Last: {new Date(remediationTimestamp[fid]!).toLocaleString()}</span>
+                      )}
+                    </div>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {finding.packageName ?? finding.description ?? "No details"}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
