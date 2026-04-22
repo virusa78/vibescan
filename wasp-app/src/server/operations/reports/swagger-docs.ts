@@ -125,4 +125,48 @@
  *         description: Forbidden - no permission to view this scan
  *       404:
  *         description: Scan not found
+ *
+ * /api/v1/reports/{scanId}/annotations:
+ *   get:
+ *     summary: List finding annotations for a report
+ *     tags:
+ *       - Reports
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - name: scanId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - name: state
+ *         in: query
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [accepted, snoozed, rejected, expired]
+ *
+ * /api/v1/reports/{scanId}/findings/{findingId}/annotation:
+ *   post:
+ *     summary: Upsert finding annotation
+ *     tags:
+ *       - Reports
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - name: scanId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - name: findingId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
  */

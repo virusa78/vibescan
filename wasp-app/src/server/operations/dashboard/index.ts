@@ -12,3 +12,11 @@ export {
   type TrendSeriesResponse,
   type TrendGranularity,
 } from './getTrendSeries';
+export {
+  listScanSavedViews,
+  createScanSavedView,
+  updateScanSavedView,
+  deleteScanSavedView,
+  type ScanSavedView,
+} from './savedViews';
+export { bulkCancelScans, bulkRerunScans, exportScans } from './bulkScanActions';

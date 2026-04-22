@@ -1,5 +1,12 @@
 import type { Response } from 'express';
-import { getReport, getReportSummary, generateReportPDF, getCIDecision } from './index';
+import {
+  getReport,
+  getReportSummary,
+  generateReportPDF,
+  getCIDecision,
+  upsertFindingAnnotation,
+  listFindingAnnotations,
+} from './index';
 import { resolveRequestUser } from '../../services/requestAuth';
 import { parseJsonBodyWithLimit, enforceRateLimit, getRateLimitKey } from '../../http/requestGuards';
 import { sendOperationError } from '../../http/httpErrors';
@@ -66,6 +73,49 @@ export async function getCIDecisionApiHandler(request: HandlerRequest, response:
       { user, entities: context.entities },
     );
 
+    response.status(200).json(result);
+  } catch (error) {
+    sendOperationError('report-operation', error, response);
+  }
+}
+
+export async function upsertFindingAnnotationApiHandler(
+  request: HandlerRequest,
+  response: Response,
+  context: HandlerContext,
+) {
+  try {
+    const user = await resolveRequestUser(request, context);
+    const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
+    const result = await upsertFindingAnnotation(
+      {
+        scanId: String(request.params.scanId),
+        findingId: String(request.params.findingId),
+        ...body,
+      },
+      { user, entities: context.entities },
+    );
+    response.status(200).json(result);
+  } catch (error) {
+    sendOperationError('report-operation', error, response);
+  }
+}
+
+export async function listFindingAnnotationsApiHandler(
+  request: HandlerRequest,
+  response: Response,
+  context: HandlerContext,
+) {
+  try {
+    const user = await resolveRequestUser(request, context);
+    const state = Array.isArray(request.query.state) ? request.query.state[0] : request.query.state;
+    const result = await listFindingAnnotations(
+      {
+        scanId: String(request.params.scanId),
+        ...(typeof state === 'string' ? { state } : {}),
+      },
+      { user, entities: context.entities },
+    );
     response.status(200).json(result);
   } catch (error) {
     sendOperationError('report-operation', error, response);

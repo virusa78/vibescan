@@ -334,6 +334,48 @@ api getQuotaStatusApi {
   httpRoute: (GET, "/api/v1/dashboard/quota")
 }
 
+api listScanSavedViewsApi {
+  fn: import { listScanSavedViewsApiHandler } from "@src/server/operations/dashboard/handlers",
+  entities: [User],
+  httpRoute: (GET, "/api/v1/dashboard/saved-views")
+}
+
+api createScanSavedViewApi {
+  fn: import { createScanSavedViewApiHandler } from "@src/server/operations/dashboard/handlers",
+  entities: [User],
+  httpRoute: (POST, "/api/v1/dashboard/saved-views")
+}
+
+api updateScanSavedViewApi {
+  fn: import { updateScanSavedViewApiHandler } from "@src/server/operations/dashboard/handlers",
+  entities: [User],
+  httpRoute: (PUT, "/api/v1/dashboard/saved-views/:viewId")
+}
+
+api deleteScanSavedViewApi {
+  fn: import { deleteScanSavedViewApiHandler } from "@src/server/operations/dashboard/handlers",
+  entities: [User],
+  httpRoute: (DELETE, "/api/v1/dashboard/saved-views/:viewId")
+}
+
+api bulkCancelScansApi {
+  fn: import { bulkCancelScansApiHandler } from "@src/server/operations/dashboard/handlers",
+  entities: [User, Scan, ScanDelta],
+  httpRoute: (POST, "/api/v1/dashboard/scans/bulk-cancel")
+}
+
+api bulkRerunScansApi {
+  fn: import { bulkRerunScansApiHandler } from "@src/server/operations/dashboard/handlers",
+  entities: [User, Scan, ScanDelta],
+  httpRoute: (POST, "/api/v1/dashboard/scans/bulk-rerun")
+}
+
+api exportScansApi {
+  fn: import { exportScansApiHandler } from "@src/server/operations/dashboard/handlers",
+  entities: [User, Scan],
+  httpRoute: (POST, "/api/v1/dashboard/scans/export")
+}
+
 // Dashboard Wasp queries (for frontend integration)
 // Dashboard & Analytics operations
 // Use HTTP API instead (/api/v1/dashboard/metrics, etc.)
@@ -369,6 +411,18 @@ api getCIDecisionApi {
   fn: import { getCIDecisionApiHandler } from "@src/server/operations/reports/handlers",
   entities: [User, Scan, Finding],
   httpRoute: (GET, "/api/v1/reports/:scanId/ci-decision")
+}
+
+api listFindingAnnotationsApi {
+  fn: import { listFindingAnnotationsApiHandler } from "@src/server/operations/reports/handlers",
+  entities: [User, Scan, Finding, VulnAcceptance],
+  httpRoute: (GET, "/api/v1/reports/:scanId/annotations")
+}
+
+api upsertFindingAnnotationApi {
+  fn: import { upsertFindingAnnotationApiHandler } from "@src/server/operations/reports/handlers",
+  entities: [User, Scan, Finding, VulnAcceptance],
+  httpRoute: (POST, "/api/v1/reports/:scanId/findings/:findingId/annotation")
 }
 //#endregion
 
@@ -406,6 +460,24 @@ api deleteWebhookApi {
   fn: import { deleteWebhookApiHandler } from "@src/server/operations/webhooks/handlers",
   entities: [User, Webhook, WebhookDelivery],
   httpRoute: (DELETE, "/api/v1/webhooks/:webhookId")
+}
+
+api listWebhookDeliveriesApi {
+  fn: import { listWebhookDeliveriesApiHandler } from "@src/server/operations/webhooks/handlers",
+  entities: [User, Webhook, WebhookDelivery],
+  httpRoute: (GET, "/api/v1/webhooks/:webhookId/deliveries")
+}
+
+api testWebhookDeliveryApi {
+  fn: import { testWebhookDeliveryApiHandler } from "@src/server/operations/webhooks/handlers",
+  entities: [User, Webhook, WebhookDelivery, Scan, ScanDelta],
+  httpRoute: (POST, "/api/v1/webhooks/:webhookId/test")
+}
+
+api retryWebhookDeliveryApi {
+  fn: import { retryWebhookDeliveryApiHandler } from "@src/server/operations/webhooks/handlers",
+  entities: [User, Webhook, WebhookDelivery],
+  httpRoute: (POST, "/api/v1/webhooks/:webhookId/deliveries/:deliveryId/retry")
 }
 //#endregion
 

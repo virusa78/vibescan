@@ -166,4 +166,88 @@
  *               $ref: '#/components/schemas/TrendSeriesResponse'
  *       401:
  *         description: User not authenticated
+ *
+ * /api/v1/dashboard/saved-views:
+ *   get:
+ *     summary: List saved dashboard views
+ *     tags:
+ *       - Dashboard
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Saved view list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SavedViewsResponse'
+ *   post:
+ *     summary: Create saved dashboard view
+ *     tags:
+ *       - Dashboard
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateSavedViewRequest'
+ *     responses:
+ *       201:
+ *         description: Saved view created
+ *
+ * /api/v1/dashboard/saved-views/{viewId}:
+ *   put:
+ *     summary: Update saved dashboard view
+ *     tags:
+ *       - Dashboard
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - name: viewId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Saved view updated
+ *   delete:
+ *     summary: Delete saved dashboard view
+ *     tags:
+ *       - Dashboard
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - name: viewId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Saved view deleted
+ *
+ * /api/v1/dashboard/scans/bulk-cancel:
+ *   post:
+ *     summary: Bulk cancel scans
+ *     tags:
+ *       - Dashboard
+ * /api/v1/dashboard/scans/bulk-rerun:
+ *   post:
+ *     summary: Bulk rerun scans
+ *     tags:
+ *       - Dashboard
+ * /api/v1/dashboard/scans/export:
+ *   post:
+ *     summary: Export selected scans
+ *     tags:
+ *       - Dashboard
  */

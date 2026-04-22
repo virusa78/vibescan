@@ -43,6 +43,11 @@ type ReportFinding = {
   severity?: string;
   description?: string;
   fixedVersion?: string | null;
+  annotation?: {
+    state?: 'accepted' | 'snoozed' | 'rejected' | 'expired';
+    reason?: string | null;
+    expires_at?: string | null;
+  } | null;
 };
 
 type ReportResponse = {
@@ -59,6 +64,7 @@ type CiDecision = {
 
 type FixableFilter = 'all' | 'fixable' | 'unfixable';
 type SeverityFilter = 'all' | 'critical' | 'high' | 'medium' | 'low' | 'info';
+type AnnotationFilter = 'all' | 'accepted' | 'snoozed' | 'rejected' | 'expired' | 'unannotated';
 
 function isFixableFinding(finding: ReportFinding): boolean {
   return Boolean((finding.fixedVersion ?? '').trim());
@@ -78,7 +84,10 @@ export default function ReportsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [fixableFilter, setFixableFilter] = useState<FixableFilter>('all');
+  const [annotationFilter, setAnnotationFilter] = useState<AnnotationFilter>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'severity' | 'package' | 'cve'>('newest');
+  const [annotationDrafts, setAnnotationDrafts] = useState<Record<string, { state: 'accepted' | 'snoozed' | 'rejected'; reason: string; expiresAt: string }>>({});
+  const [annotationSaving, setAnnotationSaving] = useState<Record<string, boolean>>({});
   const [remediationLoading, setRemediationLoading] = useState<Record<string, boolean>>({});
   const [remediationTimestamp, setRemediationTimestamp] = useState<Record<string, string | null>>({});
 
@@ -239,6 +248,44 @@ export default function ReportsPage() {
     [fixableCounts.all, fixableCounts.fixable, fixableCounts.unfixable],
   );
 
+  const annotationCounts = useMemo(() => {
+    const counts: Record<AnnotationFilter, number> = {
+      all: findings.length,
+      accepted: 0,
+      snoozed: 0,
+      rejected: 0,
+      expired: 0,
+      unannotated: 0,
+    };
+
+    for (const finding of findings) {
+      const state = finding.annotation?.state;
+      if (!state) {
+        counts.unannotated += 1;
+        continue;
+      }
+
+      if (state === 'accepted') counts.accepted += 1;
+      else if (state === 'snoozed') counts.snoozed += 1;
+      else if (state === 'rejected') counts.rejected += 1;
+      else if (state === 'expired') counts.expired += 1;
+    }
+
+    return counts;
+  }, [findings]);
+
+  const annotationChipOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All', count: annotationCounts.all },
+      { value: 'accepted', label: 'Accepted', count: annotationCounts.accepted },
+      { value: 'snoozed', label: 'Snoozed', count: annotationCounts.snoozed },
+      { value: 'rejected', label: 'Rejected', count: annotationCounts.rejected },
+      { value: 'expired', label: 'Expired', count: annotationCounts.expired },
+      { value: 'unannotated', label: 'No annotation', count: annotationCounts.unannotated },
+    ],
+    [annotationCounts],
+  );
+
   const filteredFindings = useMemo(() => {
     const list = findings.slice();
     const query = searchQuery.trim().toLowerCase();
@@ -254,6 +301,16 @@ export default function ReportsPage() {
 
       if (fixableFilter === 'unfixable' && isFixableFinding(finding)) {
         return false;
+      }
+
+      if (annotationFilter === 'unannotated' && finding.annotation?.state) {
+        return false;
+      }
+
+      if (annotationFilter !== 'all' && annotationFilter !== 'unannotated') {
+        if ((finding.annotation?.state ?? null) !== annotationFilter) {
+          return false;
+        }
       }
 
       if (!query) {
@@ -285,7 +342,7 @@ export default function ReportsPage() {
     }
 
     return filtered;
-  }, [findings, fixableFilter, searchQuery, severityFilter, sortBy]);
+  }, [annotationFilter, findings, fixableFilter, searchQuery, severityFilter, sortBy]);
 
   const resolveCve = (finding: ReportFinding) => finding.cveId ?? finding.cve ?? '';
 
@@ -314,6 +371,36 @@ export default function ReportsPage() {
     setSearchQuery('');
     setSeverityFilter('all');
     setFixableFilter('all');
+    setAnnotationFilter('all');
+  };
+
+  const updateFindingAnnotationInState = (
+    findingId: string,
+    annotation: { state: 'accepted' | 'snoozed' | 'rejected' | 'expired'; reason: string | null; expires_at: string | null },
+  ) => {
+    setReport((previous) => {
+      if (!previous) return previous;
+
+      if (Array.isArray(previous.findings)) {
+        return {
+          ...previous,
+          findings: previous.findings.map((finding) =>
+            finding.id === findingId ? { ...finding, annotation } : finding,
+          ),
+        };
+      }
+
+      if (Array.isArray(previous.vulnerabilities)) {
+        return {
+          ...previous,
+          vulnerabilities: previous.vulnerabilities.map((finding) =>
+            finding.id === findingId ? { ...finding, annotation } : finding,
+          ),
+        };
+      }
+
+      return previous;
+    });
   };
 
   if (isLoading) {
@@ -480,6 +567,16 @@ export default function ReportsPage() {
               ariaLabel="Fixability filters"
             />
           </div>
+
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Annotation</p>
+            <ToggleChipGroup
+              options={annotationChipOptions}
+              value={annotationFilter}
+              onChange={(next) => setAnnotationFilter(next as AnnotationFilter)}
+              ariaLabel="Annotation filters"
+            />
+          </div>
         </CardHeader>
         <CardContent>
           {findings.length === 0 ? (
@@ -508,6 +605,13 @@ export default function ReportsPage() {
                 const packageLink = buildPackageLink(finding);
                 const fixSnippet = buildPatchSnippet(finding.ecosystem, finding.packageName, finding.fixedVersion);
                 const canCopyPatch = fixSnippet.length > 0;
+                const draft = annotationDrafts[fid] ?? {
+                  state: (finding.annotation?.state === 'snoozed' || finding.annotation?.state === 'rejected'
+                    ? finding.annotation.state
+                    : 'accepted') as 'accepted' | 'snoozed' | 'rejected',
+                  reason: finding.annotation?.reason ?? '',
+                  expiresAt: finding.annotation?.expires_at?.slice(0, 10) ?? '',
+                };
 
                 return (
                   <div key={fid} className="rounded-md border border-border/50 p-3">
@@ -555,6 +659,93 @@ export default function ReportsPage() {
                         finding.description ?? 'No details'
                       )}
                     </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="rounded border border-border/60 bg-card/50 px-2 py-1">
+                        Annotation: {(finding.annotation?.state ?? 'none').toUpperCase()}
+                      </span>
+                      {finding.annotation?.reason ? (
+                        <span className="text-muted-foreground">Note: {finding.annotation.reason}</span>
+                      ) : null}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Select
+                        value={draft.state}
+                        onValueChange={(value) =>
+                          setAnnotationDrafts((previous) => ({
+                            ...previous,
+                            [fid]: { ...draft, state: value as 'accepted' | 'snoozed' | 'rejected' },
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="w-36" aria-label="Annotation state">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="accepted">Accepted</SelectItem>
+                          <SelectItem value="snoozed">Snoozed</SelectItem>
+                          <SelectItem value="rejected">Rejected</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={draft.reason}
+                        onChange={(event) =>
+                          setAnnotationDrafts((previous) => ({
+                            ...previous,
+                            [fid]: { ...draft, reason: event.target.value },
+                          }))
+                        }
+                        className="w-64"
+                        placeholder="Optional note"
+                        aria-label="Annotation reason"
+                      />
+                      {draft.state === 'snoozed' && (
+                        <Input
+                          type="date"
+                          value={draft.expiresAt}
+                          onChange={(event) =>
+                            setAnnotationDrafts((previous) => ({
+                              ...previous,
+                              [fid]: { ...draft, expiresAt: event.target.value },
+                            }))
+                          }
+                          className="w-44"
+                          aria-label="Snooze until date"
+                        />
+                      )}
+                      <Button
+                        onClick={async () => {
+                          if (!scanId || !findingId) return;
+                          setAnnotationSaving((previous) => ({ ...previous, [fid]: true }));
+                          try {
+                            const payload: Record<string, unknown> = {
+                              state: draft.state,
+                              reason: draft.reason.trim() || undefined,
+                            };
+                            if (draft.state === 'snoozed' && draft.expiresAt) {
+                              payload.expiresAt = new Date(`${draft.expiresAt}T23:59:59.000Z`).toISOString();
+                            }
+
+                            const response = await api.post(
+                              `/api/v1/reports/${scanId}/findings/${findingId}/annotation`,
+                              payload,
+                            );
+                            const annotation = response.data?.annotation;
+                            if (annotation) {
+                              updateFindingAnnotationInState(findingId, annotation);
+                              toast({ title: 'Annotation saved' });
+                            }
+                          } catch (annotationError) {
+                            console.error(annotationError);
+                            toast({ title: 'Annotation save failed', variant: 'destructive' });
+                          } finally {
+                            setAnnotationSaving((previous) => ({ ...previous, [fid]: false }));
+                          }
+                        }}
+                        aria-label="Save annotation"
+                      >
+                        {annotationSaving[fid] ? 'Saving...' : 'Save annotation'}
+                      </Button>
+                    </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <Button
                         onClick={() => {

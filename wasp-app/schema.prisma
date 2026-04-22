@@ -74,6 +74,7 @@ model User {
   region                    String          @default("OTHER") // IN, PK, OTHER
   timezone                  String?
   language                  String?         @default("en")
+  uiPreferences             Json            @default("{}") @map("ui_preferences")
 
   // Quota tracking
   monthlyQuotaLimit         Int             @default(10) @map("monthly_quota_limit")
@@ -449,13 +450,17 @@ model WebhookDelivery {
   webhookId                 String          @map("webhook_id") @db.Uuid
   scanId                    String          @map("scan_id") @db.Uuid
   
+  eventType                 String          @default("scan_complete") @map("event_type")
+  payload                   Json?
   targetUrl                 String          @map("target_url")
   payloadHash               String          @map("payload_hash")
   attemptNumber             Int             @default(1) @map("attempt_number")
   httpStatus                Int?            @map("http_status")
   responseBody              String?         @map("response_body")
+  durationMs                Int?            @map("duration_ms")
   deliveredAt               DateTime?       @map("delivered_at")
   nextRetryAt               DateTime?       @map("next_retry_at")
+  manualRetryOfId           String?         @map("manual_retry_of_id") @db.Uuid
   status                    WebhookDeliveryStatus @default(pending)
 
   webhook                   Webhook         @relation(fields: [webhookId], references: [id], onDelete: Cascade)

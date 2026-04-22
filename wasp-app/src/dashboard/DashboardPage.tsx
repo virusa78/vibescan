@@ -59,6 +59,15 @@ interface TrendSeriesResponse {
   };
 }
 
+interface SavedView {
+  id: string;
+  name: string;
+  sortField: DashboardSortField;
+  sortDirection: DashboardSortDirection;
+  statuses: DashboardStatus[];
+  query: string;
+}
+
 interface RecentScanApiRecord {
   id: string;
   status: string;
@@ -136,6 +145,9 @@ export default function DashboardPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [filteredCount, setFilteredCount] = useState(0);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [savedViewName, setSavedViewName] = useState('');
+  const [activeSavedViewId, setActiveSavedViewId] = useState('');
 
   useEffect(() => {
     if (parsedSearch.isValid) return;
@@ -234,7 +246,7 @@ export default function DashboardPage() {
         setTotalCount(Number(scansData.total_count ?? 0));
         setFilteredCount(Number(scansData.filtered_count ?? formattedScans.length));
 
-        const [quotaRes, severityRes, trendsRes] = await Promise.all([
+        const [quotaRes, severityRes, trendsRes, savedViewsRes] = await Promise.all([
           api.get('/api/v1/dashboard/quota'),
           api.get('/api/v1/dashboard/severity-breakdown', {
             params: { time_range: timeRange },
@@ -242,11 +254,13 @@ export default function DashboardPage() {
           api.get('/api/v1/dashboard/trends', {
             params: { time_range: timeRange },
           }),
+          api.get('/api/v1/dashboard/saved-views'),
         ]);
 
         setQuota(quotaRes.data);
         setSeverity(severityRes.data);
         setTrends(trendsRes.data);
+        setSavedViews(Array.isArray(savedViewsRes.data?.views) ? savedViewsRes.data.views : []);
       },
       {
         errorMessage: 'Failed to load dashboard',
@@ -403,6 +417,143 @@ export default function DashboardPage() {
     } catch (error) {
       console.error(error);
       toast({ title: 'Copy failed', description: scanId, variant: 'destructive' });
+    }
+  };
+
+  const handleBulkCancel = async (scanIds: string[]) => {
+    try {
+      const response = await api.post('/api/v1/dashboard/scans/bulk-cancel', { scanIds });
+      const data = response.data;
+      toast({
+        title: 'Bulk cancel finished',
+        description: `${data.succeeded}/${data.requested} cancelled`,
+      });
+      handleRefresh();
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Bulk cancel failed', variant: 'destructive' });
+    }
+  };
+
+  const handleBulkRerun = async (scanIds: string[]) => {
+    try {
+      const response = await api.post('/api/v1/dashboard/scans/bulk-rerun', { scanIds });
+      const data = response.data;
+      toast({
+        title: 'Bulk re-run finished',
+        description: `${data.succeeded}/${data.requested} queued`,
+      });
+      handleRefresh();
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Bulk re-run failed', variant: 'destructive' });
+    }
+  };
+
+  const downloadFile = (filename: string, content: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleBulkExport = async (scanIds: string[], format: 'csv' | 'jsonl') => {
+    try {
+      const response = await api.post('/api/v1/dashboard/scans/export', { scanIds, format });
+      const data = response.data;
+      const mimeType = format === 'csv' ? 'text/csv;charset=utf-8' : 'application/x-ndjson;charset=utf-8';
+      downloadFile(data.filename ?? `vibescan-scans.${format}`, data.content ?? '', mimeType);
+      toast({
+        title: 'Export ready',
+        description: `${data.exported ?? 0} rows exported`,
+      });
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Export failed', variant: 'destructive' });
+    }
+  };
+
+  const handleSaveCurrentView = async () => {
+    const name = savedViewName.trim();
+    if (!name) {
+      toast({ title: 'Name required', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const response = await api.post('/api/v1/dashboard/saved-views', {
+        name,
+        config: {
+          sortField: parsedSearch.sortField,
+          sortDirection: parsedSearch.sortDirection,
+          statuses: parsedSearch.statuses,
+          query: parsedSearch.query,
+        },
+      });
+      const created = response.data?.view as SavedView;
+      setSavedViews((previous) => [created, ...previous]);
+      setSavedViewName('');
+      setActiveSavedViewId(created.id);
+      toast({ title: 'Saved view created', description: created.name });
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Failed to save view', variant: 'destructive' });
+    }
+  };
+
+  const handleApplySavedView = () => {
+    const selectedView = savedViews.find((view) => view.id === activeSavedViewId);
+    if (!selectedView) {
+      return;
+    }
+    const nextSearch = buildDashboardSearch(
+      selectedView.sortField,
+      selectedView.sortDirection,
+      selectedView.statuses,
+      selectedView.query,
+    );
+    navigate({ pathname: location.pathname, search: nextSearch }, { replace: false });
+  };
+
+  const handleUpdateSavedView = async () => {
+    const selectedView = savedViews.find((view) => view.id === activeSavedViewId);
+    if (!selectedView) return;
+
+    try {
+      const response = await api.put(`/api/v1/dashboard/saved-views/${selectedView.id}`, {
+        config: {
+          sortField: parsedSearch.sortField,
+          sortDirection: parsedSearch.sortDirection,
+          statuses: parsedSearch.statuses,
+          query: parsedSearch.query,
+        },
+      });
+      const updated = response.data?.view as SavedView;
+      setSavedViews((previous) => previous.map((view) => (view.id === updated.id ? updated : view)));
+      toast({ title: 'Saved view updated', description: updated.name });
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Failed to update view', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteSavedView = async () => {
+    const selectedView = savedViews.find((view) => view.id === activeSavedViewId);
+    if (!selectedView) return;
+
+    try {
+      await api.delete(`/api/v1/dashboard/saved-views/${selectedView.id}`);
+      setSavedViews((previous) => previous.filter((view) => view.id !== selectedView.id));
+      setActiveSavedViewId('');
+      toast({ title: 'Saved view deleted', description: selectedView.name });
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Failed to delete view', variant: 'destructive' });
     }
   };
 
@@ -591,6 +742,63 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <Card className="border-border/50 bg-card/50 backdrop-blur-sm mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm">Saved Views</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 md:flex-row md:items-center">
+          <input
+            value={savedViewName}
+            onChange={(event) => setSavedViewName(event.target.value)}
+            placeholder="View name"
+            className="w-full md:w-56 rounded border border-border/60 bg-background px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={handleSaveCurrentView}
+            className="rounded border border-primary/50 px-3 py-2 text-sm text-primary hover:bg-primary/10"
+          >
+            Save Current
+          </button>
+          <select
+            value={activeSavedViewId}
+            onChange={(event) => setActiveSavedViewId(event.target.value)}
+            className="w-full md:w-64 rounded border border-border/60 bg-background px-3 py-2 text-sm"
+          >
+            <option value="">Select saved view</option>
+            {savedViews.map((view) => (
+              <option key={view.id} value={view.id}>
+                {view.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={!activeSavedViewId}
+            onClick={handleApplySavedView}
+            className="rounded border border-border/60 px-3 py-2 text-sm disabled:opacity-50"
+          >
+            Apply
+          </button>
+          <button
+            type="button"
+            disabled={!activeSavedViewId}
+            onClick={handleUpdateSavedView}
+            className="rounded border border-border/60 px-3 py-2 text-sm disabled:opacity-50"
+          >
+            Update
+          </button>
+          <button
+            type="button"
+            disabled={!activeSavedViewId}
+            onClick={handleDeleteSavedView}
+            className="rounded border border-red-500/40 px-3 py-2 text-sm text-red-500 disabled:opacity-50"
+          >
+            Delete
+          </button>
+        </CardContent>
+      </Card>
+
       {!hasAnyScans && !isLoading ? (
         <EmptyState
           title="No scans yet"
@@ -617,6 +825,9 @@ export default function DashboardPage() {
           onCancelScan={handleCancelScan}
           onRerunScan={handleRerunScan}
           onCopyScanId={handleCopyScanId}
+          onBulkCancel={handleBulkCancel}
+          onBulkRerun={handleBulkRerun}
+          onBulkExport={handleBulkExport}
         />
       )}
     </div>

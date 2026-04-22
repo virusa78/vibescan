@@ -40,6 +40,9 @@ interface ScanTableProps {
   onCancelScan: (scanId: string) => Promise<void>;
   onRerunScan: (scanId: string) => Promise<void>;
   onCopyScanId: (scanId: string) => Promise<void>;
+  onBulkCancel: (scanIds: string[]) => Promise<void>;
+  onBulkRerun: (scanIds: string[]) => Promise<void>;
+  onBulkExport: (scanIds: string[], format: 'csv' | 'jsonl') => Promise<void>;
 }
 
 const SORTABLE_COLUMNS: Array<{ field: DashboardSortField; label: string }> = [
@@ -93,9 +96,13 @@ export function ScanTable({
   onCancelScan,
   onRerunScan,
   onCopyScanId,
+  onBulkCancel,
+  onBulkRerun,
+  onBulkExport,
 }: ScanTableProps) {
   const navigate = useNavigate();
   const [activeRowIndex, setActiveRowIndex] = useState(0);
+  const [selectedScanIds, setSelectedScanIds] = useState<string[]>([]);
 
   useEffect(() => {
     setActiveRowIndex((previous) => {
@@ -104,9 +111,12 @@ export function ScanTable({
       }
       return Math.min(previous, scans.length - 1);
     });
+
+    setSelectedScanIds((previous) => previous.filter((scanId) => scans.some((scan) => scan.id === scanId)));
   }, [scans.length]);
 
   const activeScan = useMemo(() => scans[activeRowIndex], [activeRowIndex, scans]);
+  const allVisibleSelected = scans.length > 0 && scans.every((scan) => selectedScanIds.includes(scan.id));
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -163,9 +173,30 @@ export function ScanTable({
     navigate(`/scans/${scanId}`);
   };
 
+  const toggleRowSelection = (scanId: string) => {
+    setSelectedScanIds((previous) =>
+      previous.includes(scanId) ? previous.filter((id) => id !== scanId) : [...previous, scanId],
+    );
+  };
+
+  const toggleAllVisibleRows = () => {
+    if (allVisibleSelected) {
+      setSelectedScanIds((previous) => previous.filter((id) => !scans.some((scan) => scan.id === id)));
+      return;
+    }
+
+    setSelectedScanIds((previous) => {
+      const next = new Set(previous);
+      for (const scan of scans) {
+        next.add(scan.id);
+      }
+      return Array.from(next);
+    });
+  };
+
   const renderSkeletonRow = () => (
     <tr className="border-b border-border/20">
-      {[0, 1, 2, 3, 4, 5].map((idx) => (
+      {[0, 1, 2, 3, 4, 5, 6].map((idx) => (
         <td key={idx} className="py-3 px-4">
           <div className="h-4 bg-muted rounded animate-pulse w-20" />
         </td>
@@ -176,6 +207,47 @@ export function ScanTable({
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
       <CardHeader className="space-y-4">
+        {selectedScanIds.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/10 p-2">
+            <span className="text-xs font-medium text-foreground">{selectedScanIds.length} selected</span>
+            <button
+              type="button"
+              className="text-xs px-2 py-1 text-amber-500 hover:bg-amber-500/10 rounded transition"
+              onClick={() => void onBulkCancel(selectedScanIds)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="text-xs px-2 py-1 text-foreground hover:bg-accent rounded transition"
+              onClick={() => void onBulkRerun(selectedScanIds)}
+            >
+              Re-run
+            </button>
+            <button
+              type="button"
+              className="text-xs px-2 py-1 text-foreground hover:bg-accent rounded transition"
+              onClick={() => void onBulkExport(selectedScanIds, 'csv')}
+            >
+              Export CSV
+            </button>
+            <button
+              type="button"
+              className="text-xs px-2 py-1 text-foreground hover:bg-accent rounded transition"
+              onClick={() => void onBulkExport(selectedScanIds, 'jsonl')}
+            >
+              Export JSONL
+            </button>
+            <button
+              type="button"
+              className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground"
+              onClick={() => setSelectedScanIds([])}
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Recent Scans</CardTitle>
@@ -241,6 +313,9 @@ export function ScanTable({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/30">
+                  <th className="py-3 px-4">
+                    <input type="checkbox" aria-label="Select all scans" />
+                  </th>
                   <th className="text-left py-3 px-4 text-muted-foreground font-medium">TARGET</th>
                   <th className="text-left py-3 px-4 text-muted-foreground font-medium">TYPE</th>
                   <th className="text-left py-3 px-4 text-muted-foreground font-medium">STATUS</th>
@@ -271,6 +346,14 @@ export function ScanTable({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/30">
+                  <th className="py-3 px-4">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all visible scans"
+                      checked={allVisibleSelected}
+                      onChange={toggleAllVisibleRows}
+                    />
+                  </th>
                   {SORTABLE_COLUMNS.map((column) => {
                     const active = sortField === column.field;
                     return (
@@ -315,6 +398,18 @@ export function ScanTable({
                       onClick={() => handleRowOpen(scan.id)}
                       aria-selected={isActive}
                     >
+                      <td className="py-3 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedScanIds.includes(scan.id)}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            toggleRowSelection(scan.id);
+                          }}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`Select scan ${scan.id}`}
+                        />
+                      </td>
                       <td className="py-3 px-4 text-foreground text-xs max-w-[20rem] truncate" title={scan.inputRef}>
                         {scan.inputRef}
                       </td>

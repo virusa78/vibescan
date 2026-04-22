@@ -2,6 +2,7 @@ import { type User, type Scan, type Finding } from "wasp/entities";
 import { HttpError, prisma } from "wasp/server";
 import * as z from "zod";
 import { ensureArgsSchemaOrThrowHttpError } from "../../validation";
+import { mapAcceptanceToAnnotationState } from "./annotations";
 
 const getReportInputSchema = z.object({
   scanId: z.string().nonempty(),
@@ -84,6 +85,30 @@ export const getReport = async (rawArgs: any, context: any): Promise<GetReportRe
     throw new HttpError(403, "Unauthorized");
   }
 
+  const acceptanceRows = await prisma.vulnAcceptance.findMany({
+    where: {
+      scanId,
+      userId: context.user.id,
+      vulnerabilityId: {
+        in: scan.findings.map((finding) => finding.id),
+      },
+    },
+  });
+
+  const annotationByFindingId = new Map(
+    acceptanceRows.map((acceptance) => [
+      acceptance.vulnerabilityId,
+      {
+        state: mapAcceptanceToAnnotationState({
+          status: acceptance.status,
+          expiresAt: acceptance.expiresAt,
+        }),
+        reason: acceptance.reason,
+        expires_at: acceptance.expiresAt ? acceptance.expiresAt.toISOString() : null,
+      },
+    ]),
+  );
+
   const lockedView = false;
 
   // Get findings and categorize by source
@@ -120,6 +145,7 @@ export const getReport = async (rawArgs: any, context: any): Promise<GetReportRe
       source: f.source,
       filePath: f.filePath,
       status: f.status,
+      annotation: annotationByFindingId.get(f.id) ?? null,
     })),
   };
 
