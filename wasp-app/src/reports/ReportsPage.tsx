@@ -3,7 +3,7 @@ import { useParams } from "react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
 import { Button } from "../client/components/ui/button";
 import { Input } from "../client/components/ui/input";
-import { Label } from "../client/components/ui/label";
+import { Skeleton } from "../client/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -14,6 +14,8 @@ import {
 import { AlertCircle, FileText, ShieldCheck } from "lucide-react";
 import { useAsyncState } from "../client/hooks/useAsyncState";
 import { api } from "wasp/client/api";
+import { ToggleChipGroup } from "../client/components/common/ToggleChipGroup";
+import { Link as ExternalLink } from "../client/components/common/VibeUI";
 
 type SeveritySummary = {
   critical?: number;
@@ -34,6 +36,7 @@ type ReportFinding = {
   cveId?: string;
   cve?: string;
   packageName?: string;
+  ecosystem?: string;
   severity?: string;
   description?: string;
 };
@@ -102,10 +105,49 @@ export default function ReportsPage() {
     }
   };
 
+  const findings = report?.findings ?? [];
+  const sev = summary?.severity ?? {};
+  const severityChipOptions = useMemo(() => {
+    const entries = [
+      { value: "critical", label: "Critical", count: sev.critical ?? 0 },
+      { value: "high", label: "High", count: sev.high ?? 0 },
+      { value: "medium", label: "Medium", count: sev.medium ?? 0 },
+      { value: "low", label: "Low", count: sev.low ?? 0 },
+      { value: "info", label: "Info", count: sev.info ?? 0 },
+    ];
+    return [{ value: "all", label: "All", count: summary?.totalFindings ?? 0 }, ...entries];
+  }, [sev.critical, sev.high, sev.info, sev.low, sev.medium, summary?.totalFindings]);
+
   if (isLoading) {
     return (
-      <div className="p-8">
-        <div className="text-center text-muted-foreground">Loading report...</div>
+      <div className="p-8 lg:p-10 space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-40" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map((idx) => (
+            <Card key={idx} className="border-border/50 bg-card/50 backdrop-blur-sm">
+              <CardHeader className="pb-3">
+                <Skeleton className="h-3 w-24" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+          <CardHeader>
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-4 w-56" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {[0, 1, 2].map((idx) => (
+              <Skeleton key={idx} className="h-14 w-full" />
+            ))}
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -119,9 +161,6 @@ export default function ReportsPage() {
       </div>
     );
   }
-
-  const findings = report?.findings ?? [];
-  const sev = summary?.severity ?? {};
 
   const filteredFindings = useMemo(() => {
     const list = (findings || []).slice();
@@ -143,6 +182,29 @@ export default function ReportsPage() {
 
     return res;
   }, [findings, searchQuery, severityFilter, sortBy]);
+
+  const resolveCve = (finding: ReportFinding) => finding.cveId ?? finding.cve ?? "";
+
+  const buildPackageLink = (finding: ReportFinding): string | null => {
+    const pkg = (finding.packageName ?? "").trim();
+    if (!pkg) return null;
+
+    const ecosystem = (finding.ecosystem ?? "").toLowerCase();
+    if (ecosystem === "npm") return `https://www.npmjs.com/package/${encodeURIComponent(pkg)}`;
+    if (ecosystem === "pypi") return `https://pypi.org/project/${encodeURIComponent(pkg)}/`;
+    if (ecosystem === "go") return `https://pkg.go.dev/${pkg}`;
+    if (ecosystem === "docker") return `https://hub.docker.com/_/${encodeURIComponent(pkg)}`;
+    if (ecosystem === "maven" && pkg.includes(":")) {
+      const [group, artifact] = pkg.split(":");
+      if (group && artifact) return `https://central.sonatype.com/artifact/${group}/${artifact}`;
+    }
+
+    if (pkg.startsWith("pkg:npm/")) return `https://www.npmjs.com/package/${encodeURIComponent(pkg.slice("pkg:npm/".length))}`;
+    if (pkg.startsWith("pkg:pypi/")) return `https://pypi.org/project/${encodeURIComponent(pkg.slice("pkg:pypi/".length))}/`;
+    if (pkg.startsWith("pkg:golang/")) return `https://pkg.go.dev/${pkg.slice("pkg:golang/".length)}`;
+    if (pkg.startsWith("pkg:docker/")) return `https://hub.docker.com/_/${encodeURIComponent(pkg.slice("pkg:docker/".length))}`;
+    return null;
+  };
 
   return (
     <div className="p-8 lg:p-10">
@@ -225,19 +287,6 @@ export default function ReportsPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-64"
             />
-            <Select value={severityFilter} onValueChange={(val) => setSeverityFilter(val as any)}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Severity" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="critical">Critical</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="info">Info</SelectItem>
-              </SelectContent>
-            </Select>
             <Select value={sortBy} onValueChange={(val) => setSortBy(val as any)}>
               <SelectTrigger className="w-44">
                 <SelectValue placeholder="Sort" />
@@ -252,6 +301,13 @@ export default function ReportsPage() {
             <Button onClick={() => { setSearchQuery(''); setSeverityFilter('all'); setSortBy('newest'); }}>
               Clear
             </Button>
+          </div>
+          <div className="mt-3">
+            <ToggleChipGroup
+              options={severityChipOptions}
+              value={severityFilter}
+              onChange={(next) => setSeverityFilter(next as typeof severityFilter)}
+            />
           </div>
         </CardHeader>
         <CardContent>
@@ -269,14 +325,35 @@ export default function ReportsPage() {
                   <div key={fid} className="rounded-md border border-border/50 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-mono text-sm text-foreground">
-                        <a href={`/scans/${scanId}`} className="underline">{finding.cveId ?? finding.cve ?? "Unknown CVE"}</a>
+                        {resolveCve(finding) ? (
+                          <span className="flex items-center gap-2">
+                            <ExternalLink href={`https://github.com/advisories?query=${encodeURIComponent(resolveCve(finding))}`}>
+                              {resolveCve(finding)}
+                            </ExternalLink>
+                            <ExternalLink href={`https://nvd.nist.gov/vuln/detail/${encodeURIComponent(resolveCve(finding))}`} withIcon={false} className="text-xs text-muted-foreground">
+                              NVD
+                            </ExternalLink>
+                          </span>
+                        ) : (
+                          "Unknown CVE"
+                        )}
                       </p>
                       <span className="text-xs px-2 py-1 rounded bg-accent/60 text-foreground">
                         {(finding.severity ?? "unknown").toUpperCase()}
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {finding.packageName ?? finding.description ?? "No details"}
+                      {finding.packageName ? (
+                        buildPackageLink(finding) ? (
+                          <ExternalLink href={buildPackageLink(finding)!} className="text-sm">
+                            {finding.packageName}
+                          </ExternalLink>
+                        ) : (
+                          finding.packageName
+                        )
+                      ) : (
+                        finding.description ?? "No details"
+                      )}
                     </p>
                     <div className="mt-2 flex items-center gap-2">
                       <Button onClick={() => {

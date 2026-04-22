@@ -1,8 +1,14 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { routes } from "wasp/client/router";
 import { useAuth } from "wasp/client/auth";
 import { Toaster } from "../client/components/ui/toaster";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../client/components/ui/dialog";
 import { applyTheme, readThemePreference } from "./theme";
 import { useTokenRefresh } from "./hooks/useTokenRefresh";
 import "./theme-init";
@@ -19,6 +25,7 @@ import CookieConsentBanner from "./components/cookie-consent/Banner";
 export default function App() {
   const location = useLocation();
   const { data: user, isLoading: isAuthLoading } = useAuth();
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   
   // Initialize token refresh on mount
   useTokenRefresh();
@@ -93,6 +100,31 @@ export default function App() {
     }
   }, [location]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      const tagName = target.tagName.toLowerCase();
+      const isTypingTarget =
+        target.isContentEditable ||
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select";
+      if (isTypingTarget) return;
+
+      const pressedQuestionMark =
+        event.key === "?" || (event.key === "/" && event.shiftKey);
+      if (!pressedQuestionMark) return;
+
+      event.preventDefault();
+      setIsShortcutsOpen((prev) => !prev);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   if (redirectPath) {
     return <Navigate to={redirectPath} replace />;
   }
@@ -119,6 +151,36 @@ export default function App() {
       </div>
       <Toaster position="bottom-right" />
       <CookieConsentBanner />
+      <Dialog open={isShortcutsOpen} onOpenChange={setIsShortcutsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Keyboard Shortcuts</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div>
+              <p className="text-muted-foreground mb-2 text-xs uppercase tracking-wide">Global</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-md border p-2"><strong>?</strong> Open this overlay</div>
+                <div className="rounded-md border p-2"><strong>Esc</strong> Close dialogs and overlays</div>
+              </div>
+            </div>
+            <div>
+              <p className="text-muted-foreground mb-2 text-xs uppercase tracking-wide">Reports</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-md border p-2"><strong>/</strong> Focus search input</div>
+                <div className="rounded-md border p-2"><strong>1..5</strong> Toggle severity chips</div>
+              </div>
+            </div>
+            <div>
+              <p className="text-muted-foreground mb-2 text-xs uppercase tracking-wide">Dashboard</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-md border p-2"><strong>/</strong> Focus scans filter</div>
+                <div className="rounded-md border p-2"><strong>Enter</strong> Open selected scan row</div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

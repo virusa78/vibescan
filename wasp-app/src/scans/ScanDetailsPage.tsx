@@ -4,6 +4,7 @@ import { Link as WaspRouterLink, routes } from "wasp/client/router";
 import { Alert, AlertDescription } from "../client/components/ui/alert";
 import { Button } from "../client/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
+import { Skeleton } from "../client/components/ui/skeleton";
 import { getScanTypeDisplay } from "../client/utils/severity";
 
 function getStatusClass(status: string) {
@@ -30,7 +31,28 @@ export default function ScanDetailsPage() {
   );
 
   if (scanQuery.isLoading) {
-    return <div className="p-8 text-sm text-muted-foreground">Loading scan details...</div>;
+    return (
+      <div className="mx-auto max-w-4xl px-6 py-10 space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-44" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-72" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Skeleton className="h-8 w-40" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   if (scanQuery.error) {

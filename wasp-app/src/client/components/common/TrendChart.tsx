@@ -1,6 +1,7 @@
 import React from 'react';
 import Chart from 'react-apexcharts';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Skeleton } from '../ui/skeleton';
 
 type Series = {
   name: string;
@@ -25,8 +26,13 @@ export function TrendChart({ categories, series, loading = false }: { categories
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="flex items-center justify-center h-48 bg-muted/20 rounded animate-pulse">
-            <p className="text-muted-foreground">Loading trends...</p>
+          <div className="space-y-3">
+            <Skeleton className="h-48 w-full" />
+            <div className="grid grid-cols-3 gap-2">
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-full" />
+            </div>
           </div>
         ) : (
           <div>
