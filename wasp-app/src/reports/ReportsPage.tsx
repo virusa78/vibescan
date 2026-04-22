@@ -118,50 +118,6 @@ export default function ReportsPage() {
     return [{ value: "all", label: "All", count: summary?.totalFindings ?? 0 }, ...entries];
   }, [sev.critical, sev.high, sev.info, sev.low, sev.medium, summary?.totalFindings]);
 
-  if (isLoading) {
-    return (
-      <div className="p-8 lg:p-10 space-y-6">
-        <div className="space-y-2">
-          <Skeleton className="h-10 w-40" />
-          <Skeleton className="h-4 w-64" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[0, 1, 2, 3].map((idx) => (
-            <Card key={idx} className="border-border/50 bg-card/50 backdrop-blur-sm">
-              <CardHeader className="pb-3">
-                <Skeleton className="h-3 w-24" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-16" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardHeader>
-            <Skeleton className="h-5 w-24" />
-            <Skeleton className="h-4 w-56" />
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[0, 1, 2].map((idx) => (
-              <Skeleton key={idx} className="h-14 w-full" />
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-8">
-        <div className="rounded-md border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-600">
-          {error}
-        </div>
-      </div>
-    );
-  }
-
   const filteredFindings = useMemo(() => {
     const list = (findings || []).slice();
     const q = searchQuery.trim().toLowerCase();
@@ -205,6 +161,50 @@ export default function ReportsPage() {
     if (pkg.startsWith("pkg:docker/")) return `https://hub.docker.com/_/${encodeURIComponent(pkg.slice("pkg:docker/".length))}`;
     return null;
   };
+
+  if (isLoading) {
+    return (
+      <div className="p-8 lg:p-10 space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-40" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map((idx) => (
+            <Card key={idx} className="border-border/50 bg-card/50 backdrop-blur-sm">
+              <CardHeader className="pb-3">
+                <Skeleton className="h-3 w-24" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+          <CardHeader>
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-4 w-56" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {[0, 1, 2].map((idx) => (
+              <Skeleton key={idx} className="h-14 w-full" />
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="rounded-md border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-600">
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 lg:p-10">
