@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from 'wasp/client/auth';
-import {
-  generateApiKey,
-  listApiKeys,
-  revokeApiKey,
-} from 'wasp/client/operations';
+import { api } from 'wasp/client/api';
 import type { ApiKey } from 'wasp/entities';
 import { Alert, AlertDescription } from '../client/components/ui/alert';
 import { Button } from '../client/components/ui/button';
@@ -29,8 +25,8 @@ export default function ApiKeysPage() {
     if (!user) return;
     await run(
       async () => {
-        const keys = await listApiKeys();
-        setApiKeys(keys);
+        const res = await api.get('/api/v1/api-keys');
+        setApiKeys(res.data || []);
       },
       { errorMessage: 'Failed to load API keys' },
     );
@@ -51,15 +47,16 @@ export default function ApiKeysPage() {
     setSuccessMessage(null);
     await run(
       async () => {
-        const result = await generateApiKey({ name: newKeyName });
+        const res = await api.post('/api/v1/api-keys', { name: newKeyName });
+        const result = res.data;
         setGeneratedKey(result);
         setNewKeyName('');
         setShowNewKeyForm(false);
         setSuccessMessage('API key generated. Copy it now—you won\'t see it again!');
 
         // Reload keys
-        const keys = await listApiKeys();
-        setApiKeys(keys);
+        const reload = await api.get('/api/v1/api-keys');
+        setApiKeys(reload.data || []);
       },
       { errorMessage: 'Failed to generate API key' },
     );
@@ -70,10 +67,10 @@ export default function ApiKeysPage() {
 
     await run(
       async () => {
-        await revokeApiKey({ id: keyId });
+        await api.delete(`/api/v1/api-keys/${encodeURIComponent(keyId)}`);
         setSuccessMessage('API key revoked');
-        const keys = await listApiKeys();
-        setApiKeys(keys);
+        const reload = await api.get('/api/v1/api-keys');
+        setApiKeys(reload.data || []);
       },
       { errorMessage: 'Failed to revoke API key', setLoading: false },
     );
