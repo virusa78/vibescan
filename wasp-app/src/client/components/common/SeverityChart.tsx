@@ -1,6 +1,7 @@
 import React from 'react';
 import Chart from 'react-apexcharts';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Skeleton } from '../ui/skeleton';
 
 interface SeverityChartProps {
   data: {
@@ -71,8 +72,14 @@ export function SeverityChart({ data, loading = false }: SeverityChartProps) {
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="flex items-center justify-center h-64 bg-muted/20 rounded animate-pulse">
-            <p className="text-muted-foreground">Loading chart...</p>
+          <div className="space-y-4">
+            <Skeleton className="h-64 w-full" />
+            <div className="grid grid-cols-2 gap-3">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
           </div>
         ) : data.total === 0 ? (
           <div className="flex items-center justify-center h-64 bg-muted/20 rounded">

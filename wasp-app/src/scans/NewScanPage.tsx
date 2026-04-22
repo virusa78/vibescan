@@ -5,6 +5,7 @@ import { Button } from "../client/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
 import { Input } from "../client/components/ui/input";
 import { Label } from "../client/components/ui/label";
+import { Skeleton } from "../client/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -130,7 +131,12 @@ export default function NewScanPage() {
           </CardHeader>
           <CardContent>
             {isRecentLoading && (
-              <div className="text-muted-foreground text-sm">Loading recent scans...</div>
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
             )}
             {recentError && !isRecentLoading && (
               <Alert variant="destructive">
