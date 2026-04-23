@@ -232,6 +232,16 @@ wasp db push                            # Sync schema to DB (development)
 11. **PostgreSQL Authority**: Wasp/Prisma is cache; PostgreSQL is source of truth
 12. **No Raw Key Storage**: API keys returned once at generation, never logged
 
+## Context Reset Contract
+
+When work spans multiple turns, preserve a context-reset-safe plan:
+- Keep `plan.md` as the single active source of truth for the current phase, next step, and handoff contract.
+- Maintain exactly one active phase at the top of `plan.md`; archive older phases below it.
+- Update `docs/CYCLONEDX_CHECKLIST.md` together with `plan.md` when phase scope or done criteria change.
+- Keep runbooks and evidence/schema docs synchronized with the active phase so the next agent can resume from files alone.
+- Record architectural decisions in the plan itself, not only in chat, so a cleared context does not lose intent.
+- After a phase boundary, refresh the plan before starting implementation so the next step is recoverable without prior conversation state.
+
 ## Testing Strategy
 
 **Unit Tests** (`test/unit/`)
