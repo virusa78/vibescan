@@ -29,8 +29,13 @@ export interface WebhookDetailResponse {
     scan_id: string;
     status: string;
     http_status: number | null;
+    event: string;
+    attempt: number;
+    duration: number | null;
     created_at: Date;
     delivered_at: Date | null;
+    payload: unknown;
+    response: string | null;
   }>;
 }
 
@@ -83,8 +88,13 @@ export async function getWebhook(
         scanId: true,
         status: true,
         httpStatus: true,
+        eventType: true,
+        attemptNumber: true,
+        durationMs: true,
         createdAt: true,
         deliveredAt: true,
+        payload: true,
+        responseBody: true,
       },
     });
 
@@ -102,8 +112,13 @@ export async function getWebhook(
         scan_id: d.scanId,
         status: d.status,
         http_status: d.httpStatus,
+        event: d.eventType ?? 'scan_complete',
+        attempt: d.attemptNumber,
+        duration: d.durationMs ?? null,
         created_at: d.createdAt,
         delivered_at: d.deliveredAt,
+        payload: d.payload ?? null,
+        response: d.responseBody ?? null,
       })),
     };
   } catch (err) {

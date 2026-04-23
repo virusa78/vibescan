@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { BarChart3, Bug, TrendingUp, Zap } from 'lucide-react';
+import { api } from 'wasp/client/api';
+import { toast } from '../client/hooks/use-toast';
 import { MetricCard } from '../client/components/common/MetricCard';
 import { ScanTable } from '../client/components/common/ScanTable';
 import { SeverityChart } from '../client/components/common/SeverityChart';
@@ -16,11 +19,21 @@ import {
   SelectValue,
 } from '../client/components/ui/select';
 import { useAsyncState } from '../client/hooks/useAsyncState';
-import { api } from 'wasp/client/api';
+import {
+  type DashboardSortDirection,
+  type DashboardSortField,
+  type DashboardStatus,
+  buildDashboardSearch,
+  normalizeStatusValue,
+  parseDashboardSearch,
+} from './urlState';
+import { isEditableTarget } from '../client/utils/keyboard';
+
+type DashboardTimeRange = '7d' | '30d' | 'all';
 
 interface Scan {
   id: string;
-  status: string;
+  status: DashboardStatus;
   inputType: string;
   inputRef: string;
   createdAt: Date;
@@ -37,8 +50,6 @@ interface SeverityBreakdown {
   info: number;
   total: number;
 }
-
-type DashboardTimeRange = '7d' | '30d' | 'all';
 
 interface TrendBucket {
   bucket_start: string;
@@ -58,7 +69,63 @@ interface TrendSeriesResponse {
   };
 }
 
+interface SavedView {
+  id: string;
+  name: string;
+  sortField: DashboardSortField;
+  sortDirection: DashboardSortDirection;
+  statuses: DashboardStatus[];
+  query: string;
+}
+
+interface RecentScanApiRecord {
+  id: string;
+  status: string;
+  inputType: string;
+  inputRef: string;
+  createdAt?: string | number | Date;
+  created_at?: string | number | Date;
+  completedAt?: string | number | Date | null;
+  completed_at?: string | number | Date | null;
+  vulnerability_count?: number;
+  findingsCount?: number;
+  planAtSubmission?: string;
+  plan_at_submission?: string;
+}
+
+function normalizeScanStatus(raw: string): DashboardStatus {
+  const normalized = normalizeStatusValue(raw);
+  return normalized ?? 'pending';
+}
+
+function normalizeStatusCounts(rawCounts: Partial<Record<string, number>> | null | undefined): Record<DashboardStatus, number> {
+  const counts: Record<DashboardStatus, number> = {
+    pending: 0,
+    scanning: 0,
+    done: 0,
+    error: 0,
+    cancelled: 0,
+  };
+
+  if (!rawCounts) {
+    return counts;
+  }
+
+  for (const [key, value] of Object.entries(rawCounts)) {
+    const normalized = normalizeStatusValue(key);
+    if (!normalized) continue;
+    counts[normalized] += Number.isFinite(value) ? Number(value) : 0;
+  }
+
+  return counts;
+}
+
 export default function DashboardPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const parsedSearch = useMemo(() => parseDashboardSearch(location.search), [location.search]);
+
   const [scans, setScans] = useState<Scan[]>([]);
   const { isLoading, error, run } = useAsyncState(true);
   const [timeRange, setTimeRange] = useState<DashboardTimeRange>('30d');
@@ -70,6 +137,13 @@ export default function DashboardPage() {
     info: 0,
     total: 0,
   });
+  const [statusCounts, setStatusCounts] = useState<Record<DashboardStatus, number>>({
+    pending: 0,
+    scanning: 0,
+    done: 0,
+    error: 0,
+    cancelled: 0,
+  });
   const [quota, setQuota] = useState<{
     used: number;
     limit: number;
@@ -77,40 +151,112 @@ export default function DashboardPage() {
     monthly_reset_date?: string;
   } | null>(null);
   const [trends, setTrends] = useState<TrendSeriesResponse | null>(null);
+  const [searchInputValue, setSearchInputValue] = useState(parsedSearch.query);
+  const [totalCount, setTotalCount] = useState(0);
+  const [filteredCount, setFilteredCount] = useState(0);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [savedViewName, setSavedViewName] = useState('');
+  const [activeSavedViewId, setActiveSavedViewId] = useState('');
 
-  // Dashboard UI state: time range & table filters
-  const [timeRange, setTimeRange] = useState<'7d' | '30d' | 'all'>('7d');
-  const [scanQuery, setScanQuery] = useState('');
-  const [scanStatusFilter, setScanStatusFilter] = useState<'all' | string>('all');
-  const [scanTypeFilter, setScanTypeFilter] = useState<'all' | string>('all');
+  useEffect(() => {
+    if (parsedSearch.isValid) return;
 
-  // Load data from API
+    navigate(
+      {
+        pathname: location.pathname,
+        search: parsedSearch.normalizedSearch,
+      },
+      { replace: true },
+    );
+  }, [location.pathname, navigate, parsedSearch.isValid, parsedSearch.normalizedSearch]);
+
+  useEffect(() => {
+    setSearchInputValue(parsedSearch.query);
+  }, [parsedSearch.query]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const nextQuery = searchInputValue.trim();
+      if (nextQuery === parsedSearch.query) {
+        return;
+      }
+
+      const nextSearch = buildDashboardSearch(
+        parsedSearch.sortField,
+        parsedSearch.sortDirection,
+        parsedSearch.statuses,
+        nextQuery,
+      );
+
+      navigate({ pathname: location.pathname, search: nextSearch }, { replace: true });
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [
+    location.pathname,
+    navigate,
+    parsedSearch.query,
+    parsedSearch.sortDirection,
+    parsedSearch.sortField,
+    parsedSearch.statuses,
+    searchInputValue,
+  ]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== '/' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+
+      event.preventDefault();
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   useEffect(() => {
     run(
       async () => {
-        // Fetch scans from API
-        const scansRes = await api.get('/api/v1/dashboard/recent-scans?limit=10');
+        const scansRes = await api.get('/api/v1/dashboard/recent-scans', {
+          params: {
+            limit: 10,
+            sort: `${parsedSearch.sortField}:${parsedSearch.sortDirection}`,
+            ...(parsedSearch.statuses.length > 0 ? { status: parsedSearch.statuses.join(',') } : {}),
+            ...(parsedSearch.query ? { q: parsedSearch.query } : {}),
+          },
+        });
+
         const scansData = scansRes.data;
-        const formattedScans = (scansData.scans || []).map((scan: any) => {
+        const formattedScans = ((scansData.scans || []) as RecentScanApiRecord[]).map((scan) => {
           const createdAtValue = scan.createdAt ?? scan.created_at ?? Date.now();
           const completedAtValue = scan.completedAt ?? scan.completed_at;
 
           return {
-          id: scan.id,
-          status: scan.status,
-          inputType: scan.inputType,
-          inputRef: scan.inputRef,
-          createdAt: new Date(createdAtValue),
-          completedAt: completedAtValue ? new Date(completedAtValue) : null,
-          findingsCount: scan.vulnerability_count ?? scan.findingsCount ?? 0,
-          planAtSubmission: scan.planAtSubmission ?? scan.plan_at_submission,
+            id: scan.id,
+            status: normalizeScanStatus(scan.status),
+            inputType: scan.inputType,
+            inputRef: scan.inputRef,
+            createdAt: new Date(createdAtValue),
+            completedAt: completedAtValue ? new Date(completedAtValue) : null,
+            findingsCount: scan.vulnerability_count ?? scan.findingsCount ?? 0,
+            planAtSubmission: scan.planAtSubmission ?? scan.plan_at_submission,
           };
         });
 
         setScans(formattedScans);
+        setStatusCounts(normalizeStatusCounts(scansData.status_counts));
+        setTotalCount(Number(scansData.total_count ?? 0));
+        setFilteredCount(Number(scansData.filtered_count ?? formattedScans.length));
 
-        // Fetch additional data from API
-        const [quotaRes, severityRes, trendsRes] = await Promise.all([
+        const [quotaRes, severityRes, trendsRes, savedViewsRes] = await Promise.all([
           api.get('/api/v1/dashboard/quota'),
           api.get('/api/v1/dashboard/severity-breakdown', {
             params: { time_range: timeRange },
@@ -118,12 +264,13 @@ export default function DashboardPage() {
           api.get('/api/v1/dashboard/trends', {
             params: { time_range: timeRange },
           }),
+          api.get('/api/v1/dashboard/saved-views'),
         ]);
 
         setQuota(quotaRes.data);
-
         setSeverity(severityRes.data);
         setTrends(trendsRes.data);
+        setSavedViews(Array.isArray(savedViewsRes.data?.views) ? savedViewsRes.data.views : []);
       },
       {
         errorMessage: 'Failed to load dashboard',
@@ -132,24 +279,21 @@ export default function DashboardPage() {
         },
       },
     );
-  }, [run, timeRange]);
+  }, [parsedSearch.query, parsedSearch.sortDirection, parsedSearch.sortField, parsedSearch.statuses, refreshTick, run, timeRange]);
 
-  // Calculate metrics
   const metrics = useMemo(() => {
-    const completed = scans.filter(s => s.status === 'done' || s.status === 'completed');
-    const totalVulnerabilities = completed.reduce((sum, s) => sum + (s.findingsCount || 0), 0);
-    const running = scans.filter(s =>
-      ['pending', 'scanning', 'running', 'queued'].includes(s.status.toLowerCase())
-    ).length;
+    const completed = scans.filter((scan) => scan.status === 'done');
+    const totalVulnerabilities = completed.reduce((sum, scan) => sum + (scan.findingsCount || 0), 0);
+    const running = scans.filter((scan) => scan.status === 'pending' || scan.status === 'scanning').length;
 
     const avgSeverity =
       severity.critical > 0
         ? 'Critical'
         : severity.high > 0
-        ? 'High'
-        : severity.medium > 0
-        ? 'Medium'
-        : 'Low';
+          ? 'High'
+          : severity.medium > 0
+            ? 'Medium'
+            : 'Low';
 
     return {
       totalScans: completed.length,
@@ -159,10 +303,13 @@ export default function DashboardPage() {
     };
   }, [scans, severity]);
 
-  // Format scans for table
+  const scansById = useMemo(() => {
+    return new Map(scans.map((scan) => [scan.id, scan]));
+  }, [scans]);
+
   const tableScans = useMemo(
     () =>
-      scans.map(scan => ({
+      scans.map((scan) => ({
         id: scan.id,
         status: scan.status,
         inputType: scan.inputType,
@@ -170,7 +317,7 @@ export default function DashboardPage() {
         created_at: scan.createdAt.toISOString(),
         vulnerability_count: scan.findingsCount || 0,
       })),
-    [scans]
+    [scans],
   );
 
   // Trends: bucket recent scans by day and count findings
@@ -255,15 +402,219 @@ export default function DashboardPage() {
     () => (trends?.buckets ?? []).slice(-12),
     [trends],
   );
+
   const maxTrendValue = useMemo(() => {
     return visibleTrendBuckets.reduce((max, bucket) => {
       return Math.max(max, bucket.scans, bucket.findings, bucket.delta);
     }, 1);
   }, [visibleTrendBuckets]);
 
+  const handleSortChange = (field: DashboardSortField) => {
+    const nextDirection: DashboardSortDirection =
+      field === parsedSearch.sortField && parsedSearch.sortDirection === 'asc' ? 'desc' : 'asc';
+    const nextSearch = buildDashboardSearch(field, nextDirection, parsedSearch.statuses, parsedSearch.query);
+    navigate({ pathname: location.pathname, search: nextSearch }, { replace: false });
+  };
+
+  const handleToggleStatus = (status: DashboardStatus) => {
+    const nextStatuses = parsedSearch.statuses.includes(status)
+      ? parsedSearch.statuses.filter((value) => value !== status)
+      : [...parsedSearch.statuses, status];
+
+    const nextSearch = buildDashboardSearch(parsedSearch.sortField, parsedSearch.sortDirection, nextStatuses, parsedSearch.query);
+    navigate({ pathname: location.pathname, search: nextSearch }, { replace: false });
+  };
+
+  const handleRefresh = () => {
+    setRefreshTick((previous) => previous + 1);
+  };
+
+  const handleCancelScan = async (scanId: string) => {
+    try {
+      await api.delete(`/api/v1/scans/${scanId}`);
+      toast({ title: 'Scan cancelled', description: scanId });
+      handleRefresh();
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Cancel failed', description: scanId, variant: 'destructive' });
+    }
+  };
+
+  const handleRerunScan = async (scanId: string) => {
+    const sourceScan = scansById.get(scanId);
+    if (!sourceScan || !sourceScan.inputRef || !sourceScan.inputType) {
+      toast({ title: 'Cannot re-run', description: 'Missing source input for this scan', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      await api.post('/api/v1/scans', {
+        inputRef: sourceScan.inputRef,
+        inputType: sourceScan.inputType,
+      });
+
+      toast({ title: 'Re-run queued', description: sourceScan.inputRef });
+      handleRefresh();
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Re-run failed', description: sourceScan.inputRef, variant: 'destructive' });
+    }
+  };
+
+  const handleCopyScanId = async (scanId: string) => {
+    try {
+      await navigator.clipboard.writeText(scanId);
+      toast({ title: 'Scan ID copied', description: scanId });
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Copy failed', description: scanId, variant: 'destructive' });
+    }
+  };
+
+  const handleBulkCancel = async (scanIds: string[]) => {
+    try {
+      const response = await api.post('/api/v1/dashboard/scans/bulk-cancel', { scanIds });
+      const data = response.data;
+      toast({
+        title: 'Bulk cancel finished',
+        description: `${data.succeeded}/${data.requested} cancelled`,
+      });
+      handleRefresh();
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Bulk cancel failed', variant: 'destructive' });
+    }
+  };
+
+  const handleBulkRerun = async (scanIds: string[]) => {
+    try {
+      const response = await api.post('/api/v1/dashboard/scans/bulk-rerun', { scanIds });
+      const data = response.data;
+      toast({
+        title: 'Bulk re-run finished',
+        description: `${data.succeeded}/${data.requested} queued`,
+      });
+      handleRefresh();
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Bulk re-run failed', variant: 'destructive' });
+    }
+  };
+
+  const downloadFile = (filename: string, content: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleBulkExport = async (scanIds: string[], format: 'csv' | 'jsonl') => {
+    try {
+      const response = await api.post('/api/v1/dashboard/scans/export', { scanIds, format });
+      const data = response.data;
+      const mimeType = format === 'csv' ? 'text/csv;charset=utf-8' : 'application/x-ndjson;charset=utf-8';
+      downloadFile(data.filename ?? `vibescan-scans.${format}`, data.content ?? '', mimeType);
+      toast({
+        title: 'Export ready',
+        description: `${data.exported ?? 0} rows exported`,
+      });
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Export failed', variant: 'destructive' });
+    }
+  };
+
+  const handleSaveCurrentView = async () => {
+    const name = savedViewName.trim();
+    if (!name) {
+      toast({ title: 'Name required', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const response = await api.post('/api/v1/dashboard/saved-views', {
+        name,
+        config: {
+          sortField: parsedSearch.sortField,
+          sortDirection: parsedSearch.sortDirection,
+          statuses: parsedSearch.statuses,
+          query: parsedSearch.query,
+        },
+      });
+      const created = response.data?.view as SavedView;
+      setSavedViews((previous) => [created, ...previous]);
+      setSavedViewName('');
+      setActiveSavedViewId(created.id);
+      toast({ title: 'Saved view created', description: created.name });
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Failed to save view', variant: 'destructive' });
+    }
+  };
+
+  const handleApplySavedView = () => {
+    const selectedView = savedViews.find((view) => view.id === activeSavedViewId);
+    if (!selectedView) {
+      return;
+    }
+    const nextSearch = buildDashboardSearch(
+      selectedView.sortField,
+      selectedView.sortDirection,
+      selectedView.statuses,
+      selectedView.query,
+    );
+    navigate({ pathname: location.pathname, search: nextSearch }, { replace: false });
+  };
+
+  const handleUpdateSavedView = async () => {
+    const selectedView = savedViews.find((view) => view.id === activeSavedViewId);
+    if (!selectedView) return;
+
+    try {
+      const response = await api.put(`/api/v1/dashboard/saved-views/${selectedView.id}`, {
+        config: {
+          sortField: parsedSearch.sortField,
+          sortDirection: parsedSearch.sortDirection,
+          statuses: parsedSearch.statuses,
+          query: parsedSearch.query,
+        },
+      });
+      const updated = response.data?.view as SavedView;
+      setSavedViews((previous) => previous.map((view) => (view.id === updated.id ? updated : view)));
+      toast({ title: 'Saved view updated', description: updated.name });
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Failed to update view', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteSavedView = async () => {
+    const selectedView = savedViews.find((view) => view.id === activeSavedViewId);
+    if (!selectedView) return;
+
+    try {
+      await api.delete(`/api/v1/dashboard/saved-views/${selectedView.id}`);
+      setSavedViews((previous) => previous.filter((view) => view.id !== selectedView.id));
+      setActiveSavedViewId('');
+      toast({ title: 'Saved view deleted', description: selectedView.name });
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Failed to delete view', variant: 'destructive' });
+    }
+  };
+
+  const hasAnyScans = useMemo(
+    () => Object.values(statusCounts).reduce((sum, count) => sum + count, 0) > 0,
+    [statusCounts],
+  );
+
   return (
     <div className="p-8 lg:p-10">
-      {/* Header */}
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-foreground text-4xl font-bold tracking-tight mb-2">Dashboard</h1>
@@ -280,6 +631,8 @@ export default function DashboardPage() {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => setTimeRange(range)}
+              aria-pressed={timeRange === range}
+              aria-label={`Set time range ${range.toUpperCase()}`}
             >
               {range.toUpperCase()}
             </button>
@@ -287,12 +640,11 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Error State */}
       {error && (
         <div className="mb-6 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-600">
           {error}
           <button
-            onClick={() => window.location.reload()}
+            onClick={handleRefresh}
             className="ml-3 underline hover:no-underline"
           >
             Retry
@@ -300,9 +652,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {statCards.map(stat => (
+        {statCards.map((stat) => (
           <MetricCard
             key={stat.label}
             label={stat.label}
@@ -315,7 +666,6 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Trend Series */}
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm mb-8">
         <CardHeader>
           <CardTitle className="text-sm">
@@ -330,9 +680,7 @@ export default function DashboardPage() {
               <div className="h-4 bg-muted rounded animate-pulse" />
             </div>
           ) : visibleTrendBuckets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No trend data available for selected range.
-            </p>
+            <p className="text-sm text-muted-foreground">No trend data available for selected range.</p>
           ) : (
             <div className="space-y-3">
               {visibleTrendBuckets.map((bucket) => {
@@ -368,9 +716,7 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Charts & Sidebar Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Trends Chart */}
         <div className="lg:col-span-2">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -398,9 +744,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Right Sidebar */}
         <div className="space-y-6">
-          {/* Quota Card */}
           <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-sm">Quota Usage</CardTitle>
@@ -408,8 +752,8 @@ export default function DashboardPage() {
             <CardContent className="space-y-3">
               {isLoading ? (
                 <div className="space-y-2">
-                  <div className="h-4 bg-muted rounded animate-pulse"></div>
-                  <div className="h-2 bg-muted rounded animate-pulse"></div>
+                  <div className="h-4 bg-muted rounded animate-pulse" />
+                  <div className="h-2 bg-muted rounded animate-pulse" />
                 </div>
               ) : quota ? (
                 <>
@@ -426,7 +770,7 @@ export default function DashboardPage() {
                       <div
                         className="bg-primary rounded-full h-2 transition-all"
                         style={{ width: `${Math.min(quota.percentage, 100)}%` }}
-                      ></div>
+                      />
                     </div>
                   </div>
                   {quota.monthly_reset_date && (
@@ -439,7 +783,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Severity Summary Card */}
           <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-sm">Severity Counts</CardTitle>
@@ -473,8 +816,64 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent Scans Table or Empty State */}
-      {scans.length === 0 && !isLoading ? (
+      <Card className="border-border/50 bg-card/50 backdrop-blur-sm mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm">Saved Views</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 md:flex-row md:items-center">
+          <input
+            value={savedViewName}
+            onChange={(event) => setSavedViewName(event.target.value)}
+            placeholder="View name"
+            className="w-full md:w-56 rounded border border-border/60 bg-background px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={handleSaveCurrentView}
+            className="rounded border border-primary/50 px-3 py-2 text-sm text-primary hover:bg-primary/10"
+          >
+            Save Current
+          </button>
+          <select
+            value={activeSavedViewId}
+            onChange={(event) => setActiveSavedViewId(event.target.value)}
+            className="w-full md:w-64 rounded border border-border/60 bg-background px-3 py-2 text-sm"
+          >
+            <option value="">Select saved view</option>
+            {savedViews.map((view) => (
+              <option key={view.id} value={view.id}>
+                {view.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={!activeSavedViewId}
+            onClick={handleApplySavedView}
+            className="rounded border border-border/60 px-3 py-2 text-sm disabled:opacity-50"
+          >
+            Apply
+          </button>
+          <button
+            type="button"
+            disabled={!activeSavedViewId}
+            onClick={handleUpdateSavedView}
+            className="rounded border border-border/60 px-3 py-2 text-sm disabled:opacity-50"
+          >
+            Update
+          </button>
+          <button
+            type="button"
+            disabled={!activeSavedViewId}
+            onClick={handleDeleteSavedView}
+            className="rounded border border-red-500/40 px-3 py-2 text-sm text-red-500 disabled:opacity-50"
+          >
+            Delete
+          </button>
+        </CardContent>
+      </Card>
+
+      {!hasAnyScans && !isLoading ? (
         <EmptyState
           title="No scans yet"
           description="Submit your first vulnerability scan to see results here"
@@ -482,47 +881,28 @@ export default function DashboardPage() {
           actionRoute="/new-scan"
         />
       ) : (
-        <div>
-          <div className="mb-4 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Input placeholder="Search scans by id or ref" value={scanQuery} onChange={(e) => setScanQuery(e.target.value)} className="w-64" />
-              <Select value={scanStatusFilter} onValueChange={(v) => setScanStatusFilter(v as any)}>
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={scanTypeFilter} onValueChange={(v) => setScanTypeFilter(v as any)}>
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All types</SelectItem>
-                  <SelectItem value="github_app">GitHub App</SelectItem>
-                  <SelectItem value="sbom_upload">SBOM</SelectItem>
-                  <SelectItem value="source_zip">Source ZIP</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button onClick={() => { setScanQuery(''); setScanStatusFilter('all'); setScanTypeFilter('all'); }}>
-                Clear
-              </Button>
-            </div>
-            <div>
-              {/* Reserved for future actions such as export */}
-            </div>
-          </div>
-
-          <ScanTable
-            scans={filteredTableScans}
-            loading={isLoading}
-            onRefresh={() => window.location.reload()}
-          />
-        </div>
+        <ScanTable
+          scans={tableScans}
+          loading={isLoading}
+          onRefresh={handleRefresh}
+          sortField={parsedSearch.sortField}
+          sortDirection={parsedSearch.sortDirection}
+          onSortChange={handleSortChange}
+          statusFilters={parsedSearch.statuses}
+          statusCounts={statusCounts}
+          onToggleStatus={handleToggleStatus}
+          searchQuery={searchInputValue}
+          onSearchQueryChange={setSearchInputValue}
+          searchInputRef={searchInputRef}
+          filteredCount={filteredCount}
+          totalCount={totalCount}
+          onCancelScan={handleCancelScan}
+          onRerunScan={handleRerunScan}
+          onCopyScanId={handleCopyScanId}
+          onBulkCancel={handleBulkCancel}
+          onBulkRerun={handleBulkRerun}
+          onBulkExport={handleBulkExport}
+        />
       )}
     </div>
   );

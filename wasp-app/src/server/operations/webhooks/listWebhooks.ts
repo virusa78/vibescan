@@ -8,6 +8,8 @@ export interface WebhookListResponse {
     created_at: Date;
     events: string[];
     enabled: boolean;
+    lastTriggeredAt?: string | null;
+    deliverySuccessRate?: number;
   }>;
 }
 
@@ -28,6 +30,14 @@ export async function listWebhooks(_args: void, context: any): Promise<WebhookLi
         createdAt: true,
         events: true,
         enabled: true,
+        deliveries: {
+          orderBy: { createdAt: 'desc' },
+          take: 100,
+          select: {
+            status: true,
+            createdAt: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -39,6 +49,13 @@ export async function listWebhooks(_args: void, context: any): Promise<WebhookLi
         created_at: w.createdAt,
         events: w.events,
         enabled: w.enabled,
+        lastTriggeredAt: w.deliveries?.[0]?.createdAt?.toISOString?.() ?? null,
+        deliverySuccessRate: (() => {
+          const total = w.deliveries?.length ?? 0;
+          if (total === 0) return 0;
+          const successful = w.deliveries.filter((delivery: any) => delivery.status === 'delivered').length;
+          return Math.round((successful / total) * 100);
+        })(),
       })),
     };
   } catch (_err) {

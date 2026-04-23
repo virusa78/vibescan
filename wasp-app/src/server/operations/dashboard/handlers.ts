@@ -5,6 +5,13 @@ import {
   getSeverityBreakdown,
   getQuotaStatus,
   getTrendSeries,
+  listScanSavedViews,
+  createScanSavedView,
+  updateScanSavedView,
+  deleteScanSavedView,
+  bulkCancelScans,
+  bulkRerunScans,
+  exportScans,
   type GetDashboardMetricsInput,
   type GetRecentScansInput,
   type GetSeverityBreakdownInput,
@@ -13,6 +20,7 @@ import {
 } from './index';
 import { resolveRequestUser } from '../../services/requestAuth';
 import { sendOperationError } from '../../http/httpErrors';
+import { parseJsonBodyWithLimit } from '../../http/requestGuards';
 import type { HandlerContext, HandlerRequest } from '../../http/handlerTypes';
 
 type DashboardTimeRange = '7d' | '30d' | 'all';
@@ -173,6 +181,115 @@ export async function getTrendSeriesApiHandler(
       ...(granularity ? { granularity } : {}),
     };
     const result = await getTrendSeries(args, { user, entities: context.entities });
+    response.status(200).json(result);
+  } catch (error) {
+    sendOperationError('dashboard-operation', error, response);
+  }
+}
+
+export async function listScanSavedViewsApiHandler(
+  request: HandlerRequest,
+  response: Response,
+  context: HandlerContext,
+) {
+  try {
+    const user = await resolveRequestUser(request, context);
+    const result = await listScanSavedViews({}, { user, entities: context.entities });
+    response.status(200).json(result);
+  } catch (error) {
+    sendOperationError('dashboard-operation', error, response);
+  }
+}
+
+export async function createScanSavedViewApiHandler(
+  request: HandlerRequest,
+  response: Response,
+  context: HandlerContext,
+) {
+  try {
+    const user = await resolveRequestUser(request, context);
+    const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
+    const result = await createScanSavedView(body, { user, entities: context.entities });
+    response.status(201).json(result);
+  } catch (error) {
+    sendOperationError('dashboard-operation', error, response);
+  }
+}
+
+export async function updateScanSavedViewApiHandler(
+  request: HandlerRequest,
+  response: Response,
+  context: HandlerContext,
+) {
+  try {
+    const user = await resolveRequestUser(request, context);
+    const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
+    const result = await updateScanSavedView(
+      { ...body, viewId: String(request.params.viewId) },
+      { user, entities: context.entities },
+    );
+    response.status(200).json(result);
+  } catch (error) {
+    sendOperationError('dashboard-operation', error, response);
+  }
+}
+
+export async function deleteScanSavedViewApiHandler(
+  request: HandlerRequest,
+  response: Response,
+  context: HandlerContext,
+) {
+  try {
+    const user = await resolveRequestUser(request, context);
+    const result = await deleteScanSavedView(
+      { viewId: String(request.params.viewId) },
+      { user, entities: context.entities },
+    );
+    response.status(200).json(result);
+  } catch (error) {
+    sendOperationError('dashboard-operation', error, response);
+  }
+}
+
+export async function bulkCancelScansApiHandler(
+  request: HandlerRequest,
+  response: Response,
+  context: HandlerContext,
+) {
+  try {
+    const user = await resolveRequestUser(request, context);
+    const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
+    const result = await bulkCancelScans(body, { user, entities: context.entities });
+    response.status(200).json(result);
+  } catch (error) {
+    sendOperationError('dashboard-operation', error, response);
+  }
+}
+
+export async function bulkRerunScansApiHandler(
+  request: HandlerRequest,
+  response: Response,
+  context: HandlerContext,
+) {
+  try {
+    const user = await resolveRequestUser(request, context);
+    const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
+    const result = await bulkRerunScans(body, { user, entities: context.entities });
+    response.status(200).json(result);
+  } catch (error) {
+    sendOperationError('dashboard-operation', error, response);
+  }
+}
+
+export async function exportScansApiHandler(
+  request: HandlerRequest,
+  response: Response,
+  context: HandlerContext,
+) {
+  try {
+    const user = await resolveRequestUser(request, context);
+    const body = parseJsonBodyWithLimit<Record<string, unknown>>(request.body);
+    const result = await exportScans(body, { user, entities: context.entities });
     response.status(200).json(result);
   } catch (error) {
     sendOperationError('dashboard-operation', error, response);

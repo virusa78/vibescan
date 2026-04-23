@@ -5,16 +5,21 @@
 
 import { Job } from 'bullmq';
 import { PrismaClient, type Prisma, type ScanSource, type ScanStatus } from '@prisma/client';
-import { normalizeCodescoringFindings } from '../operations/scans/normalizeFindings.js';
+import { normalizeCodescoringFindings, type NormalizedFinding } from '../operations/scans/normalizeFindings.js';
 import { scanWithCodescoring } from '../lib/scanners/codescoringApiClient.js';
 import { emitWebhookEvent, buildWebhookPayload } from '../services/webhookEventEmitter.js';
 import type { ScanJob } from '../queues/jobContract.js';
 import { loadScanArtifacts, type NormalizedComponent } from '../services/inputAdapterService.js';
+import {
+  decideComponentsWithCycloneDx,
+  ingestScannerFindingsWithCycloneDx,
+  logCycloneDxTelemetry,
+} from '../services/cyclonedxIngestionService.js';
 
 const prisma = new PrismaClient();
 
 export async function enterpriseScannerWorker(job: Job<ScanJob>) {
-  const { scanId, userId, inputType, inputRef, s3Bucket } = job.data;
+  const { scanId, userId } = job.data;
 
   try {
     console.log(`[Enterprise Scanner] Starting scan ${scanId} for user ${userId}`);
@@ -71,15 +76,21 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
       console.log(`[Enterprise Scanner] No components to scan for ${scanId}`);
     }
 
+    const componentDecision = decideComponentsWithCycloneDx({
+      scanId,
+      scannerId: 'enterprise',
+      sbomRaw: scan.sbomRaw as Record<string, unknown> | null,
+      legacyComponents: hydratedComponents,
+    });
+    logCycloneDxTelemetry(componentDecision.telemetry);
+    const scannerComponents = componentDecision.selectedComponents;
+
     // Call Codescoring/BlackDuck API
     const startTime = Date.now();
     let codescoringFindings: any[] = [];
 
-    if (hydratedComponents.length > 0) {
-      codescoringFindings = await scanWithCodescoring(hydratedComponents, scanId, {
-        inputType: scan.inputType,
-        inputRef: scan.inputRef,
-      });
+    if (scannerComponents.length > 0) {
+      codescoringFindings = await scanWithCodescoring(scannerComponents, scanId);
     }
 
     const durationMs = Date.now() - startTime;
@@ -88,7 +99,7 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
 
     // Convert to Codescoring format for normalization
     const codescoringOutput = {
-      components: hydratedComponents.map(comp => ({
+      components: scannerComponents.map(comp => ({
         name: comp.name,
         version: comp.version,
         vulnerabilities: codescoringFindings
@@ -105,6 +116,24 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
 
     // Normalize findings
     const normalizedFindings = normalizeCodescoringFindings(codescoringOutput);
+    const resultDecision = ingestScannerFindingsWithCycloneDx({
+      scanId,
+      scannerId: 'enterprise',
+      components: scannerComponents,
+      findings: normalizedFindings as ScannerFinding[],
+    });
+    logCycloneDxTelemetry(resultDecision.telemetry);
+
+    const ingestionMeta = {
+      mode: componentDecision.mode,
+      componentIngestion: componentDecision.telemetry,
+      resultIngestion: resultDecision.telemetry,
+      resultStatus: resultDecision.ingestionResult.status,
+      unifiedStats:
+        resultDecision.ingestionResult.status === 'ingested'
+          ? resultDecision.ingestionResult.payload.stats
+          : null,
+    };
 
     // Store raw output in ScanResult
     const scanResult = await prisma.scanResult.upsert({
@@ -117,14 +146,14 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
       create: {
         scanId,
         source: 'enterprise',
-        rawOutput: codescoringOutput as any,
+        rawOutput: { ...codescoringOutput, ingestionMeta } as any,
         vulnerabilities: normalizedFindings as any,
         scannerVersion: 'codescoring-1.0',
         cveDbTimestamp: new Date(),
         durationMs,
       },
       update: {
-        rawOutput: codescoringOutput as any,
+        rawOutput: { ...codescoringOutput, ingestionMeta } as any,
         vulnerabilities: normalizedFindings as any,
         cveDbTimestamp: new Date(),
         durationMs,
@@ -305,3 +334,8 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
     throw error;
   }
 }
+
+type ScannerFinding = Pick<
+  NormalizedFinding,
+  'cveId' | 'severity' | 'package' | 'version' | 'fixedVersion' | 'description' | 'cvssScore'
+>;

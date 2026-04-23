@@ -5,16 +5,21 @@
 
 import { Job } from 'bullmq';
 import { PrismaClient, type Prisma, type ScanSource, type ScanStatus } from '@prisma/client';
-import { normalizeGrypeFindings } from '../operations/scans/normalizeFindings.js';
+import { normalizeGrypeFindings, type NormalizedFinding } from '../operations/scans/normalizeFindings.js';
 import { scanWithGrype } from '../lib/scanners/grypeScannerUtil.js';
 import { emitWebhookEvent, buildWebhookPayload } from '../services/webhookEventEmitter.js';
 import type { ScanJob } from '../queues/jobContract.js';
 import { loadScanArtifacts, type NormalizedComponent } from '../services/inputAdapterService.js';
+import {
+  decideComponentsWithCycloneDx,
+  ingestScannerFindingsWithCycloneDx,
+  logCycloneDxTelemetry,
+} from '../services/cyclonedxIngestionService.js';
 
 const prisma = new PrismaClient();
 
 export async function freeScannerWorker(job: Job<ScanJob>) {
-  const { scanId, userId, inputType, inputRef, s3Bucket } = job.data;
+  const { scanId, userId } = job.data;
 
   try {
     console.log(`[Free Scanner] Starting scan ${scanId} for user ${userId}`);
@@ -71,12 +76,21 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       console.log(`[Free Scanner] No components to scan for ${scanId}`);
     }
 
+    const componentDecision = decideComponentsWithCycloneDx({
+      scanId,
+      scannerId: 'free',
+      sbomRaw: scan.sbomRaw as Record<string, unknown> | null,
+      legacyComponents: hydratedComponents,
+    });
+    logCycloneDxTelemetry(componentDecision.telemetry);
+    const scannerComponents = componentDecision.selectedComponents;
+
     // Execute Grype scan
     const startTime = Date.now();
     let grypFindings: any[] = [];
     
-    if (hydratedComponents.length > 0) {
-      grypFindings = await scanWithGrype(hydratedComponents, scanId);
+    if (scannerComponents.length > 0) {
+      grypFindings = await scanWithGrype(scannerComponents, scanId);
     }
 
     const durationMs = Date.now() - startTime;
@@ -103,6 +117,24 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
 
     // Normalize findings
     const normalizedFindings = normalizeGrypeFindings(grypOutput);
+    const resultDecision = ingestScannerFindingsWithCycloneDx({
+      scanId,
+      scannerId: 'free',
+      components: scannerComponents,
+      findings: normalizedFindings as ScannerFinding[],
+    });
+    logCycloneDxTelemetry(resultDecision.telemetry);
+
+    const ingestionMeta = {
+      mode: componentDecision.mode,
+      componentIngestion: componentDecision.telemetry,
+      resultIngestion: resultDecision.telemetry,
+      resultStatus: resultDecision.ingestionResult.status,
+      unifiedStats:
+        resultDecision.ingestionResult.status === 'ingested'
+          ? resultDecision.ingestionResult.payload.stats
+          : null,
+    };
 
     // Store raw output in ScanResult
     const scanResult = await prisma.scanResult.upsert({
@@ -115,14 +147,14 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       create: {
         scanId,
         source: 'free',
-        rawOutput: grypOutput as any,
+        rawOutput: { ...grypOutput, ingestionMeta } as any,
         vulnerabilities: normalizedFindings as any,
         scannerVersion: 'grype-0.111.0', // Get actual version from Grype
         cveDbTimestamp: new Date(),
         durationMs,
       },
       update: {
-        rawOutput: grypOutput as any,
+        rawOutput: { ...grypOutput, ingestionMeta } as any,
         vulnerabilities: normalizedFindings as any,
         cveDbTimestamp: new Date(),
         durationMs,
@@ -300,3 +332,8 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
     throw error;
   }
 }
+
+type ScannerFinding = Pick<
+  NormalizedFinding,
+  'cveId' | 'severity' | 'package' | 'version' | 'fixedVersion' | 'description' | 'cvssScore'
+>;

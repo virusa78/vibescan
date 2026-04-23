@@ -18,6 +18,7 @@ export interface WebhookEvent {
 }
 
 export interface DeliveryQueueJob {
+  deliveryId: string;
   webhookId: string;
   scanId: string;
   eventType: string;
@@ -88,6 +89,8 @@ export async function emitWebhookEvent(event: WebhookEvent): Promise<void> {
           data: {
             webhookId: webhook.id,
             scanId: scanId,
+            eventType: eventType,
+            payload: payload,
             targetUrl: webhook.url,
             payloadHash: payloadHash,
             attemptNumber: 1, // Initial attempt
@@ -97,6 +100,7 @@ export async function emitWebhookEvent(event: WebhookEvent): Promise<void> {
 
         // Enqueue delivery job
         const jobData: DeliveryQueueJob = {
+          deliveryId: delivery.id,
           webhookId: webhook.id,
           scanId: scanId,
           eventType: eventType,

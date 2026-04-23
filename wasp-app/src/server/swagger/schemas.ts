@@ -361,6 +361,21 @@ export const schemas = {
       },
       filePath: { type: 'string', nullable: true, description: 'File path where finding was detected' },
       status: { type: 'string', description: 'Finding status' },
+      annotation: {
+        oneOf: [
+          { $ref: '#/components/schemas/FindingAnnotation' },
+          { type: 'null' },
+        ],
+      },
+    },
+  },
+
+  FindingAnnotation: {
+    type: 'object',
+    properties: {
+      state: { type: 'string', enum: ['accepted', 'snoozed', 'rejected', 'expired'] },
+      reason: { type: 'string', nullable: true },
+      expires_at: { type: 'string', format: 'date-time', nullable: true },
     },
   },
 
@@ -543,8 +558,13 @@ export const schemas = {
         enum: ['pending', 'delivered', 'failed', 'exhausted'],
       },
       http_status: { type: 'integer', nullable: true },
+      event: { type: 'string' },
+      attempt: { type: 'integer' },
+      duration: { type: 'integer', nullable: true },
       created_at: { type: 'string', format: 'date-time' },
       delivered_at: { type: 'string', format: 'date-time', nullable: true },
+      payload: { type: 'object', nullable: true, additionalProperties: true },
+      response: { type: 'string', nullable: true },
     },
   },
 
@@ -556,6 +576,21 @@ export const schemas = {
       last_5_deliveries: {
         type: 'array',
         items: { $ref: '#/components/schemas/WebhookDelivery' },
+      },
+    },
+  },
+
+  WebhookDeliveriesResponse: {
+    type: 'object',
+    properties: {
+      deliveries: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/WebhookDelivery' },
+      },
+      next_cursor: {
+        type: 'string',
+        format: 'uuid',
+        nullable: true,
       },
     },
   },
@@ -680,6 +715,54 @@ export const schemas = {
         type: 'array',
         items: { $ref: '#/components/schemas/RecentScan' },
         description: 'List of recent scans (up to limit)',
+      },
+    },
+  },
+
+  SavedView: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      name: { type: 'string' },
+      sortField: { type: 'string', enum: ['submitted', 'target', 'type', 'status', 'findings'] },
+      sortDirection: { type: 'string', enum: ['asc', 'desc'] },
+      statuses: {
+        type: 'array',
+        items: { type: 'string', enum: ['pending', 'scanning', 'done', 'error', 'cancelled'] },
+      },
+      query: { type: 'string' },
+      createdAt: { type: 'string', format: 'date-time' },
+      updatedAt: { type: 'string', format: 'date-time' },
+    },
+  },
+
+  SavedViewsResponse: {
+    type: 'object',
+    properties: {
+      views: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/SavedView' },
+      },
+    },
+  },
+
+  CreateSavedViewRequest: {
+    type: 'object',
+    required: ['name', 'config'],
+    properties: {
+      name: { type: 'string' },
+      config: {
+        type: 'object',
+        required: ['sortField', 'sortDirection', 'statuses', 'query'],
+        properties: {
+          sortField: { type: 'string', enum: ['submitted', 'target', 'type', 'status', 'findings'] },
+          sortDirection: { type: 'string', enum: ['asc', 'desc'] },
+          statuses: {
+            type: 'array',
+            items: { type: 'string', enum: ['pending', 'scanning', 'done', 'error', 'cancelled'] },
+          },
+          query: { type: 'string' },
+        },
       },
     },
   },

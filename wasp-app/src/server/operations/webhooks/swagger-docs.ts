@@ -147,4 +147,26 @@
  *         description: Forbidden
  *       404:
  *         description: Webhook not found
+ *
+ * /api/v1/webhooks/{webhookId}/deliveries:
+ *   get:
+ *     summary: List webhook deliveries
+ *     description: Retrieve paginated delivery timeline items for a webhook.
+ *     operationId: listWebhookDeliveries
+ *     tags:
+ *       - Webhooks
+ *
+ * /api/v1/webhooks/{webhookId}/test:
+ *   post:
+ *     summary: Queue synthetic test delivery
+ *     operationId: testWebhookDelivery
+ *     tags:
+ *       - Webhooks
+ *
+ * /api/v1/webhooks/{webhookId}/deliveries/{deliveryId}/retry:
+ *   post:
+ *     summary: Retry failed/exhausted delivery now
+ *     operationId: retryWebhookDelivery
+ *     tags:
+ *       - Webhooks
  */

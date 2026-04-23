@@ -66,7 +66,7 @@ function httpRequest(url: string, options: any, data: string): Promise<{ status:
  */
 export async function webhookDeliveryWorker(job: any): Promise<any> {
   const data: DeliveryQueueJob = job.data;
-  const { webhookId, scanId, eventType, payload, payloadHash, targetUrl, signingSecretEncrypted } = data;
+  const { deliveryId, webhookId, scanId, eventType, payload, payloadHash, targetUrl, signingSecretEncrypted } = data;
   const targetHost = safeTarget(targetUrl);
   
   // Use BullMQ's attemptsMade to get actual attempt number (0-based, so add 1)
@@ -77,13 +77,15 @@ export async function webhookDeliveryWorker(job: any): Promise<any> {
   );
 
   try {
-    const deliveryRecord = await prisma.webhookDelivery.findFirst({
-      where: {
-        webhookId,
-        scanId,
-        payloadHash,
-      },
-    });
+    const deliveryRecord = deliveryId
+      ? await prisma.webhookDelivery.findUnique({ where: { id: deliveryId } })
+      : await prisma.webhookDelivery.findFirst({
+          where: {
+            webhookId,
+            scanId,
+            payloadHash,
+          },
+        });
 
     if (!deliveryRecord) {
       console.warn(`[WebhookWorker] Delivery record not found for ${webhookId}/${scanId}`);
@@ -92,11 +94,12 @@ export async function webhookDeliveryWorker(job: any): Promise<any> {
 
     let httpStatus = 500;
     let responseBody = '';
+    let durationMs = 0;
 
     try {
-    await validateWebhookTargetUrl(targetUrl, {
-      allowHttp: true,
-    });
+      await validateWebhookTargetUrl(targetUrl, {
+        allowHttp: true,
+      });
 
       // Generate signature
       const { signature } = signWebhookPayload(payload, signingSecretEncrypted);
@@ -109,10 +112,12 @@ export async function webhookDeliveryWorker(job: any): Promise<any> {
         'X-Vibescan-Timestamp': new Date().toISOString(),
       };
 
+      const startedAt = Date.now();
       const response = await httpRequest(targetUrl, {
         method: 'POST',
         headers,
       }, payload);
+      durationMs = Date.now() - startedAt;
 
       httpStatus = response.status;
       responseBody = response.body;
@@ -123,6 +128,7 @@ export async function webhookDeliveryWorker(job: any): Promise<any> {
       );
       httpStatus = 0;
       responseBody = error instanceof Error ? error.message : String(error);
+      durationMs = 0;
     }
 
     const status = httpStatus >= 200 && httpStatus < 300 ? 'delivered' : 'failed';
@@ -133,6 +139,7 @@ export async function webhookDeliveryWorker(job: any): Promise<any> {
         httpStatus,
         responseBody,
         attemptNumber,
+        durationMs,
         status,
         deliveredAt: status === 'delivered' ? new Date() : null,
         nextRetryAt: status === 'failed' && attemptNumber < MAX_RETRIES ? calculateNextRetry(attemptNumber) : null,
