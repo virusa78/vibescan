@@ -265,9 +265,18 @@ export default function WebhooksPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
-                    <div className="text-right mr-4">
-                      <p className="text-sm font-semibold text-foreground">{webhook.deliverySuccessRate ?? 0}%</p>
-                      <p className="text-xs text-muted-foreground">success rate</p>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-foreground">{webhook.deliverySuccessRate ?? 0}%</p>
+                        <p className="text-xs text-muted-foreground">success rate</p>
+                      </div>
+                      <div className="w-px h-8 bg-border/40" />
+                      <div className="inline-flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-1 text-xs font-medium ${webhook.enabled ? 'text-green-600' : 'text-gray-600'}`}>
+                          <span className={`w-2 h-2 rounded-full ${webhook.enabled ? 'bg-green-500' : 'bg-gray-500'}`} />
+                          {webhook.enabled ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => void handleToggleActive(webhook.id)}>
                       {webhook.enabled ? 'Disable' : 'Enable'}
