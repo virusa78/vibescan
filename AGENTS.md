@@ -231,6 +231,104 @@ wasp db push                            # Sync schema to DB (development)
 10. **Idempotency**: Use `Idempotency-Key` header for mutation retries
 11. **PostgreSQL Authority**: Wasp/Prisma is cache; PostgreSQL is source of truth
 12. **No Raw Key Storage**: API keys returned once at generation, never logged
+13. **🔴 CRITICAL: Auth Table Integrity** (Recurring P0 Bug Prevention)
+
+### Auth Table Integrity — CRITICAL RECURRING BUG
+
+**Problem**: Authentication has died 3+ times during branch merges. Root cause: Wasp auto-manages Auth, AuthIdentity, Session tables in Prisma. When feature branches with stale migrations merge back to main, conflicting migration sequences cause auth tables to DROP and recreate, losing session data.
+
+**Timeline of Auth Deaths**:
+- Migration `20260416152840_init`: Dropped old Auth/Session tables (legacy cleanup)
+- Migration `20260417090858_wasp_auth_init`: Wasp recreated Auth/Session tables (Wasp-only arch)
+- **Problem**: When feature branches created after `_init` but before `_auth_init` are merged, Prisma migration engine sees conflicting definitions and **loses auth context entirely**
+
+**Root Causes**:
+1. **Stacked PRs with diverging migrations**: Each branch gets own migration numbering → conflicts on merge
+2. **Manual schema edits**: Developers editing Prisma schema directly instead of using `wasp db migrate-dev`
+3. **Migration gaps**: Merging branches skips migration sequence order
+4. **No validation gate**: No pre-merge check ensures migration cleanness
+
+**PREVENTION RULES (Non-Negotiable)**:
+
+1. **NEVER manually edit migrations or schema.prisma**
+   - Use ONLY: `wasp db migrate-dev --name <description>`
+   - This ensures Wasp-managed tables (Auth, Session, AuthIdentity) stay in sync with Wasp's auto-generated code
+
+2. **ALWAYS run migrations on main BEFORE branching**
+   - Before creating feature branch: `wasp db migrate-dev` on main
+   - Every branch inherits clean migration state
+   - No branch can have a "newer" migration than main at branch point
+
+3. **Stacked PRs MUST have sequential migration numbers**
+   - PR1 base: `main` (latest migration: e.g., `_20260423_*)
+   - PR2 base: PR1 (next migration: `_20260424_*`)
+   - PR3 base: PR2 (next migration: `_20260425_*`)
+   - Use: `git merge-base origin/main HEAD` to check divergence
+
+4. **Pre-merge validation checklist**:
+   - [ ] All migrations from this branch can apply cleanly to main's latest state
+   - [ ] No migration numbers conflict with any branch being merged
+   - [ ] Auth, Session, AuthIdentity tables are NOT in any migration (Wasp owns these)
+   - [ ] Run: `wasp db migrate-dev` locally and verify no errors before pushing
+
+5. **If auth death happens again**:
+   - DO NOT manually recreate Auth tables
+   - DO NOT edit migrations
+   - **Reset to last known good commit**: `git revert <bad-merge-commit>`
+   - **Re-merge properly**: Ensure all branches have sequential, non-overlapping migration numbers
+
+**Files that touch Auth (dangerous territory)**:
+- `wasp-app/prisma/schema.prisma` — Never manually edit Auth/Session/AuthIdentity definitions
+- `wasp-app/prisma/migrations/` — Only Prisma CLI should create files here
+- `wasp-app/main.wasp` — Wasp config (do not modify `auth.userEntity` or `db` sections)
+
+**Safe Operations**:
+- ✅ Add NEW domain models to schema → `wasp db migrate-dev`
+- ✅ Add NEW fields to existing tables → `wasp db migrate-dev`
+- ✅ Create NEW migrations → `wasp db migrate-dev`
+- ❌ NEVER manually touch Auth/Session/AuthIdentity
+- ❌ NEVER run `prisma migrate dev` (use `wasp db migrate-dev` instead)
+
+14. **🔴 CRITICAL: Wasp Custom HTTP API Authentication Limitation**
+
+**Problem**: Wasp v0.23 custom HTTP `api {}` handlers **do NOT auto-inject context.user** from authenticated session.
+
+**Root Cause**: Wasp's auth middleware only injects `context.user` into operations (query/action), not custom HTTP endpoint handlers. Both `context.user` and `request.user` remain NULL even with authenticated session.
+
+**Impact**: ALL custom HTTP endpoints return 401 Unauthorized:
+- `/api/v1/dashboard/*` endpoints (recent-scans, metrics, severity-breakdown, trends, quota)
+- `/api/v1/reports/*` endpoints
+- `/api/v1/webhooks/*` endpoints
+- Any other custom HTTP endpoint for authenticated resources
+
+**This is NOT a bug - it's a Wasp limitation.** The solution is architectural, not a quick fix.
+
+**FIX OPTION A (RECOMMENDED): Use Wasp Operations**
+- Replace custom `api {}` with `query {}` (read) or `action {}` (write)
+- Auth works automatically
+- Type-safe, cleaner, aligns with Wasp best practices
+- Frontend uses `wasp/client/operations` instead of fetch
+- Effort: ~4-6 hours for ~20 endpoints
+
+**FIX OPTION B: Use Bearer Token Authentication**
+- Require `Authorization: Bearer <api-key>` header
+- Validate with existing `authenticateBearerApiKey()` function
+- Smaller refactor but requires frontend to send API keys
+- Effort: ~2-3 hours
+
+**DO NOT DO (Fragile)**: Manually extract user from `request.session`
+- Couples to Express internals
+- Unsupported by Wasp, breaks on upgrades
+- Adds session lookup overhead
+
+**Prevention Rule**: 
+```
+❌ NEVER use custom HTTP `api {}` handlers for authenticated endpoints
+✅ ALWAYS use `query {}` or `action {}` operations instead
+✅ If low-level HTTP features needed, use Bearer token auth (Option B)
+```
+
+**Detection**: Any endpoint returning 401 with `context.user: undefined` in logs → check if it's a custom `api {}` handler → convert to operation.
 
 ## Context Reset Contract
 
