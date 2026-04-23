@@ -3,6 +3,7 @@ import { HttpError, prisma } from "wasp/server";
 import * as z from "zod";
 import { ensureArgsSchemaOrThrowHttpError } from "../../validation";
 import { mapAcceptanceToAnnotationState } from "./annotations";
+import { resolveCycloneDxPipelineMode } from "../../services/cyclonedxIngestionService.js";
 
 const getReportInputSchema = z.object({
   scanId: z.string().nonempty(),
@@ -29,6 +30,11 @@ interface GetReportResponse {
   vulnerabilities: any[];
 }
 
+interface UnifiedStatsPayload {
+  vulnerabilityCount: number;
+  severityCounts: Partial<Record<'critical' | 'high' | 'medium' | 'low' | 'info', number>>;
+}
+
 /**
  * Calculate severity breakdown from findings
  */
@@ -51,6 +57,26 @@ function calculateSeverityBreakdown(findings: Finding[]): SeverityBreakdown {
   return breakdown;
 }
 
+function extractUnifiedStats(scanResults: Array<{ rawOutput: unknown }>): UnifiedStatsPayload | null {
+  for (const result of scanResults) {
+    if (!result.rawOutput || typeof result.rawOutput !== 'object') continue;
+
+    const ingestionMeta = (result.rawOutput as Record<string, any>).ingestionMeta;
+    if (!ingestionMeta || ingestionMeta.resultStatus !== 'ingested') continue;
+
+    const unifiedStats = ingestionMeta.unifiedStats;
+    if (!unifiedStats || typeof unifiedStats !== 'object') continue;
+    if (typeof unifiedStats.vulnerabilityCount !== 'number') continue;
+
+    return {
+      vulnerabilityCount: unifiedStats.vulnerabilityCount,
+      severityCounts: (unifiedStats.severityCounts || {}) as UnifiedStatsPayload['severityCounts'],
+    };
+  }
+
+  return null;
+}
+
 export const getReport = async (rawArgs: any, context: any): Promise<GetReportResponse> => {
   const { scanId } = ensureArgsSchemaOrThrowHttpError(
     getReportInputSchema,
@@ -69,6 +95,11 @@ export const getReport = async (rawArgs: any, context: any): Promise<GetReportRe
       include: {
         findings: true,
         scanDeltas: true,
+        scanResults: {
+          select: {
+            rawOutput: true,
+          },
+        },
       },
     }),
   ]);
@@ -118,6 +149,18 @@ export const getReport = async (rawArgs: any, context: any): Promise<GetReportRe
 
   // Calculate severity breakdown
   const severity_breakdown = calculateSeverityBreakdown(findings);
+  const pipelineMode = resolveCycloneDxPipelineMode();
+  const useUnifiedReadPath = pipelineMode === 'cutover';
+  const unifiedStats = useUnifiedReadPath ? extractUnifiedStats(scan.scanResults || []) : null;
+  const effectiveSeverityBreakdown: SeverityBreakdown = unifiedStats
+    ? {
+        critical: unifiedStats.severityCounts.critical || 0,
+        high: unifiedStats.severityCounts.high || 0,
+        medium: unifiedStats.severityCounts.medium || 0,
+        low: unifiedStats.severityCounts.low || 0,
+        info: unifiedStats.severityCounts.info || 0,
+      }
+    : severity_breakdown;
 
   // Get delta info
   const scanDelta = scan.scanDeltas?.[0];
@@ -129,7 +172,7 @@ export const getReport = async (rawArgs: any, context: any): Promise<GetReportRe
     scanId,
     status: scan.status === 'done' ? 'completed' : scan.status === 'error' ? 'failed' : 'partial',
     lockedView,
-    severity_breakdown,
+    severity_breakdown: effectiveSeverityBreakdown,
     total_free,
     total_enterprise,
     delta_count,

@@ -1,46 +1,47 @@
 # CycloneDX Implementation Checklist
 
 ## 0. Базовые договорённости
-- [ ] Зафиксировано, что все сканеры считаются источниками CycloneDX.
-- [ ] Опорный пример `cyclone.json` принят как базовый референс.
-- [ ] Зафиксированы поддерживаемые версии схемы: `1.4`, `1.5`, `1.6`.
+- [x] Зафиксировано, что все сканеры считаются источниками CycloneDX.
+- [x] Зафиксированы поддерживаемые версии схемы: `1.4`, `1.5`, `1.6`.
+- [ ] Опорные fixtures согласованы для текущей ветки (не полагаться на отсутствующий корневой `cyclone.json`).
 
 ## 1. Parser
-- [ ] Создан модуль parser для CycloneDX JSON.
-- [ ] Ошибки parser унифицированы (`parse_error`) с диагностикой.
-- [ ] Parser возвращает типизированный `ParsedCycloneDxDocument`.
-- [ ] Добавлены unit-тесты parser на `cyclone.json` и edge cases.
+- [x] Создан модуль parser для CycloneDX JSON.
+- [x] Ошибки parser унифицированы (`parse_error`) с диагностикой.
+- [x] Parser возвращает типизированный `ParsedCycloneDxDocument`.
+- [ ] Добавлены целевые unit-тесты parser на edge cases и malformed payloads.
 
 ## 2. Validator
-- [ ] Добавлена schema validation CycloneDX.
-- [ ] Добавлены runtime-инварианты платформы.
-- [ ] При `validation_error` orchestration не запускается.
-- [ ] Добавлены unit/contract тесты validator.
+- [x] Добавлена schema validation CycloneDX.
+- [x] Добавлены runtime-инварианты платформы.
+- [x] При `validation_error` ingestion возвращает `rejected`.
+- [ ] Добавлены отдельные unit/contract тесты validator.
 
 ## 3. Unifier
-- [ ] Создан unified DTO для `components` и `vulnerabilities`.
-- [ ] Нормализованы `severity`, `cvss`, `id` (`CVE/GHSA/OSV`), `cwe`, `purl`, `cpe`.
-- [ ] Сохранена трассируемость raw -> unified полей.
+- [x] Создан unified DTO для `components` и `vulnerabilities`.
+- [x] Нормализованы `severity`, `cvss`, `id` (`CVE/GHSA/OSV`), `cwe`, `purl`, `cpe`.
+- [x] Сохранена трассируемость raw -> unified полей.
 - [ ] Добавлены regression-тесты unifier на разные варианты CycloneDX.
 
-## 4. Adapter Contract
-- [ ] Для каждого scanner adapter зафиксирован контракт "return CycloneDX raw".
-- [ ] Для адаптеров без нативного CycloneDX добавлен слой конвертации.
-- [ ] Добавлены contract fixtures по каждому адаптеру.
+## 4. M1 Runtime Integration
+- [x] Введены runtime-флаги `shadow/cutover/rollback` для ingestion path.
+- [x] Workers интегрированы с ingestion decision слоем (legacy vs unified components).
+- [x] В scan result пишется `ingestionMeta` (режим, статус, unified stats, drift telemetry).
+- [x] Report read path умеет читать unified stats при `cutover` с fallback на legacy.
 
 ## 5. Format Learning Loop
-- [ ] Raw-артефакты каждого скана сохраняются для анализа.
-- [ ] Ведётся каталог неизвестных полей (`unknownFieldCatalog`).
+- [ ] Raw-артефакты каждого скана сохраняются для анализа в отдельном каталоге.
+- [ ] Ведётся каталог неизвестных полей (`unknownFieldCatalog`) с triage.
 - [ ] Для каждого нового поля проходит цикл: triage -> mapping rule -> тест.
 - [ ] Обновления unifier backward-compatible.
 
-## 6. Интеграция и rollout
-- [ ] `parser/validator/unifier` встроены в `scanOrchestrator` и workers.
-- [ ] Сохранена совместимость текущих API/отчётов.
-- [ ] Включён `shadow mode` с метриками расхождений.
-- [ ] Подготовлен cutover + rollback сценарий.
+## 6. Quality Gate перед cutover
+- [ ] Unit + integration тесты для ingestion mode routing зелёные.
+- [ ] Regression тесты на consistent findings totals между legacy и cutover.
+- [ ] Документация rollout и rollback порогов обновлена.
+- [ ] Нет критичных `validation_error/unify_error` в telemetry за прогон smoke-набора.
 
-## 7. Quality Gate перед merge
-- [ ] Unit + contract + integration тесты зеленые.
-- [ ] Нет неразобранных неизвестных полей без triage.
-- [ ] Документация по новым mapping rules обновлена.
+## 7. M2 Backlog (после M1)
+- [ ] Contract fixtures по каждому scanner adapter.
+- [ ] unknownFieldCatalog + mapping loop automation.
+- [ ] Расширенные unifier regression suites.
