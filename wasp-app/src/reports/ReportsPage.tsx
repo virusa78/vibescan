@@ -19,6 +19,7 @@ import { useAsyncState } from '../client/hooks/useAsyncState';
 import { toast } from '../client/hooks/use-toast';
 import { isEditableTarget } from '../client/utils/keyboard';
 import { buildPatchSnippet } from './patchSnippet';
+import { resolveCveId, buildGitHubAdvisoryUrl, buildNvdUrl, buildPackageUrl } from './linkHelpers';
 
 type SeveritySummary = {
   critical?: number;
@@ -344,27 +345,8 @@ export default function ReportsPage() {
     return filtered;
   }, [annotationFilter, findings, fixableFilter, searchQuery, severityFilter, sortBy]);
 
-  const resolveCve = (finding: ReportFinding) => finding.cveId ?? finding.cve ?? '';
-
   const buildPackageLink = (finding: ReportFinding): string | null => {
-    const pkg = (finding.packageName ?? '').trim();
-    if (!pkg) return null;
-
-    const ecosystem = (finding.ecosystem ?? '').toLowerCase();
-    if (ecosystem === 'npm') return `https://www.npmjs.com/package/${encodeURIComponent(pkg)}`;
-    if (ecosystem === 'pypi') return `https://pypi.org/project/${encodeURIComponent(pkg)}/`;
-    if (ecosystem === 'go') return `https://pkg.go.dev/${pkg}`;
-    if (ecosystem === 'docker') return `https://hub.docker.com/_/${encodeURIComponent(pkg)}`;
-    if (ecosystem === 'maven' && pkg.includes(':')) {
-      const [group, artifact] = pkg.split(':');
-      if (group && artifact) return `https://central.sonatype.com/artifact/${group}/${artifact}`;
-    }
-
-    if (pkg.startsWith('pkg:npm/')) return `https://www.npmjs.com/package/${encodeURIComponent(pkg.slice('pkg:npm/'.length))}`;
-    if (pkg.startsWith('pkg:pypi/')) return `https://pypi.org/project/${encodeURIComponent(pkg.slice('pkg:pypi/'.length))}/`;
-    if (pkg.startsWith('pkg:golang/')) return `https://pkg.go.dev/${pkg.slice('pkg:golang/'.length)}`;
-    if (pkg.startsWith('pkg:docker/')) return `https://hub.docker.com/_/${encodeURIComponent(pkg.slice('pkg:docker/'.length))}`;
-    return null;
+    return buildPackageUrl(finding);
   };
 
   const clearFilters = () => {
@@ -601,7 +583,7 @@ export default function ReportsPage() {
               {filteredFindings.map((finding, index) => {
                 const fid = finding.id ?? `${finding.cveId ?? finding.cve ?? 'finding'}-${index}`;
                 const findingId = finding.id ?? '';
-                const cve = resolveCve(finding);
+                const cve = resolveCveId(finding);
                 const packageLink = buildPackageLink(finding);
                 const fixSnippet = buildPatchSnippet(finding.ecosystem, finding.packageName, finding.fixedVersion);
                 const canCopyPatch = fixSnippet.length > 0;
@@ -620,13 +602,13 @@ export default function ReportsPage() {
                         {cve ? (
                           <span className="flex items-center gap-2">
                             <ExternalLink
-                              href={`https://github.com/advisories?query=${encodeURIComponent(cve)}`}
+                              href={buildGitHubAdvisoryUrl(cve)}
                               aria-label={`Open GitHub advisory search for ${cve}`}
                             >
                               {cve}
                             </ExternalLink>
                             <ExternalLink
-                              href={`https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cve)}`}
+                              href={buildNvdUrl(cve)}
                               withIcon={false}
                               className="text-xs text-muted-foreground"
                               aria-label={`Open NVD details for ${cve}`}
