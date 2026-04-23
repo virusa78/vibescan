@@ -2,6 +2,7 @@
 
 ## Note
 - Active non-CycloneDX work is tracked in `plan.md` under M6.
+- Final non-CycloneDX M6 merge-ready handoff is captured in `docs/M6_PR3B5_IMPLEMENTATION_ACT.md`.
 - This checklist remains the CycloneDX archive and source of truth for M1-M5.
 
 ## 0. Базовые договорённости

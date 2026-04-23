@@ -19,10 +19,17 @@
 ## M6 Progress
 - PR1 implemented: shell error boundary + locale bootstrap.
 - PR2 implemented: API key usage tracking, details endpoint contract, list metadata, and richer API keys page.
-- PR3 pending: remaining `UX_spec.md` closure sweep and any regression polish that falls out of it.
+- Dev contour recovered: restored `npm run wasp:up` / `npm run wasp:down`, added `scripts/wasp-dev.sh` status dispatcher, and replaced client API SDK imports with a local SSR-safe helper so Wasp server startup no longer trips on `client/env`.
+- PR3A (backend-first OpenAPI hardening) implemented: `/api/v1/*` manifest-driven OpenAPI generation + fallback + hard contract gate.
+- PR3B.1 complete: `UX_spec.md` closure sweep confirmed for in-scope items; only `POST-LAUNCH`/future batches remain open by design.
+- PR3B.2 complete: targeted regression pass executed for dashboard/reports/webhooks/settings/api-keys surfaces.
+- PR3B.3 complete (fix-only): webhooks UX hardening for empty/loading states + icon-only delete action accessibility label.
+- PR3B.4 complete: final merge-ready verification bundle is green, including repaired `useScanPolling` harness in single-runtime `wasp-app` Jest.
+- PR3B.5 complete: merge-ready handoff act published in `docs/M6_PR3B5_IMPLEMENTATION_ACT.md`.
 
 ## M6 Status
 - Status: in progress.
+- merge-ready handoff complete: yes (`docs/M6_PR3B5_IMPLEMENTATION_ACT.md`).
 - Verified so far: focused unit tests for request auth usage recording and API key details aggregation.
 - Public API: unchanged for `submitScan` / `getReport`.
 - Rollback auto-recovery: unchanged from M5.
@@ -30,14 +37,63 @@
 ## M6 PR Breakdown
 1. `M6-PR1`: App shell hardening + crash fallback + locale bootstrap.
 2. `M6-PR2`: API keys completion with real usage tracking and key details UI.
-3. `M6-PR3`: UX-spec closure sweep + final regression pass.
+3. `M6-PR3A`: Backend-first OpenAPI hardening for `/api/v1/*` (manifest/fallback/policy gate).
+4. `M6-PR3B`: UX-spec closure sweep + final regression pass.
 
 ## M6 Done Criteria
 - API keys list/details show real expiry and usage data instead of placeholders.
 - Route crashes render a branded fallback instead of a blank screen.
 - Locale preference is persisted and applied at the document level.
+- `/api/v1/*` routes from `main.wasp` and generated OpenAPI spec match exactly.
+- Every `/api/v1/*` operation passes contract policy (`operationId`, `security`, `requestBody` when required, `2xx/4xx/5xx` with shared error schema).
+- `npm run openapi:contract` is hard-fail and wired into CI.
 - Remaining `UX_spec.md` gaps are either closed or explicitly deferred in the plan.
 - Focused tests cover the new API keys data path and the shell hardening path.
+
+## M6-PR3A Verification Commands
+- `npm run openapi:contract`
+- `npx jest --runInBand test/unit/openapiContractPolicy.test.ts`
+
+## M6 Next Priorities
+1. `Sync + Scope Guard`: обновить ветку от `main` и подтвердить doc-only scope (`plan.md`, `docs/M6_PR3B5_IMPLEMENTATION_ACT.md`, `docs/CYCLONEDX_CHECKLIST.md`).
+2. `Conditional Re-Verify`: при изменении контекста после rebase/merge повторить `npm run verify:m6:pr3b4` и зафиксировать актуальный UTC evidence window.
+3. `Commit`: подготовить Conventional Commit для `M6-PR3B.5` (doc sync + merge-ready handoff).
+4. `PR Update`: обновить PR description в формате `Problem / Solution / Verification / Evidence Source` и явно указать статусы `M6 in progress` и `merge-ready handoff complete`.
+5. `Merge After Review`: выполнить merge-операции без запуска нового продуктового планирования в рамках M6.
+
+## M6-PR3B.4 Verification Bundle (Single Source of Truth)
+- Required gate bundle (single command):
+  - `npm run verify:m6:pr3b4`
+- Required gate commands (expanded):
+  - `npm run lint`
+  - `npm run openapi:contract`
+  - `npm run test:targeted:pr3b4`
+  - `npm run test:use-scan-polling`
+  - `cd wasp-app && wasp build`
+- Informational/diagnostic (not merge-blocking):
+  - `npx jest --runInBand --detectOpenHandles test/unit/dashboard.test.ts test/unit/dashboardTrends.test.ts test/unit/dashboardUrlState.test.ts test/unit/reports-annotations-mapping.test.ts test/unit/getAPIKeyDetails.test.ts test/unit/scannerAccessSettings.test.ts test/unit/webhookTarget.test.ts`
+
+## M6-PR3B Review Notes
+- `UX_spec.md` status check: open items are `POST-LAUNCH`/future batches and are intentionally out of текущего M6 scope.
+- Regression evidence:
+  - passed: `dashboard`, `dashboardTrends`, `dashboardUrlState`, `reports-annotations-mapping`, `getAPIKeyDetails`, `scannerAccessSettings`, `webhookTarget`;
+  - open-handle warning persists in jest exit path (known baseline in this repo).
+- Residual risk:
+  - `useScanPolling` harness is repaired and no longer blocked by duplicate React runtime; suite now runs in `wasp-app/tests/useScanPolling.test.ts` under `--env=jsdom`.
+
+## M6-PR3B.4 Evidence
+- Run window (UTC): `2026-04-23T16:26:41Z` → `2026-04-23T16:27:16Z`.
+- Verification command:
+  - `npm run verify:m6:pr3b4`
+- Gate status:
+  - `npm run lint` -> `PASS` (warnings only; no errors).
+  - `npm run openapi:contract` -> `PASS` (`[openapi:contract] OK`, route parity `41/41`).
+  - `npm run test:targeted:pr3b4` -> `PASS` (`7 suites`, `33 tests`).
+  - `npm run test:use-scan-polling` -> `PASS` (`1 suite`, `8 tests`).
+  - `cd wasp-app && wasp build` -> `PASS`.
+- Non-blocking notes:
+  - ESLint baseline still reports repository-wide warnings (`440`) but exits `0`.
+  - `test:targeted:pr3b4` uses `--forceExit` to make the known open-handle baseline deterministic in CI/local runs.
 
 # Master Phase M5: Rollout Hardening & Deployability
 
