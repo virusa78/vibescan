@@ -245,12 +245,13 @@ export default function ApiKeysPage() {
 
     await runList(
       async () => {
-        await revokeApiKey({ id: keyId });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (revokeApiKey as any)({ id: keyId });
         setSuccessMessage('API key revoked');
         const keys = await listApiKeys();
         setApiKeys(keys);
       },
-      { errorMessage: 'Failed to revoke API key', setLoading: false },
+      { errorMessage: 'Failed to revoke API key' },
     );
   };
 
@@ -413,16 +414,16 @@ export default function ApiKeysPage() {
                                 <Badge variant={statusBadgeVariant(status)}>{status}</Badge>
                               </div>
                               <p className="text-sm text-muted-foreground">
-                                Created {formatIsoDate(key.createdAt as string)}
-                                {key.lastUsedAt && ` · Last used ${formatRelative(key.lastUsedAt as string, 'never')}`}
+                                Created {formatIsoDate(key.createdAt instanceof Date ? key.createdAt.toISOString() : key.createdAt)}
+                                {key.lastUsedAt && ` · Last used ${formatRelative(key.lastUsedAt instanceof Date ? key.lastUsedAt.toISOString() : key.lastUsedAt, 'never')}`}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                {key.keyPrefix ? `Prefix ${key.keyPrefix}` : key.masked_key}
+                                {key.keyPrefix ? `Prefix ${key.keyPrefix}` : 'No prefix'}
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
                               <Badge variant="outline">
-                                {key.expiresAt ? `Expires ${formatRelative(key.expiresAt as string, 'Never')}` : 'No expiry'}
+                                {key.expiresAt ? `Expires ${formatRelative(key.expiresAt instanceof Date ? key.expiresAt.toISOString() : key.expiresAt, 'Never')}` : 'No expiry'}
                               </Badge>
                               <Button
                                 size="sm"

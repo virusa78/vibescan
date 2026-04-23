@@ -2,20 +2,22 @@
  * External link generation helpers for report findings
  */
 
-type ReportFinding = {
+// Flexible finding type accepting both versions
+type Finding = {
   cveId?: string;
   cve?: string;
   packageName?: string;
   ecosystem?: string;
-  fixedVersion?: string;
+  fixedVersion?: string | null;
   severity?: string;
+  [key: string]: unknown;
 };
 
 /**
  * Resolve CVE ID from finding data
  * Checks cveId field first, falls back to cve field
  */
-export function resolveCveId(finding: ReportFinding): string {
+export function resolveCveId(finding: Finding): string {
   return finding.cveId ?? finding.cve ?? '';
 }
 
@@ -38,7 +40,7 @@ export function buildNvdUrl(cveId: string): string {
  * Supports: npm, pypi, go, docker, maven
  * Also handles purl (Package URL) format
  */
-export function buildPackageUrl(finding: ReportFinding): string | null {
+export function buildPackageUrl(finding: Finding): string | null {
   const pkg = (finding.packageName ?? '').trim();
   if (!pkg) return null;
 
