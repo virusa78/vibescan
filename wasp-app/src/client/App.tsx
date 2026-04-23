@@ -3,7 +3,6 @@ import { Navigate, Outlet, useLocation, useNavigate } from 'react-router';
 import { routes } from 'wasp/client/router';
 import { useAuth, logout } from 'wasp/client/auth';
 import { generateApiKey } from 'wasp/client/operations';
-import { api } from 'wasp/client/api';
 import { Toaster } from '../client/components/ui/toaster';
 import {
   Dialog,
@@ -24,6 +23,7 @@ import { getAuthRedirectPath } from './utils/routeGuard';
 import { appNavigationItems, marketingNavigationItems } from './components/NavBar/constants';
 import CookieConsentBanner from './components/cookie-consent/Banner';
 import { DocsUrl } from '../shared/common';
+import { api } from './utils/api';
 
 type PaletteScan = {
   id: string;

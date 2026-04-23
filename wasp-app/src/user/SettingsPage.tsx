@@ -1,7 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useAuth } from "wasp/client/auth";
 import { updateUserSettings } from "wasp/client/operations";
-import { api } from "wasp/client/api";
 import { Alert, AlertDescription } from "../client/components/ui/alert";
 import { Button } from "../client/components/ui/button";
 import { Badge } from "../client/components/ui/badge";
@@ -17,6 +16,7 @@ import {
   SelectValue,
 } from "../client/components/ui/select";
 import { useAsyncState } from "../client/hooks/useAsyncState";
+import { api } from "../client/utils/api";
 
 type NotificationSettingsResponse = {
   project_key?: string;

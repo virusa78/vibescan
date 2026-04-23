@@ -1,5 +1,4 @@
 import type { ApiKey } from 'wasp/entities';
-import { api } from 'wasp/client/api';
 import { HttpError } from 'wasp/server';
 import { v4 as uuidv4 } from 'uuid';
 import * as bcrypt from 'bcrypt';
@@ -104,25 +103,4 @@ export async function revokeApiKey(
   });
 
   return { success: true };
-}
-
-export type ApiKeyUsagePoint = {
-  date: string;
-  count: number;
-};
-
-export type ApiKeyDetailsResponse = {
-  id: string;
-  name: string;
-  created_at: string;
-  expires_at: string | null;
-  last_used_at: string | null;
-  request_count: number;
-  usage_by_day: ApiKeyUsagePoint[];
-  status: 'active' | 'revoked' | 'expired';
-};
-
-export async function getApiKeyDetails(keyId: string): Promise<ApiKeyDetailsResponse> {
-  const response = await api.get(`/api/v1/api-keys/${keyId}`);
-  return response.data as ApiKeyDetailsResponse;
 }

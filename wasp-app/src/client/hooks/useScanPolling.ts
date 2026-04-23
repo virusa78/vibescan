@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { api } from 'wasp/client/api';
+import { api } from '../utils/api';
 
 export interface ScanPollingState {
   scan: {
