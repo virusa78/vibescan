@@ -292,23 +292,27 @@ export function ScanTable({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter scans by status">
+        <div className="flex flex-wrap items-center gap-3 pt-2" role="group" aria-label="Filter scans by status">
           {STATUS_OPTIONS.map((option) => {
             const active = statusFilters.includes(option.value);
+            const count = statusCounts[option.value] ?? 0;
             return (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => onToggleStatus(option.value)}
-                className={`rounded-full border px-3 py-1 text-xs transition ${
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
                   active
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border/60 text-muted-foreground hover:text-foreground'
+                    ? 'border-primary/40 bg-primary/10 text-primary'
+                    : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground hover:bg-accent/5'
                 }`}
                 aria-pressed={active}
-                aria-label={`${option.label} (${statusCounts[option.value] ?? 0})`}
+                aria-label={`${option.label} (${count})`}
               >
-                {option.label} ({statusCounts[option.value] ?? 0})
+                <span>{option.label}</span>
+                <span className={`text-xs font-semibold ${active ? 'text-primary' : 'text-muted-foreground'}`}>
+                  {count}
+                </span>
               </button>
             );
           })}
