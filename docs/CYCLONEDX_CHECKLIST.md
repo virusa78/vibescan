@@ -1,5 +1,9 @@
 # CycloneDX Implementation Checklist
 
+## Note
+- Active non-CycloneDX work is tracked in `plan.md` under M6.
+- This checklist remains the CycloneDX archive and source of truth for M1-M5.
+
 ## 0. Базовые договорённости
 - [x] Зафиксировано, что все сканеры считаются источниками CycloneDX.
 - [x] Зафиксированы поддерживаемые версии схемы: `1.4`, `1.5`, `1.6`.

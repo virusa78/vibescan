@@ -188,7 +188,7 @@
  *           description: Timestamp of last usage
  *         status:
  *           type: string
- *           enum: ["active", "revoked"]
+ *           enum: ["active", "revoked", "expired"]
  *           description: Current status of the API key
  *
  *     APIKeyListResponse:
@@ -227,9 +227,20 @@
  *         request_count:
  *           type: integer
  *           description: Total number of requests made with this key
+ *         usage_by_day:
+ *           type: array
+ *           description: Daily usage counts for the most recent activity window
+ *           items:
+ *             type: object
+ *             properties:
+ *               date:
+ *                 type: string
+ *                 format: date
+ *               count:
+ *                 type: integer
  *         status:
  *           type: string
- *           enum: ["active", "revoked"]
+ *           enum: ["active", "revoked", "expired"]
  *           description: Current status of the API key
  *
  *     ActionResponse:

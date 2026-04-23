@@ -11,6 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../client/components/ui/dialog';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
+import { applyAppLocale, resolveAppLocale } from './i18n';
 import { applyTheme, persistTheme, readThemePreference } from './theme';
 import { useTokenRefresh } from './hooks/useTokenRefresh';
 import { toast } from './hooks/use-toast';
@@ -73,6 +75,7 @@ export default function App() {
   const [paletteQuery, setPaletteQuery] = useState('');
   const [paletteScans, setPaletteScans] = useState<PaletteScan[]>([]);
   const [paletteIndex, setPaletteIndex] = useState(0);
+  const locale = useMemo(() => resolveAppLocale(user?.language), [user?.language]);
 
   useTokenRefresh();
 
@@ -133,6 +136,10 @@ export default function App() {
     const theme = readThemePreference(localStorage.getItem('theme'), prefersDark);
     applyTheme(theme);
   }, []);
+
+  useEffect(() => {
+    applyAppLocale(locale);
+  }, [locale]);
 
   useEffect(() => {
     if (location.hash) {
@@ -345,24 +352,26 @@ export default function App() {
 
   return (
     <>
-      <div className="bg-background text-foreground min-h-screen">
-        <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.05),_transparent_42%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-15" />
+      <AppErrorBoundary locale={locale}>
+        <div className="bg-background text-foreground min-h-screen">
+          <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.05),_transparent_42%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-15" />
+          </div>
+          {isAdminDashboard ? (
+            <Outlet />
+          ) : (
+            <>
+              {shouldDisplayAppNavBar && (
+                <NavBar navigationItems={navigationItems} />
+              )}
+              <main>
+                <Outlet />
+              </main>
+            </>
+          )}
         </div>
-        {isAdminDashboard ? (
-          <Outlet />
-        ) : (
-          <>
-            {shouldDisplayAppNavBar && (
-              <NavBar navigationItems={navigationItems} />
-            )}
-            <main>
-              <Outlet />
-            </main>
-          </>
-        )}
-      </div>
+      </AppErrorBoundary>
       <Toaster position="bottom-right" />
       <CookieConsentBanner />
 

@@ -15,6 +15,7 @@ export type APIKeyDetailsResponse = {
   expires_at: string | null;
   last_used_at: string | null;
   request_count: number;
+  usage_by_day: Array<{ date: string; count: number }>;
   status: 'active' | 'revoked' | 'expired';
 };
 
@@ -44,6 +45,31 @@ export async function getAPIKeyDetails(
     throw new HttpError(404, 'API key not found');
   }
 
+  const usageEventModel = prisma as typeof prisma & {
+    apiKeyUsageEvent: {
+      count: (args: any) => Promise<number>;
+      findMany: (args: any) => Promise<Array<{ createdAt: Date }>>;
+    };
+  };
+
+  const [usageCount, usageEvents] = await Promise.all([
+    usageEventModel.apiKeyUsageEvent.count({
+      where: { apiKeyId: apiKey.id },
+    }),
+    usageEventModel.apiKeyUsageEvent.findMany({
+      where: { apiKeyId: apiKey.id },
+      select: { createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 90,
+    }),
+  ]);
+
+  const usageByDay = new Map<string, number>();
+  for (const event of usageEvents) {
+    const date = event.createdAt.toISOString().slice(0, 10);
+    usageByDay.set(date, (usageByDay.get(date) ?? 0) + 1);
+  }
+
   // Determine status
   let status: 'active' | 'revoked' | 'expired' = 'active';
   if (!apiKey.enabled) {
@@ -58,7 +84,10 @@ export async function getAPIKeyDetails(
     created_at: apiKey.createdAt.toISOString(),
     expires_at: apiKey.expiresAt?.toISOString() || null,
     last_used_at: apiKey.lastUsedAt?.toISOString() || null,
-    request_count: 0, // Placeholder for usage tracking
+    request_count: usageCount,
+    usage_by_day: Array.from(usageByDay.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, count]) => ({ date, count })),
     status: status,
   };
 }

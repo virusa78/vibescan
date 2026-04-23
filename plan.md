@@ -1,3 +1,44 @@
+# Master Phase M6: Product Completion & Launch Hardening
+
+## Goal
+Довести оставшиеся known features из `UX_spec.md` и поднять production reliability без ломки уже закрытых M4/M5 контуров. Активный фокус сейчас: API keys как полноценная surface, route-level crash fallback, locale bootstrap, затем точечная зачистка оставшихся UX gaps.
+
+## M6 Scope
+- App shell hardening:
+  - route-level error boundary с branded fallback card,
+  - consistent empty-state/skeleton affordances on the API keys surface,
+  - locale bootstrap through document language + persisted preference.
+- API keys completion:
+  - replace placeholder usage counts with real request tracking,
+  - expose expiry / last-used / request-count / usage-by-day in the key details surface,
+  - preserve raw key display-once behavior and keep public API stable.
+- UX-spec closure sweep:
+  - audit remaining `UX_spec.md` gaps and close only the known leftovers,
+  - avoid introducing new product surfaces beyond the agreed batch.
+
+## M6 Progress
+- PR1 implemented: shell error boundary + locale bootstrap.
+- PR2 implemented: API key usage tracking, details endpoint contract, list metadata, and richer API keys page.
+- PR3 pending: remaining `UX_spec.md` closure sweep and any regression polish that falls out of it.
+
+## M6 Status
+- Status: in progress.
+- Verified so far: focused unit tests for request auth usage recording and API key details aggregation.
+- Public API: unchanged for `submitScan` / `getReport`.
+- Rollback auto-recovery: unchanged from M5.
+
+## M6 PR Breakdown
+1. `M6-PR1`: App shell hardening + crash fallback + locale bootstrap.
+2. `M6-PR2`: API keys completion with real usage tracking and key details UI.
+3. `M6-PR3`: UX-spec closure sweep + final regression pass.
+
+## M6 Done Criteria
+- API keys list/details show real expiry and usage data instead of placeholders.
+- Route crashes render a branded fallback instead of a blank screen.
+- Locale preference is persisted and applied at the document level.
+- Remaining `UX_spec.md` gaps are either closed or explicitly deferred in the plan.
+- Focused tests cover the new API keys data path and the shell hardening path.
+
 # Master Phase M5: Rollout Hardening & Deployability
 
 ## Goal
