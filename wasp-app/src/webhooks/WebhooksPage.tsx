@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
 import { Button } from '../client/components/ui/button';
+import { Skeleton } from '../client/components/ui/skeleton';
 import { Plus, Trash2, Check, X, Webhook as WebhookIcon } from 'lucide-react';
 import { useAsyncState } from '../client/hooks/useAsyncState';
-import { api } from 'wasp/client/api';
 import { toast } from '../client/hooks/use-toast';
+import { api } from '../client/utils/api';
 import { ToggleChipGroup } from '../client/components/common/ToggleChipGroup';
 
 type DrawerTab = 'overview' | 'deliveries' | 'payloads' | 'settings';
@@ -32,6 +33,22 @@ interface DeliveryItem {
   payload: unknown;
   response: string | null;
   manual_retry_of_id: string | null;
+}
+
+function WebhookCardSkeleton() {
+  return (
+    <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+      <CardHeader className="space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/3" />
+          </div>
+          <Skeleton className="h-6 w-16 rounded-full" />
+        </div>
+      </CardHeader>
+    </Card>
+  );
 }
 
 export default function WebhooksPage() {
@@ -224,9 +241,11 @@ export default function WebhooksPage() {
       )}
 
       {isLoading ? (
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardContent className="py-8 text-sm text-muted-foreground">Loading webhooks...</CardContent>
-        </Card>
+        <div className="space-y-4">
+          <WebhookCardSkeleton />
+          <WebhookCardSkeleton />
+          <WebhookCardSkeleton />
+        </div>
       ) : webhooks.length === 0 ? (
         <Card className="border-dashed border-border/50 bg-card/50 backdrop-blur-sm">
           <CardHeader>
@@ -235,6 +254,18 @@ export default function WebhooksPage() {
               <CardTitle className="text-muted-foreground">No Webhooks Configured</CardTitle>
             </div>
           </CardHeader>
+          <CardContent className="pt-0">
+            <p className="mb-4 text-sm text-muted-foreground">
+              Add your first webhook to receive scan events in real time.
+            </p>
+            <Button
+              onClick={() => setIsAddingNew(true)}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add first webhook
+            </Button>
+          </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
@@ -286,6 +317,7 @@ export default function WebhooksPage() {
                       size="sm"
                       className="border-red-500/30 hover:bg-red-500/10 hover:text-red-600"
                       onClick={() => void handleDeleteWebhook(webhook.id)}
+                      aria-label={`Delete webhook ${webhook.url}`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>

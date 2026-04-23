@@ -9,7 +9,7 @@ import { useScanPolling } from '../client/hooks/useScanPolling';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
 import { Badge } from '../client/components/ui/badge';
 import { AlertTriangle, CheckCircle, Clock, Zap, ArrowLeft } from 'lucide-react';
-import { api } from 'wasp/client/api';
+import { api } from '../client/utils/api';
 
 interface Report {
   scanId: string;

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { BarChart3, Bug, TrendingUp, Zap } from 'lucide-react';
-import { api } from 'wasp/client/api';
 import { toast } from '../client/hooks/use-toast';
 import { MetricCard } from '../client/components/common/MetricCard';
 import { ScanTable } from '../client/components/common/ScanTable';
@@ -18,6 +17,7 @@ import {
   parseDashboardSearch,
 } from './urlState';
 import { isEditableTarget } from '../client/utils/keyboard';
+import { api } from '../client/utils/api';
 
 type DashboardTimeRange = '7d' | '30d' | 'all';
 
