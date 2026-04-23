@@ -32,6 +32,9 @@ jobs:
       - name: Run linting
         run: npm run lint
 
+      - name: Run OpenAPI contract gate
+        run: npm run openapi:contract
+
       - name: Run unit tests
         run: npm run test:coverage
 
