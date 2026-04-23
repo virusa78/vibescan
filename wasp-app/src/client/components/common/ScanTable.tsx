@@ -273,19 +273,33 @@ export function ScanTable({
           )}
         </div>
 
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-2">
-            <Input
-              ref={searchInputRef}
-              value={searchQuery}
-              onChange={(event) => onSearchQueryChange(event.target.value)}
-              placeholder="Search by target, scan id, CVE"
-              className="w-72"
-              aria-label="Search recent scans"
-            />
-            <span className="rounded-md border border-border/50 px-2 py-1 text-xs text-muted-foreground" aria-live="polite">
-              {filteredCount}/{totalCount}
-            </span>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 md:w-72">
+                <Input
+                  ref={searchInputRef}
+                  value={searchQuery}
+                  onChange={(event) => onSearchQueryChange(event.target.value)}
+                  placeholder="Search scans by target, ID, or CVE..."
+                  className="w-full"
+                  aria-label="Search recent scans"
+                />
+                {searchQuery && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
+                    {filteredCount}
+                  </span>
+                )}
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-md border border-border/50 px-2 py-1.5 text-xs text-muted-foreground whitespace-nowrap">
+                <span>{filteredCount}</span>
+                <span>/</span>
+                <span>{totalCount}</span>
+              </span>
+            </div>
+            {searchQuery && filteredCount === 0 && (
+              <p className="text-xs text-muted-foreground">No matching scans found</p>
+            )}
           </div>
           <div className="text-xs text-muted-foreground">
             Shortcuts: j/k move, Enter open, x cancel, c copy id
