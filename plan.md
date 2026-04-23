@@ -1,3 +1,103 @@
+# Master Phase M5: Rollout Hardening & Deployability
+
+## Goal
+Закрыть M4 до production-grade состояния без изменения публичных API: сделать staging acceptance fail-closed на пустом окне и добавить реальный migration artifact для новых rollout-таблиц. Rollback auto-recovery сохраняется как есть.
+
+## M5 Scope
+- Hard gate for empty window:
+  - `evaluateCycloneDxStagingWindow()` возвращает `block_promote`, если окно не содержит ни одного snapshot,
+  - причина должна быть машинно-читабельной и стабильной, например `empty_window_no_observed_data`,
+  - acceptance runner считает пустое окно провалом sign-off, но всё равно пишет evidence pack с blocked-статусом.
+- Deployable migration for rollout storage:
+  - добавить настоящий `migration.sql` в `wasp-app/migrations/` для rollout enums/tables/indexes/FK,
+  - синхронизировать все 3 schema-копии и migration artifact, чтобы fresh DB поднималась без ручных правок,
+  - если генерация через Wasp/Prisma в этой среде упирается в интерактивность, фиксируем ручной SQL-манифест миграции вместо schema-only изменения.
+- Operator/docs sync:
+  - обновить `docs/CYCLONEDX_CHECKLIST.md` и `plan.md`,
+  - зафиксировать, что blocked empty window является ожидаемым состоянием, а не runtime-ошибкой.
+
+## M5 Progress
+- PR1 complete: empty-window hard gate now fails closed with a deterministic reason.
+- PR2 complete: rollout tables/enums have a real migration artifact in `wasp-app/migrations/`.
+- PR3 complete: M5 runbook and checklist are synchronized with the active phase.
+- Fresh-db migration path verified end-to-end on a clean database.
+
+## M5 Status
+- Status: done.
+- Verified: empty-window gate, rollout migration artifact, fresh-db migration path, runbook/checklist sync.
+- Rollback auto-recovery: unchanged by design.
+- Public API: unchanged.
+
+## M5 PR Breakdown
+1. `M5-PR1`: Empty-window hard gate + acceptance runner fail-closed behavior.
+2. `M5-PR2`: Real migration artifact for rollout tables + fresh-db validation.
+3. `M5-PR3`: Docs/checklist/runbook sync + final regression coverage.
+
+## M5 Done Criteria
+- Empty staging windows return `block_promote` with a deterministic reason code.
+- Acceptance runner exits non-zero on empty windows and still emits blocked evidence.
+- A fresh database can be migrated without ad-hoc schema repair.
+- Rollback auto-recovery behavior remains unchanged.
+- Public API for `submitScan` / `getReport` remains unchanged.
+
+# Master Phase M3: Cutover Readiness & Canary Rollout
+
+## Goal
+Довести CycloneDX pipeline до staged canary cutover с operational gate, S3-first raw artifacts и strict drift blocker `0.10`.
+
+## M3 Scope (Implemented)
+- S3-first artifact capture для ingestion pipeline: входной SBOM + scanner-result normalized source.
+- В `ingestionMeta.artifacts[]` хранятся только metadata-ссылки: `artifactKey`, `sha256`, `sizeBytes`, `capturedAt`, `retentionUntil`.
+- Добавлен retention baseline:
+  - TTL через `VIBESCAN_CYCLONEDX_ARTIFACT_RETENTION_DAYS`,
+  - cleanup runner `npm run retention:cyclonedx:m3`,
+  - аварийный флаг отключения capture `VIBESCAN_CYCLONEDX_ARTIFACT_CAPTURE_ENABLED`.
+- Upload failures не роняют scan completion: пишутся как `warning:*` в gate reasons.
+- Operational gate обновлён:
+  - блокировка при `validation_error|unify_error`,
+  - блокировка при `driftRate > 0.10` (default).
+- Добавлен canary decision summary:
+  - статусы: `allow_promote | block_promote | rollback_required`,
+  - stage progression: `shadow_smoke -> canary_cutover_cohort -> expand_cohort`,
+  - rollback сохраняет приоритет и блокирует продвижение.
+- Добавлены runbook + smoke automation + evidence pack:
+  - `docs/CYCLONEDX_M3_RUNBOOK.md`,
+  - `npm run smoke:cyclonedx:m3`,
+  - `docs/CYCLONEDX_M3_SMOKE_EVIDENCE.json`,
+  - `docs/CYCLONEDX_M3_SMOKE_REPORT.md`,
+  - schema `docs/CYCLONEDX_M3_EVIDENCE_SCHEMA.json`.
+
+## M3 PR Breakdown
+1. `M3-PR1`: Artifact capture + retention baseline (S3-first).
+2. `M3-PR2`: Operational gate + canary decision engine.
+3. `M3-PR3`: Runbook + smoke automation + evidence contract.
+
+---
+# Master Phase M2: Data Quality & Mapping Loop
+
+## Goal
+Стабилизировать CycloneDX data-plane после M1 через contract fixtures, `unknownFieldCatalog` и regression quality gates для безопасного cutover/rollback.
+
+## M2 Scope (Implemented)
+- Contract fixtures baseline: scanner-oriented manifest + golden fixtures для parser/validator/unifier.
+- Runtime `unknownFieldCatalog`: агрегация `scannerId/specVersion/path/firstSeen/lastSeen/count/status` из `_unknownFields`.
+- Triage workflow: статусы `new -> accepted -> mapped/ignored` с валидацией переходов.
+- Rollback-safe ingestion: в `rollback` unknown catalog продолжает собираться, но gate возвращает `not_applicable`.
+- Cutover quality gates: блокировка при `validation_error/unify_error` или drift-rate выше порога (`VIBESCAN_CYCLONEDX_DRIFT_RATE_THRESHOLD`, default `0.15`).
+- Deterministic metadata: snapshot каталога и gate-решение сериализуются в `scan_results.raw_output.ingestionMeta`.
+
+## M2 PR Breakdown
+1. `M2-PR1` Contract fixtures baseline + fixture manifest contract tests.
+2. `M2-PR2` Unknown field catalog + triage loop + deterministic snapshot in ingestion metadata.
+3. `M2-PR3` Regression and cutover quality gates + docs/checklist sync.
+
+## M2 Done Criteria
+- Contract fixtures и regression suite зелёные.
+- Unknown field catalog обновляется детерминированно в runtime metadata.
+- Cutover gate вычисляется/логируется для ingestion и блокирует небезопасный cutover.
+- Rollback path сохраняет сбор unknown fields без влияния на read path/cutover decision.
+
+---
 # Master Phase M1: CycloneDX Integration & Rollout
 
 ## Goal
@@ -109,7 +209,7 @@
 
 9. **Documentation** ✅
    - Historical MVP plan docs were removed; this file is now the single active plan.
-   - File: `PHASE_2_SUMMARY.md` - Complete overview
+   - File: `Backup/2026-04-23_obsolete_docs/PHASE_2_SUMMARY.md` - Complete overview
    - Code comments throughout inputAdapterService.ts
    - Error handling strategy documented
    - Docker isolation approach outlined
@@ -133,7 +233,7 @@
 **Created (2)**:
    - `wasp-app/src/server/services/inputAdapterService.ts` (280 lines)
    - `test/integration/input-adapters.test.ts` (300 lines)
-   - `PHASE_2_SUMMARY.md` (600+ lines)
+   - `Backup/2026-04-23_obsolete_docs/PHASE_2_SUMMARY.md` (600+ lines)
 
 **Modified (2)**:
 - `wasp-app/src/server/operations/scans/submitScan.ts` (+50 lines)
