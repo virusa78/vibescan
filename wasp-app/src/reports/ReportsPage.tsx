@@ -403,6 +403,19 @@ export default function ReportsPage() {
     });
   };
 
+  const findings = report?.findings ?? [];
+  const sev = summary?.severity ?? {};
+  const severityChipOptions = useMemo(() => {
+    const entries = [
+      { value: "critical", label: "Critical", count: sev.critical ?? 0 },
+      { value: "high", label: "High", count: sev.high ?? 0 },
+      { value: "medium", label: "Medium", count: sev.medium ?? 0 },
+      { value: "low", label: "Low", count: sev.low ?? 0 },
+      { value: "info", label: "Info", count: sev.info ?? 0 },
+    ];
+    return [{ value: "all", label: "All", count: summary?.totalFindings ?? 0 }, ...entries];
+  }, [sev.critical, sev.high, sev.info, sev.low, sev.medium, summary?.totalFindings]);
+
   if (isLoading) {
     return (
       <div className="p-8 lg:p-10 space-y-6">
