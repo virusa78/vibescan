@@ -5,6 +5,7 @@ import { Plus, Trash2, Check, X, Webhook as WebhookIcon } from 'lucide-react';
 import { useAsyncState } from '../client/hooks/useAsyncState';
 import { api } from 'wasp/client/api';
 import { toast } from '../client/hooks/use-toast';
+import { ToggleChipGroup } from '../client/components/common/ToggleChipGroup';
 
 type DrawerTab = 'overview' | 'deliveries' | 'payloads' | 'settings';
 
@@ -12,6 +13,7 @@ interface Webhook {
   id: string;
   url: string;
   enabled: boolean;
+  events?: string[];
   created_at: string;
   lastTriggeredAt?: string | null;
   deliverySuccessRate?: number;
@@ -43,6 +45,7 @@ export default function WebhooksPage() {
   const [deliveries, setDeliveries] = useState<DeliveryItem[]>([]);
   const [deliveryCursor, setDeliveryCursor] = useState<string | null>(null);
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string>('');
+  const [editingEvents, setEditingEvents] = useState<string[]>([]);
 
   const selectedDelivery = useMemo(
     () => deliveries.find((delivery) => delivery.id === selectedDeliveryId) ?? deliveries[0] ?? null,
@@ -403,17 +406,32 @@ export default function WebhooksPage() {
             )}
 
             {drawerTab === 'settings' && (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={() => void handleToggleActive(selectedWebhook.id)}>
-                  {selectedWebhook.enabled ? 'Disable webhook' : 'Enable webhook'}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-red-500/30 hover:bg-red-500/10 hover:text-red-600"
-                  onClick={() => void handleDeleteWebhook(selectedWebhook.id)}
-                >
-                  Delete webhook
-                </Button>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Event Types</p>
+                  <ToggleChipGroup
+                    options={[
+                      { value: 'scan_complete', label: 'Scan Complete' },
+                      { value: 'report_ready', label: 'Report Ready' },
+                      { value: 'scan_failed', label: 'Scan Failed' },
+                    ]}
+                    value={selectedWebhook?.events?.[0] ?? 'scan_complete'}
+                    onChange={(value) => setEditingEvents([value])}
+                    ariaLabel="Webhook event types"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={() => void handleToggleActive(selectedWebhook.id)}>
+                    {selectedWebhook.enabled ? 'Disable webhook' : 'Enable webhook'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-red-500/30 hover:bg-red-500/10 hover:text-red-600"
+                    onClick={() => void handleDeleteWebhook(selectedWebhook.id)}
+                  >
+                    Delete webhook
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
