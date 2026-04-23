@@ -11,10 +11,13 @@ import { emitWebhookEvent, buildWebhookPayload } from '../services/webhookEventE
 import type { ScanJob } from '../queues/jobContract.js';
 import { loadScanArtifacts, type NormalizedComponent } from '../services/inputAdapterService.js';
 import {
+  buildCycloneDxIngestionMeta,
   decideComponentsWithCycloneDx,
   ingestScannerFindingsWithCycloneDx,
   logCycloneDxTelemetry,
 } from '../services/cyclonedxIngestionService.js';
+import { persistCycloneDxRolloutSnapshot } from '../services/cyclonedxRolloutGovernance.js';
+import { captureCycloneDxArtifacts } from '../services/cyclonedxArtifactStorage.js';
 
 const prisma = new PrismaClient();
 
@@ -59,9 +62,11 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       : ([] as NormalizedComponent[]);
 
     let hydratedComponents = components;
+    let hydratedSbomRaw: Record<string, unknown> | null = (scan.sbomRaw as Record<string, unknown> | null) || null;
     if (hydratedComponents.length === 0) {
       const hydrated = await loadScanArtifacts(scan.inputType, scan.inputRef);
       hydratedComponents = hydrated.components;
+      hydratedSbomRaw = (hydrated.sbomRaw as Record<string, unknown> | null) || hydratedSbomRaw;
 
       await prisma.scan.update({
         where: { id: scanId },
@@ -79,7 +84,7 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
     const componentDecision = decideComponentsWithCycloneDx({
       scanId,
       scannerId: 'free',
-      sbomRaw: scan.sbomRaw as Record<string, unknown> | null,
+      sbomRaw: hydratedSbomRaw,
       legacyComponents: hydratedComponents,
     });
     logCycloneDxTelemetry(componentDecision.telemetry);
@@ -125,16 +130,32 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
     });
     logCycloneDxTelemetry(resultDecision.telemetry);
 
-    const ingestionMeta = {
+    const artifactCapture = await captureCycloneDxArtifacts({
+      scanId,
+      scannerId: 'free',
+      artifacts: [
+        {
+          artifactType: 'input_sbom',
+          payload: hydratedSbomRaw || {},
+        },
+        {
+          artifactType: 'scanner_result_normalized',
+          payload: {
+            findings: normalizedFindings,
+            scanner: 'free',
+          },
+        },
+      ],
+    });
+
+    const ingestionMeta = buildCycloneDxIngestionMeta({
       mode: componentDecision.mode,
-      componentIngestion: componentDecision.telemetry,
-      resultIngestion: resultDecision.telemetry,
-      resultStatus: resultDecision.ingestionResult.status,
-      unifiedStats:
-        resultDecision.ingestionResult.status === 'ingested'
-          ? resultDecision.ingestionResult.payload.stats
-          : null,
-    };
+      scannerId: 'free',
+      componentDecision,
+      resultDecision,
+      artifacts: artifactCapture.artifacts,
+      artifactWarnings: artifactCapture.warnings,
+    });
 
     // Store raw output in ScanResult
     const scanResult = await prisma.scanResult.upsert({
@@ -159,6 +180,13 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
         cveDbTimestamp: new Date(),
         durationMs,
       },
+    });
+
+    await persistCycloneDxRolloutSnapshot({
+      prisma,
+      scanResultId: scanResult.id,
+      scannerId: 'free',
+      ingestionMeta,
     });
 
     // Create Finding records

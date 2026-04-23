@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-04-23T00:00:00.000Z",
+  "entries": [
+    {
+      "scanResultId": "example-scan-result-id",
+      "artifacts": [
+        {
+          "artifactKey": "cyclonedx-artifacts/example-scan/free/2026-04-23T00-00-00-000Z-input_sbom-abc123.json",
+          "sha256": "abc123",
+          "sizeBytes": 120,
+          "capturedAt": "2026-04-23T00:00:00.000Z",
+          "retentionUntil": "2026-05-07T00:00:00.000Z"
+        }
+      ]
+    }
+  ]
+}

@@ -33,6 +33,20 @@ enum VulnAcceptanceStatus {
   expired
 }
 
+enum CycloneDxRolloutStage {
+  shadow_smoke
+  canary_cutover_cohort
+  expand_cohort
+  ready_for_prod
+}
+
+enum CycloneDxRolloutStatus {
+  in_progress
+  blocked
+  ready_for_prod
+  rollback_active
+}
+
 model Scan {
   id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId           String     @map("user_id") @db.Uuid
@@ -72,6 +86,41 @@ model ScanResult {
 
   @@unique([scanId, source], map: "idx_scan_results_unique")
   @@map("scan_results")
+}
+
+model CycloneDxRolloutSnapshot {
+  id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  scannerId     String                @map("scanner_id")
+  scanResultId  String                @unique @map("scan_result_id") @db.Uuid
+  rolloutStage  CycloneDxRolloutStage @map("rollout_stage")
+  progressStatus CycloneDxRolloutStatus @map("progress_status")
+  decisionStatus String                @map("decision_status")
+  gateStatus    String                @map("gate_status")
+  gateSnapshot  Json                  @map("gate_snapshot")
+  ingestionMeta Json                  @map("ingestion_meta")
+  summary       Json                  @map("summary")
+
+  scanResult ScanResult @relation(fields: [scanResultId], references: [id], onDelete: Cascade)
+
+  @@index([scannerId, createdAt])
+  @@index([rolloutStage, progressStatus])
+  @@map("cyclonedx_rollout_snapshots")
+}
+
+model CycloneDxRolloutState {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  scannerId      String                @unique @map("scanner_id")
+  currentStage   CycloneDxRolloutStage @default(shadow_smoke) @map("current_stage")
+  progressStatus CycloneDxRolloutStatus @default(in_progress) @map("progress_status")
+  latestSnapshotId String?             @unique @map("latest_snapshot_id") @db.Uuid
+  latestDecision Json?                 @map("latest_decision")
+
+  latestSnapshot CycloneDxRolloutSnapshot? @relation(fields: [latestSnapshotId], references: [id], onDelete: SetNull)
+
+  @@map("cyclonedx_rollout_states")
 }
 
 model ScanDelta {

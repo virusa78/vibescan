@@ -41,6 +41,20 @@ enum VulnAcceptanceStatus {
   expired
 }
 
+enum CycloneDxRolloutStage {
+  shadow_smoke
+  canary_cutover_cohort
+  expand_cohort
+  ready_for_prod
+}
+
+enum CycloneDxRolloutStatus {
+  in_progress
+  blocked
+  ready_for_prod
+  rollback_active
+}
+
 enum PlanTier {
   free_trial
   starter
@@ -123,10 +137,22 @@ model ApiKey {
   enabled                   Boolean         @default(true)
 
   user                      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usageEvents               ApiKeyUsageEvent[]
 
   @@unique([userId, keyHash])
   @@index([keyPrefix])
   @@map("api_keys")
+}
+
+model ApiKeyUsageEvent {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  apiKeyId                  String          @map("api_key_id") @db.Uuid
+
+  apiKey                    ApiKey          @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@index([apiKeyId, createdAt])
+  @@map("api_key_usage_events")
 }
 
 // Scans - core entity
@@ -498,4 +524,41 @@ model QuotaLedger {
   @@index([userId])
   @@index([createdAt])
   @@map("quota_ledger")
+}
+
+model CycloneDxRolloutSnapshot {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt         DateTime              @default(now()) @map("created_at")
+
+  scannerId         String                @map("scanner_id")
+  scanResultId      String                @unique @map("scan_result_id") @db.Uuid
+  rolloutStage      CycloneDxRolloutStage @map("rollout_stage")
+  progressStatus    CycloneDxRolloutStatus @map("progress_status")
+  decisionStatus    String                @map("decision_status")
+  gateStatus        String                @map("gate_status")
+  gateSnapshot      Json                  @map("gate_snapshot")
+  ingestionMeta     Json                  @map("ingestion_meta")
+  summary           Json                  @map("summary")
+
+  scanResult        ScanResult            @relation(fields: [scanResultId], references: [id], onDelete: Cascade)
+
+  @@index([scannerId, createdAt])
+  @@index([rolloutStage, progressStatus])
+  @@map("cyclonedx_rollout_snapshots")
+}
+
+model CycloneDxRolloutState {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  scannerId         String                @unique @map("scanner_id")
+  currentStage      CycloneDxRolloutStage @default(shadow_smoke) @map("current_stage")
+  progressStatus    CycloneDxRolloutStatus @default(in_progress) @map("progress_status")
+  latestSnapshotId  String?               @unique @map("latest_snapshot_id") @db.Uuid
+  latestDecision    Json?                 @map("latest_decision")
+
+  latestSnapshot    CycloneDxRolloutSnapshot? @relation(fields: [latestSnapshotId], references: [id], onDelete: SetNull)
+
+  @@map("cyclonedx_rollout_states")
 }

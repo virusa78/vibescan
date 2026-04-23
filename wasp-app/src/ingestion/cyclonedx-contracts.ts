@@ -55,6 +55,7 @@ export interface CycloneDxComponent {
   version?: string;
   purl?: string;
   cpe?: string;
+  supplier?: string;
   licenses?: Array<{ license?: CycloneDxLicense }>;
   properties?: Array<{ name: string; value: string }>;
   [key: string]: unknown;
@@ -207,6 +208,22 @@ export interface IngestionFailureResult {
 
 export type IngestionResult = IngestionSuccessResult | IngestionFailureResult;
 
+export interface CycloneDxFixtureExpectation {
+  status: IngestionStatus;
+  errorType?: IngestionErrorType;
+  componentCount?: number;
+  vulnerabilityCount?: number;
+  severityCounts?: Partial<Record<SeverityLevel, number>>;
+}
+
+export interface CycloneDxFixtureManifestEntry {
+  id: string;
+  scannerId: string;
+  specVersion: CycloneDXSpecVersion | "unknown";
+  filePath: string;
+  expected: CycloneDxFixtureExpectation;
+}
+
 const SUPPORTED_SPEC_VERSIONS: CycloneDXSpecVersion[] = ["1.4", "1.5", "1.6"];
 
 const CYCLOONEDX_SCHEMA = {
@@ -262,6 +279,31 @@ const AjvCtor = Ajv as unknown as new (options: {
 const ajv = new AjvCtor({ allErrors: true, allowUnionTypes: true, strict: false });
 const validateSchema = ajv.compile(CYCLOONEDX_SCHEMA as any);
 
+const KNOWN_METADATA_FIELDS = new Set(["timestamp", "tools", "component"]);
+const KNOWN_COMPONENT_FIELDS = new Set([
+  "bomRef",
+  "bom-ref",
+  "type",
+  "name",
+  "version",
+  "purl",
+  "cpe",
+  "supplier",
+  "licenses",
+  "properties",
+]);
+const KNOWN_VULNERABILITY_FIELDS = new Set([
+  "ref",
+  "id",
+  "source",
+  "ratings",
+  "cwes",
+  "fixes",
+  "references",
+  "affects",
+  "description",
+]);
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -303,6 +345,19 @@ function createIngestionError(
     context,
     timestamp: new Date(),
   };
+}
+
+function appendUnknownFields(
+  target: Map<string, unknown>,
+  source: Record<string, unknown>,
+  basePath: string,
+  knownFields: Set<string>,
+): void {
+  for (const [key, value] of Object.entries(source)) {
+    if (!knownFields.has(key)) {
+      target.set(`${basePath}.${key}`, value);
+    }
+  }
 }
 
 function parseRawCycloneDXDocument(
@@ -400,6 +455,7 @@ function normalizeComponent(component: unknown): CycloneDxComponent | null {
     type: typeof component.type === "string" ? component.type : "library",
     purl: typeof component.purl === "string" ? component.purl : undefined,
     cpe: typeof component.cpe === "string" ? component.cpe : undefined,
+    supplier: typeof component.supplier === "string" ? component.supplier : undefined,
     licenses,
     properties,
   };
@@ -644,9 +700,28 @@ export function unifyCycloneDXDocument(
   const unknownFields = new Map<string, unknown>();
   if (document._rawFields) {
     for (const [key, value] of Object.entries(document._rawFields)) {
-      unknownFields.set(key, value);
+      unknownFields.set(`$.${key}`, value);
     }
   }
+  if (document.metadata && isObject(document.metadata)) {
+    appendUnknownFields(unknownFields, document.metadata, "$.metadata", KNOWN_METADATA_FIELDS);
+  }
+  document.components.forEach((component, index) => {
+    appendUnknownFields(
+      unknownFields,
+      component as Record<string, unknown>,
+      `$.components[${index}]`,
+      KNOWN_COMPONENT_FIELDS,
+    );
+  });
+  document.vulnerabilities.forEach((vulnerability, index) => {
+    appendUnknownFields(
+      unknownFields,
+      vulnerability as Record<string, unknown>,
+      `$.vulnerabilities[${index}]`,
+      KNOWN_VULNERABILITY_FIELDS,
+    );
+  });
 
   return {
     scanId: context?.scanId || "unknown-scan",

@@ -13,7 +13,7 @@ Each proposal is labelled:
 
 Current: 5-column table, no filters, fixed ordering (newest first), 10 rows fixed.
 
-### 1.1 Column-header click to sort 🎨 ✅ M6-PR3
+### 1.1 Column-header click to sort 🎨
 Make `Target · Type · Status · Findings · Submitted` clickable. Chevron indicator
 shows current direction. Default `Submitted DESC`. Multi-column sort via shift-click
 (show second chevron).
@@ -21,29 +21,29 @@ shows current direction. Default `Submitted DESC`. Multi-column sort via shift-c
 - Keep the URL in sync: `/dashboard?sort=submitted:desc,findings:asc`. Sorts survive
   refresh.
 
-### 1.2 Status filter row 🎨 ✅ M6-PR3
+### 1.2 Status filter row 🎨
 Replace any future dropdown with the existing `ToggleChipGroup`:
 `pending · scanning · done · error · cancelled` — all visible, click to toggle,
 multi-select. Counts next to each chip (`done · 42`).
 
-### 1.3 Inline fuzzy search 🎨 ✅ M6-PR3
+### 1.3 Inline fuzzy search 🎨
 Small `⌘K`-style input above the table: `\"ft… \"` narrows to rows containing `ft`
 in target/CVE/scan-id. Debounced 150ms. Badge shows matches/total.
 
-### 1.4 Row-level \"Quick actions\" on hover 🎨 ⏳ POST-LAUNCH
+### 1.4 Row-level \"Quick actions\" on hover 🎨
 On hover, right-align: `↗ Open · ⏹ Cancel · ⟳ Re-run · 📋 Copy ID`.
 Keyboard access: `j/k` to move, `Enter` to open, `x` to cancel, `c` to copy.
 
-### 1.5 Saved views 🚀 ⏳ POST-LAUNCH
+### 1.5 Saved views 🚀
 Let the user save a filter+sort combination with a name (`\"Critical builds — last 7d\"`).
 Persist in `User.uiPreferences.scanSavedViews`. Render as pill-tabs above the table
 (`All · Critical builds · My team`). Mirror in URL for shareability.
 
-### 1.6 Bulk actions 🚀 ⏳ POST-LAUNCH
+### 1.6 Bulk actions 🚀
 Checkbox column + \"N selected\" bar → `Cancel · Re-run · Export CSV/JSONL`.
 Important for teams that want to bulk-cancel after a bad commit.
 
-### 1.7 Column visibility 🎨 ⏳ POST-LAUNCH
+### 1.7 Column visibility 🎨
 Small icon-button `⚙` opening a `ToggleChipGroup` of optional columns:
 `Project · Branch · Commit · Author · Delta count · Duration`. Persists via
 localStorage keyed by userId.
@@ -54,7 +54,7 @@ localStorage keyed by userId.
 
 Current: 6-column table, no filters, no deep-links to CVE.
 
-### 2.1 CVE deep-link to NVD + GHSA + MITRE 🎨 ✅ M6-PR3
+### 2.1 CVE deep-link to NVD + GHSA + MITRE 🎨
 Every CVE cell becomes **two links**: the CVE id itself → GitHub Advisory (fast,
 well-written), and a tiny `nvd.nist.gov` glyph for the primary source.
 
@@ -68,7 +68,7 @@ well-written), and a tiny `nvd.nist.gov` glyph for the primary source.
 Open in new tab, `rel=\"noopener noreferrer\"`. Add `title=\"\"` with hover-preview of
 the first 200 chars of the description — reduces context-switch cost.
 
-### 2.2 Package deep-links (ecosystem-aware) 🎨 ✅ M6-PR3
+### 2.2 Package deep-links (ecosystem-aware) 🎨
 Given `packageName` + `ecosystem` from finding, link to:
 - npm → `https://www.npmjs.com/package/<name>`
 - pypi → `https://pypi.org/project/<name>`
@@ -83,30 +83,29 @@ Given `packageName` + `ecosystem` from finding, link to:
 </a>
 ```
 
-### 2.3 Severity filter 🎨 ✅ M6-PR3
+### 2.3 Severity filter 🎨
 Reuse `ToggleChipGroup` from Dashboard. Active/inactive states retain counts.
-We already have the component; this is mostly wiring + query/local filtering.
 
-### 2.4 \"Show only fixable\" toggle 🎨 ✅ M6-PR3
+### 2.4 \"Show only fixable\" toggle 🎨
 Single `SegmentedControl` above the table: `All · Fixable · Unfixable`. Fixable =
 `fixedVersion` is not null. High-utility for devs triaging what to bump in
 `package.json`.
 
-### 2.5 Group-by package 🚀 ⏳ POST-LAUNCH
+### 2.5 Group-by package 🚀
 Switch table into a tree view: `lodash@4.17.20 [3 CVEs]` collapsible, expanding
 shows CVE children. Reduces \"same package, 8 CVEs = 8 rows\" noise. Toggle via
 `SegmentedControl` `Flat · By package · By severity`.
 
-### 2.6 Copy-as patch 🎨 ⏳ POST-LAUNCH
+### 2.6 Copy-as patch 🎨
 Icon next to fixed version: `📋 package.json patch`. Click copies
 `\"lodash\": \"^4.17.21\"` in the ecosystem-native format (package.json, requirements.txt,
 go.mod, etc.). Power-user killer feature.
 
-### 2.7 Keyboard-first filter 🎨 ⏳ POST-LAUNCH
+### 2.7 Keyboard-first filter 🎨
 `/` focuses search, `Esc` clears, `1..5` toggles severity chips (1=critical),
 `f` toggles fixable-only. All shortcuts listed in a `?`-overlay.
 
-### 2.8 Annotations (team reviews) 🚀 ⏳ POST-LAUNCH
+### 2.8 Annotations (team reviews) 🚀
 Each row can have `✅ accepted · ⏸ snoozed · ❌ rejected` state with optional note.
 Persist in `VulnAcceptance` (already in `schema.prisma`). Appears as a badge
 column, also drives `ci-decision` output.
@@ -117,7 +116,7 @@ column, also drives `ci-decision` output.
 
 Current: flat list, no delivery history visible from UI.
 
-### 3.1 Delivery timeline drawer 🔧 ⏳ POST-LAUNCH
+### 3.1 Delivery timeline drawer 🔧
 Click a webhook row → right-side panel opens (`<Sheet>` already in repo) with:
 - Tabs: `Overview · Deliveries · Payloads · Settings`
 - Deliveries tab: table of last 100 `WebhookDelivery` rows with
@@ -126,20 +125,20 @@ Click a webhook row → right-side panel opens (`<Sheet>` already in repo) with:
 - Click a row → payload viewer with the request body, HMAC header, response.
   Useful for CI-side debugging.
 
-### 3.2 \"Test delivery\" button 🔧 ⏳ POST-LAUNCH
+### 3.2 \"Test delivery\" button 🔧
 Fires a `webhook.test` event with a synthetic payload to the URL. Shows live
 result inline. Backend needs `POST /api/v1/webhooks/:id/test`.
 
-### 3.3 Event-type editor 🎨 ✅ M6-PR3
+### 3.3 Event-type editor 🎨
 Replace \"events: scan_complete, report_ready, scan_failed\" display with a
 `ToggleChipGroup` inline on each row — edit subscribed events without opening
 a separate form.
 
-### 3.4 Status summary tile 🎨 ✅ M6-PR3
+### 3.4 Status summary tile 🎨
 Above the list: `12 active · 97% success rate · 3 failing (7d)`. Red count
 clickable → filters to failing webhooks.
 
-### 3.5 Resend delivery 🔧 ⏳ POST-LAUNCH
+### 3.5 Resend delivery 🔧
 Action on each failed delivery: \"Retry now\". Bypasses the 5-attempt backoff, useful
 after fixing the receiver.
 
@@ -225,10 +224,6 @@ pattern, huge ergonomics win.
 Press `?` anywhere → translucent panel listing context-aware shortcuts.
 Self-documenting, no help-docs needed.
 
-Skeleton version (even before shortcuts are wired):
-- `?` opens a `<Dialog>`
-- list shortcuts by context (Dashboard table, Reports table, global)
-
 ### 7.3 Toast / inline confirmation
 `useToast` already in repo. Use consistently: scan submit, webhook create, key
 revoke — right now some show alerts, some change page. Standardize.
@@ -245,15 +240,6 @@ screen. React Router v7 offers `errorElement`.
 ### 7.6 Skeleton loaders 🎨
 Replace `\"Loading scans…\"` text with actual skeleton rows (same layout, shimmering
 gray blocks). Perceived performance +2×.
-
-Notes:
-- Replace \"Loading…\" strings on Dashboard / Reports / Scans
-- Tiny CSS + a `<Skeleton>` component (already in `ui/`)
-
-### 7.11 External-link icon helper 🎨
-Add a small external-link helper for consistent `target=\"_blank\"` + `rel=\"noopener noreferrer\"`
-and a tiny glyph. Implement as a `<Link>` React component in `VibeUI.tsx`, then reuse
-it for 2.1/2.2/3/etc.
 
 ### 7.7 i18n readiness 🚀
 Currently all strings are hardcoded English. Adopt `react-i18next`. Settings
@@ -322,7 +308,8 @@ Small, reviewable commits on this branch:
    10-15 LOC in `ReportsPage.tsx`. Makes the report **useful** instantly.
 2. **Sortable column headers for Recent Scans on Dashboard** (§1.1). Client-side
    sorting; URL sync. ~40 LOC.
-3. **Skeleton loaders** replacing \"Loading…\" strings on Dashboard / Reports / Scans. Tiny CSS + a `<Skeleton>` component already in `ui/`.
+3. **Skeleton loaders** replacing \"Loading…\" strings on Dashboard / Reports /
+  Scans. Tiny CSS + a `<Skeleton>` component already in `ui/`.
 4. **Severity filter ToggleChipGroup on Reports** (§2.3) — we already built the
    component, just wire it.
 5. **External-link icon helper** — a `<Link>` React component in `VibeUI.tsx`

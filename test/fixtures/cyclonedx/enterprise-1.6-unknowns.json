@@ -1,0 +1,40 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "xScannerMetadata": {
+    "channel": "enterprise"
+  },
+  "metadata": {
+    "timestamp": "2026-04-23T12:00:00Z",
+    "tools": {
+      "components": [
+        { "name": "codescoring", "version": "1.0.0" }
+      ]
+    },
+    "xMetaField": "kept-for-triage"
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:npm/axios@1.7.0",
+      "type": "library",
+      "name": "axios",
+      "version": "1.7.0",
+      "purl": "pkg:npm/axios@1.7.0",
+      "supplier": "axios-team",
+      "xTeamRisk": "new"
+    }
+  ],
+  "vulnerabilities": [
+    {
+      "id": "CVE-2025-1000",
+      "ratings": [
+        { "severity": "critical", "score": 9.8 }
+      ],
+      "affects": [
+        { "ref": "pkg:npm/axios@1.7.0" }
+      ],
+      "xVulnSource": "internal-catalog"
+    }
+  ]
+}

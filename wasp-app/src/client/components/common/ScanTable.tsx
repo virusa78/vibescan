@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import {
@@ -63,9 +64,15 @@ const STATUS_OPTIONS: Array<{ value: DashboardStatus; label: string }> = [
 
 const CANCELLABLE_STATUSES = new Set(['pending', 'scanning']);
 
-function getSortIndicator(active: boolean, direction: DashboardSortDirection): string {
-  if (!active) return '↕';
-  return direction === 'asc' ? '↑' : '↓';
+// SortHeader icon component
+function SortHeaderIcon({ active, direction }: { active: boolean; direction: DashboardSortDirection }) {
+  if (!active) {
+    return <div className="w-4 h-4 opacity-40 transition-opacity" />;
+  }
+  if (direction === 'asc') {
+    return <ChevronUp className="w-4 h-4 transition-transform" />;
+  }
+  return <ChevronDown className="w-4 h-4 transition-transform" />;
 }
 
 function getReadableStatusLabel(status: string): string {
@@ -364,14 +371,16 @@ export function ScanTable({
                       >
                         <button
                           type="button"
-                          className={`inline-flex items-center gap-1 transition ${
-                            active ? 'text-foreground' : 'hover:text-foreground'
+                          className={`inline-flex items-center gap-2 px-2 py-1 rounded transition-all ${
+                            active 
+                              ? 'text-foreground bg-accent/10' 
+                              : 'text-muted-foreground hover:text-foreground hover:bg-accent/5'
                           }`}
                           onClick={() => onSortChange(column.field)}
                           aria-label={`Sort by ${column.label.toLowerCase()} ${active && sortDirection === 'asc' ? 'descending' : 'ascending'}`}
                         >
                           {column.label}
-                          <span aria-hidden="true">{getSortIndicator(active, sortDirection)}</span>
+                          <SortHeaderIcon active={active} direction={sortDirection} />
                         </button>
                       </th>
                     );

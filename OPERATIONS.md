@@ -108,8 +108,8 @@ export function MyComponent() {
 7. Process repeats until refresh token expires (30 days)
 
 **Related Documentation**:
-- [TOKEN_MANAGEMENT.md](TOKEN_MANAGEMENT.md) - Complete token management guide
-- [TOKEN_VALIDATION.md](TOKEN_VALIDATION.md) - Token validation checklist
+- [Backup Token Management](Backup/2026-04-23_obsolete_docs/TOKEN_MANAGEMENT.md) - Archived token management guide
+- [Backup Token Validation](Backup/2026-04-23_obsolete_docs/TOKEN_VALIDATION.md) - Archived token validation checklist
 
 ---
 

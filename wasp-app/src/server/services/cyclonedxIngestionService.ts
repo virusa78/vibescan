@@ -1,7 +1,18 @@
 import type { NormalizedComponent } from './inputAdapterService.js';
-import { fromCycloneDX, type IngestionErrorType, type IngestionResult, type SeverityLevel, type UnifiedScanPayload } from '../../ingestion/cyclonedx-contracts.js';
+import {
+  fromCycloneDX,
+  type IngestionErrorType,
+  type IngestionResult,
+  type SeverityLevel,
+  type UnifiedScanPayload,
+} from '../../ingestion/cyclonedx-contracts.js';
+import type { CycloneDxArtifactMeta } from './cyclonedxArtifactStorage.js';
 
 export type CycloneDxPipelineMode = 'legacy' | 'shadow' | 'cutover' | 'rollback';
+export type UnknownFieldTriageStatus = 'new' | 'accepted' | 'mapped' | 'ignored';
+export type CutoverGateStatus = 'allow_cutover' | 'block_cutover' | 'not_applicable';
+export type CanaryDecisionStatus = 'allow_promote' | 'block_promote' | 'rollback_required';
+export type CanaryRolloutStage = 'shadow_smoke' | 'canary_cutover_cohort' | 'expand_cohort' | 'ready_for_prod';
 
 export interface ScannerFindingInput {
   cveId: string;
@@ -48,23 +59,97 @@ export interface CycloneDxTelemetry {
   };
 }
 
+export interface UnknownFieldCatalogEntry {
+  scannerId: string;
+  specVersion: string;
+  path: string;
+  firstSeen: Date;
+  lastSeen: Date;
+  count: number;
+  status: UnknownFieldTriageStatus;
+}
+
+export interface UnknownFieldCatalogSnapshotEntry {
+  scannerId: string;
+  specVersion: string;
+  path: string;
+  firstSeen: string;
+  lastSeen: string;
+  count: number;
+  status: UnknownFieldTriageStatus;
+}
+
+export interface CutoverGateDecision {
+  status: CutoverGateStatus;
+  mode: CycloneDxPipelineMode;
+  driftRate: number;
+  driftThreshold: number;
+  blockerErrors: IngestionErrorType[];
+  reasons: string[];
+  canaryDecision: {
+    scannerId: string;
+    stage: CanaryRolloutStage;
+    status: CanaryDecisionStatus;
+    nextStage: CanaryRolloutStage | null;
+    reasons: string[];
+  };
+}
+
+export interface CycloneDxIngestionMeta {
+  mode: CycloneDxPipelineMode;
+  componentIngestion: CycloneDxTelemetry;
+  resultIngestion: CycloneDxTelemetry;
+  resultStatus: IngestionResult['status'];
+  unifiedStats: UnifiedScanPayload['stats'] | null;
+  artifacts: CycloneDxArtifactMeta[];
+  unknownFieldCatalog: UnknownFieldCatalogSnapshotEntry[];
+  gate: CutoverGateDecision;
+}
+
+const triageTransitions: Record<UnknownFieldTriageStatus, UnknownFieldTriageStatus[]> = {
+  new: ['new', 'accepted', 'mapped', 'ignored'],
+  accepted: ['accepted', 'mapped', 'ignored'],
+  mapped: ['mapped'],
+  ignored: ['ignored', 'mapped'],
+};
+
+const unknownFieldCatalog = new Map<string, UnknownFieldCatalogEntry>();
+
 function envFlag(value: string | undefined, defaultValue = false): boolean {
   if (value == null) return defaultValue;
   const normalized = value.trim().toLowerCase();
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
 }
 
-export function resolveCycloneDxPipelineMode(): CycloneDxPipelineMode {
-  if (envFlag(process.env.VIBESCAN_CYCLONEDX_ROLLBACK_ENABLED)) {
-    return 'rollback';
-  }
-  if (envFlag(process.env.VIBESCAN_CYCLONEDX_CUTOVER_ENABLED)) {
-    return 'cutover';
-  }
-  if (envFlag(process.env.VIBESCAN_CYCLONEDX_SHADOW_ENABLED)) {
-    return 'shadow';
-  }
-  return 'legacy';
+function parseNumberFlag(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function catalogKey(scannerId: string, specVersion: string, path: string): string {
+  return `${scannerId}|${specVersion}|${path}`;
+}
+
+function toSnapshot(entry: UnknownFieldCatalogEntry): UnknownFieldCatalogSnapshotEntry {
+  return {
+    scannerId: entry.scannerId,
+    specVersion: entry.specVersion,
+    path: entry.path,
+    firstSeen: entry.firstSeen.toISOString(),
+    lastSeen: entry.lastSeen.toISOString(),
+    count: entry.count,
+    status: entry.status,
+  };
+}
+
+function getUnknownFieldStatus(
+  scannerId: string,
+  specVersion: string,
+  path: string,
+): UnknownFieldTriageStatus {
+  const entry = unknownFieldCatalog.get(catalogKey(scannerId, specVersion, path));
+  return entry?.status || 'new';
 }
 
 function componentKey(component: NormalizedComponent): string {
@@ -212,6 +297,299 @@ function buildTelemetry(
   };
 }
 
+function updateUnknownFieldCatalog(
+  scannerId: string,
+  ingestionResult: IngestionResult | null,
+  observedAt: Date,
+): void {
+  if (!ingestionResult || ingestionResult.status !== 'ingested') {
+    return;
+  }
+
+  const specVersion = ingestionResult.payload._originalDocument.specVersion || 'unknown';
+  for (const path of ingestionResult.payload._unknownFields.keys()) {
+    const key = catalogKey(scannerId, specVersion, path);
+    const existing = unknownFieldCatalog.get(key);
+
+    if (!existing) {
+      unknownFieldCatalog.set(key, {
+        scannerId,
+        specVersion,
+        path,
+        firstSeen: observedAt,
+        lastSeen: observedAt,
+        count: 1,
+        status: getUnknownFieldStatus(scannerId, specVersion, path),
+      });
+      continue;
+    }
+
+    existing.lastSeen = observedAt;
+    existing.count += 1;
+  }
+}
+
+function safeDriftRate(drift?: CycloneDxTelemetry['drift']): number {
+  if (!drift) return 0;
+  const base = Math.max(1, drift.legacyComponents);
+  return (drift.missingInUnified + drift.extraInUnified) / base;
+}
+
+export function resolveCanaryRolloutStage(): CanaryRolloutStage {
+  const raw = process.env.VIBESCAN_CYCLONEDX_CANARY_STAGE?.trim().toLowerCase();
+  if (raw === 'canary_cutover_cohort' || raw === 'expand_cohort' || raw === 'shadow_smoke' || raw === 'ready_for_prod') {
+    return raw;
+  }
+  return 'shadow_smoke';
+}
+
+function nextCanaryStage(stage: CanaryRolloutStage): CanaryRolloutStage | null {
+  if (stage === 'shadow_smoke') return 'canary_cutover_cohort';
+  if (stage === 'canary_cutover_cohort') return 'expand_cohort';
+  if (stage === 'expand_cohort') return 'ready_for_prod';
+  return null;
+}
+
+function evaluateCanaryDecision(options: {
+  scannerId: string;
+  mode: CycloneDxPipelineMode;
+  gateStatus: CutoverGateStatus;
+  gateReasons: string[];
+}): CutoverGateDecision['canaryDecision'] {
+  const stage = resolveCanaryRolloutStage();
+  const reasons = [...options.gateReasons];
+
+  if (options.mode === 'rollback') {
+    return {
+      scannerId: options.scannerId,
+      stage,
+      status: 'rollback_required',
+      nextStage: null,
+      reasons: ['rollback_mode_active'],
+    };
+  }
+
+  if (options.mode === 'legacy') {
+    return {
+      scannerId: options.scannerId,
+      stage,
+      status: 'block_promote',
+      nextStage: null,
+      reasons: ['legacy_mode_not_eligible_for_canary'],
+    };
+  }
+
+  if (stage === 'shadow_smoke' && options.mode !== 'shadow') {
+    return {
+      scannerId: options.scannerId,
+      stage,
+      status: 'block_promote',
+      nextStage: null,
+      reasons: ['shadow_smoke_requires_shadow_mode', ...reasons],
+    };
+  }
+
+  if ((stage === 'canary_cutover_cohort' || stage === 'expand_cohort') && options.mode !== 'cutover') {
+    return {
+      scannerId: options.scannerId,
+      stage,
+      status: 'block_promote',
+      nextStage: null,
+      reasons: ['cutover_stage_requires_cutover_mode', ...reasons],
+    };
+  }
+
+  if (stage === 'ready_for_prod' && options.mode !== 'cutover') {
+    return {
+      scannerId: options.scannerId,
+      stage,
+      status: 'block_promote',
+      nextStage: null,
+      reasons: ['ready_for_prod_requires_cutover_mode', ...reasons],
+    };
+  }
+
+  if (options.gateStatus === 'block_cutover') {
+    return {
+      scannerId: options.scannerId,
+      stage,
+      status: 'block_promote',
+      nextStage: null,
+      reasons,
+    };
+  }
+
+  return {
+    scannerId: options.scannerId,
+    stage,
+    status: 'allow_promote',
+    nextStage: nextCanaryStage(stage),
+    reasons: reasons.length > 0 ? reasons : ['ready_for_stage_promotion'],
+  };
+}
+
+export function getUnknownFieldCatalogSnapshot(): UnknownFieldCatalogSnapshotEntry[] {
+  return Array.from(unknownFieldCatalog.values())
+    .sort((a, b) => {
+      if (a.scannerId !== b.scannerId) return a.scannerId.localeCompare(b.scannerId);
+      if (a.specVersion !== b.specVersion) return a.specVersion.localeCompare(b.specVersion);
+      return a.path.localeCompare(b.path);
+    })
+    .map(toSnapshot);
+}
+
+export function resetUnknownFieldCatalogForTests(): void {
+  unknownFieldCatalog.clear();
+}
+
+export function setUnknownFieldTriageStatus(options: {
+  scannerId: string;
+  specVersion: string;
+  path: string;
+  status: UnknownFieldTriageStatus;
+}): UnknownFieldCatalogSnapshotEntry {
+  const { scannerId, specVersion, path, status } = options;
+  const key = catalogKey(scannerId, specVersion, path);
+  const now = new Date();
+  const existing = unknownFieldCatalog.get(key);
+
+  if (!existing) {
+    const entry: UnknownFieldCatalogEntry = {
+      scannerId,
+      specVersion,
+      path,
+      firstSeen: now,
+      lastSeen: now,
+      count: 0,
+      status,
+    };
+    unknownFieldCatalog.set(key, entry);
+    return toSnapshot(entry);
+  }
+
+  const allowed = triageTransitions[existing.status];
+  if (!allowed.includes(status)) {
+    throw new Error(`invalid_triage_transition:${existing.status}->${status}`);
+  }
+
+  existing.status = status;
+  existing.lastSeen = now;
+  return toSnapshot(existing);
+}
+
+export function evaluateCutoverQualityGate(options: {
+  scannerId: string;
+  mode: CycloneDxPipelineMode;
+  componentTelemetry?: CycloneDxTelemetry;
+  result: IngestionResult;
+  warnings?: string[];
+}): CutoverGateDecision {
+  const { mode, componentTelemetry, result } = options;
+  const driftThreshold = parseNumberFlag(process.env.VIBESCAN_CYCLONEDX_DRIFT_RATE_THRESHOLD, 0.10);
+  const driftRate = safeDriftRate(componentTelemetry?.drift);
+
+  if (mode === 'rollback') {
+    const reasons = ['rollback_mode_ignores_cutover_decision'];
+    return {
+      status: 'not_applicable',
+      mode,
+      driftRate,
+      driftThreshold,
+      blockerErrors: [],
+      reasons,
+      canaryDecision: evaluateCanaryDecision({
+        scannerId: options.scannerId,
+        mode,
+        gateStatus: 'not_applicable',
+        gateReasons: reasons,
+      }),
+    };
+  }
+
+  const blockerErrors: IngestionErrorType[] = [];
+  const reasons: string[] = [];
+
+  if (result.status === 'rejected') {
+    if (result.error.type === 'validation_error' || result.error.type === 'unify_error') {
+      blockerErrors.push(result.error.type);
+      reasons.push(`blocker_error:${result.error.type}`);
+    }
+  }
+
+  if (driftRate > driftThreshold) {
+    reasons.push(`drift_rate_exceeded:${driftRate.toFixed(4)}>${driftThreshold.toFixed(4)}`);
+  }
+
+  if (options.warnings && options.warnings.length > 0) {
+    reasons.push(...options.warnings.map((warning) => `warning:${warning}`));
+  }
+
+  const shouldBlock = blockerErrors.length > 0 || driftRate > driftThreshold;
+  const status: CutoverGateStatus = shouldBlock ? 'block_cutover' : 'allow_cutover';
+  const gateReasons = shouldBlock ? reasons : reasons.length > 0 ? reasons : ['within_threshold'];
+
+  return {
+    status,
+    mode,
+    driftRate,
+    driftThreshold,
+    blockerErrors,
+    reasons: gateReasons,
+    canaryDecision: evaluateCanaryDecision({
+      scannerId: options.scannerId,
+      mode,
+      gateStatus: status,
+      gateReasons,
+    }),
+  };
+}
+
+export function buildCycloneDxIngestionMeta(options: {
+  mode: CycloneDxPipelineMode;
+  scannerId: string;
+  componentDecision: CycloneDxComponentDecision;
+  resultDecision: CycloneDxScanResultDecision;
+  artifacts?: CycloneDxArtifactMeta[];
+  artifactWarnings?: string[];
+}): CycloneDxIngestionMeta {
+  const observedAt = new Date();
+  updateUnknownFieldCatalog(options.scannerId, options.componentDecision.ingestionResult, observedAt);
+  updateUnknownFieldCatalog(options.scannerId, options.resultDecision.ingestionResult, observedAt);
+
+  return {
+    mode: options.mode,
+    componentIngestion: options.componentDecision.telemetry,
+    resultIngestion: options.resultDecision.telemetry,
+    resultStatus: options.resultDecision.ingestionResult.status,
+    unifiedStats:
+      options.resultDecision.ingestionResult.status === 'ingested'
+        ? options.resultDecision.ingestionResult.payload.stats
+        : null,
+    artifacts: options.artifacts || [],
+    unknownFieldCatalog: getUnknownFieldCatalogSnapshot(),
+    gate: evaluateCutoverQualityGate({
+      scannerId: options.scannerId,
+      mode: options.mode,
+      componentTelemetry: options.componentDecision.telemetry,
+      result: options.resultDecision.ingestionResult,
+      warnings: options.artifactWarnings,
+    }),
+  };
+}
+
+export function resolveCycloneDxPipelineMode(): CycloneDxPipelineMode {
+  if (envFlag(process.env.VIBESCAN_CYCLONEDX_ROLLBACK_ENABLED)) {
+    return 'rollback';
+  }
+  if (envFlag(process.env.VIBESCAN_CYCLONEDX_CUTOVER_ENABLED)) {
+    return 'cutover';
+  }
+  if (envFlag(process.env.VIBESCAN_CYCLONEDX_SHADOW_ENABLED)) {
+    return 'shadow';
+  }
+  return 'legacy';
+}
+
 export function decideComponentsWithCycloneDx(options: {
   scanId: string;
   scannerId: string;
@@ -221,7 +599,7 @@ export function decideComponentsWithCycloneDx(options: {
   const mode = resolveCycloneDxPipelineMode();
   const { scanId, scannerId, sbomRaw, legacyComponents } = options;
 
-  if (!sbomRaw || mode === 'legacy' || mode === 'rollback') {
+  if (!sbomRaw || mode === 'legacy') {
     return {
       mode,
       selectedComponents: legacyComponents,
