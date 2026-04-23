@@ -29,7 +29,7 @@ interface ScanTableProps {
   onRefresh?: () => void;
   sortField: DashboardSortField;
   sortDirection: DashboardSortDirection;
-  onSortChange: (field: DashboardSortField) => void;
+  onSortChange: (field: DashboardSortField, event?: React.MouseEvent<HTMLButtonElement>) => void;
   statusFilters: DashboardStatus[];
   statusCounts: Record<DashboardStatus, number>;
   onToggleStatus: (status: DashboardStatus) => void;
@@ -376,7 +376,7 @@ export function ScanTable({
                               ? 'text-foreground bg-accent/10' 
                               : 'text-muted-foreground hover:text-foreground hover:bg-accent/5'
                           }`}
-                          onClick={() => onSortChange(column.field)}
+                          onClick={(event) => onSortChange(column.field, event)}
                           aria-label={`Sort by ${column.label.toLowerCase()} ${active && sortDirection === 'asc' ? 'descending' : 'ascending'}`}
                         >
                           {column.label}

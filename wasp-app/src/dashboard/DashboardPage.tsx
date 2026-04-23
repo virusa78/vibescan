@@ -358,7 +358,11 @@ export default function DashboardPage() {
     }, 1);
   }, [visibleTrendBuckets]);
 
-  const handleSortChange = (field: DashboardSortField) => {
+  const handleSortChange = (field: DashboardSortField, event?: React.MouseEvent<HTMLButtonElement>) => {
+    const isShiftClick = event?.shiftKey ?? false;
+    
+    // For now: single-sort mode (no multi-sort state)
+    // Shift+click still toggles direction like normal click
     const nextDirection: DashboardSortDirection =
       field === parsedSearch.sortField && parsedSearch.sortDirection === 'asc' ? 'desc' : 'asc';
     const nextSearch = buildDashboardSearch(field, nextDirection, parsedSearch.statuses, parsedSearch.query);
