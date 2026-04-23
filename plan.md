@@ -55,11 +55,19 @@
 - `npx jest --runInBand test/unit/openapiContractPolicy.test.ts`
 
 ## M6 Next Priorities
-1. `Sync + Scope Guard`: обновить ветку от `main` и подтвердить doc-only scope (`plan.md`, `docs/M6_PR3B5_IMPLEMENTATION_ACT.md`, `docs/CYCLONEDX_CHECKLIST.md`).
-2. `Conditional Re-Verify`: при изменении контекста после rebase/merge повторить `npm run verify:m6:pr3b4` и зафиксировать актуальный UTC evidence window.
-3. `Commit`: подготовить Conventional Commit для `M6-PR3B.5` (doc sync + merge-ready handoff).
-4. `PR Update`: обновить PR description в формате `Problem / Solution / Verification / Evidence Source` и явно указать статусы `M6 in progress` и `merge-ready handoff complete`.
-5. `Merge After Review`: выполнить merge-операции без запуска нового продуктового планирования в рамках M6.
+1. `Merge current docs PR`: довести `#9` (`M6-PR3B.5`) до merge как отдельный doc-only handoff, без смешивания с кодовым объёмом.
+2. `Code PR 1`: вынести contract/infrastructure hardening в отдельный PR
+   - openapi contract tooling, CI wiring, swagger policy/spec generation, and related scripts/lockfiles.
+3. `Code PR 2`: вынести product/runtime UI fixes в отдельный PR
+   - API keys, dashboard, reports, webhooks, client bootstrap, API helper, and polling stabilization.
+4. `Code review gate`: перед стартом `Code PR 3` провести code review для PR 1 и PR 2, зафиксировать замечания и решить, что переносится в финальный PR.
+5. `Code PR 3`: вынести schema/migration alignment и review follow-ups в последний кодовый PR, затем повторить verify bundle только если затронуты schema/contracts.
+
+## M6 Next Code PR Split
+- `PR 1`: contract/infrastructure hardening, no UI or schema changes.
+- `PR 2`: UI/runtime fixes, no schema/migration changes.
+- `PR 3`: schema/migration alignment plus fixes from review of PR 1 and PR 2.
+- Review must happen before `PR 3` is started.
 
 ## M6-PR3B.4 Verification Bundle (Single Source of Truth)
 - Required gate bundle (single command):

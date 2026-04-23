@@ -118,3 +118,33 @@
   - Смёрженный PR с сохранённым doc-only scope.
 - Done condition:
   - Handoff завершён, M6 остаётся `in progress` до отдельного done-решения.
+
+## Next Code PR Split
+
+### Code PR 1
+- Focus:
+  - contract/infrastructure hardening.
+- Includes:
+  - openapi contract tooling, CI wiring, swagger policy/spec generation, and script/lockfile plumbing.
+- Excludes:
+  - UI/runtime surface changes.
+  - schema/migration changes.
+
+### Code PR 2
+- Focus:
+  - product/runtime UI fixes.
+- Includes:
+  - API keys, dashboard, reports, webhooks, client bootstrap, API helper, and polling stabilization.
+- Excludes:
+  - schema/migration changes.
+  - contract tooling changes already owned by PR 1.
+
+### Code PR 3
+- Focus:
+  - schema/migration alignment and review follow-ups.
+- Includes:
+  - Prisma/schema copies, migration artifacts, and any fixes required after review of PR 1 and PR 2.
+- Required gate:
+  - run code review on PR 1 and PR 2 before starting PR 3.
+- Verification:
+  - re-run `npm run verify:m6:pr3b4` only if schema/contracts or other verification inputs change.
