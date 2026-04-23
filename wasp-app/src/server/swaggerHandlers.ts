@@ -1,100 +1,20 @@
-import swaggerJsdoc from 'swagger-jsdoc';
 import type { PaymentsWebhook } from 'wasp/server/api';
-import { schemas } from './swagger/schemas';
+import { generateOpenApiSpec } from './swagger/openapiSpec';
 
 /**
  * Swagger/OpenAPI handlers for VibeScan API documentation
  * Exposes GET /docs (Swagger UI) and GET /docs/swagger.json (OpenAPI spec)
  */
 
-const swaggerOptions = {
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'VibeScan API',
-      version: '1.0.0',
-      description: 'Vulnerability scanning platform API - Submit scans, manage API keys, view reports',
-      contact: {
-        name: 'VibeScan Support',
-        url: 'https://vibescan.app',
-      },
-    },
-    servers: [
-      {
-        url: process.env.WASP_SERVER_URL || 'http://192.168.1.17:3555',
-        description: 'Development server',
-      },
-      {
-        url: 'https://app.vibescan.app',
-        description: 'Production server',
-      },
-    ],
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
-          description: 'JWT Bearer token from /auth/login (15 min expiry)',
-        },
-        apiKeyAuth: {
-          type: 'apiKey',
-          in: 'header',
-          name: 'Authorization',
-          description: 'API Key (format: vsk_...; legacy sk_live_... still accepted) generated from /api/v1/api-keys',
-        },
-      },
-      schemas,
-    },
-    security: [
-      { bearerAuth: [] },
-      { apiKeyAuth: [] },
-    ],
-    tags: [
-      {
-        name: 'Authentication',
-        description: 'User authentication and authorization',
-      },
-      {
-        name: 'API Keys',
-        description: 'Manage API keys for programmatic access',
-      },
-      {
-        name: 'Scans',
-        description: 'Submit and manage vulnerability scans',
-      },
-      {
-        name: 'Reports',
-        description: 'Retrieve scan reports and results',
-      },
-      {
-        name: 'Webhooks',
-        description: 'Configure and manage webhooks',
-      },
-      {
-        name: 'Dashboard',
-        description: 'Dashboard analytics and metrics',
-      },
-      {
-        name: 'Settings',
-        description: 'Profile and notification settings',
-      },
-      {
-        name: 'Billing',
-        description: 'Billing and payment operations',
-      },
-    ],
-  },
-  apis: [
-    './src/auth/**/*.ts',
-    './src/apiKeys/**/*.ts',
-    './src/scans/**/*.ts',
-    './src/server/operations/**/*.ts',
-    './src/payment/**/*.ts',
-  ],
-};
+let swaggerSpecPromise: Promise<any> | null = null;
 
-const swaggerSpec = swaggerJsdoc(swaggerOptions);
+async function getSwaggerSpec() {
+  if (!swaggerSpecPromise) {
+    swaggerSpecPromise = generateOpenApiSpec();
+  }
+
+  return swaggerSpecPromise;
+}
 
 /**
  * GET /docs/swagger.json - Returns OpenAPI specification as JSON
@@ -102,10 +22,18 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 export const getSwaggerJson: PaymentsWebhook = async (
   _request: any,
   response: any,
-  context: any,
+  _context: any,
 ) => {
-  response.setHeader('Content-Type', 'application/json');
-  response.send(swaggerSpec);
+  try {
+    response.setHeader('Content-Type', 'application/json');
+    response.send(await getSwaggerSpec());
+  } catch (error) {
+    response.statusCode = 500;
+    response.send({
+      error: 'swagger_generation_failed',
+      message: error instanceof Error ? error.message : 'Unknown swagger generation error',
+    });
+  }
 };
 
 /**
@@ -114,7 +42,7 @@ export const getSwaggerJson: PaymentsWebhook = async (
 export const getSwaggerUI: PaymentsWebhook = async (
   _request: any,
   response: any,
-  context: any,
+  _context: any,
 ) => {
   // Serve Swagger UI HTML with CDN resources
   const html = `
