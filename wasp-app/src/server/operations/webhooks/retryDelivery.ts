@@ -12,7 +12,7 @@ export type RetryWebhookDeliveryInput = z.infer<typeof retryDeliveryInputSchema>
 
 const retryableStatuses = new Set(['failed', 'exhausted']);
 
-export async function retryWebhookDelivery(rawArgs: unknown, context: any): Promise<{ queued: true; delivery_id: string }> {
+export async function retryWebhookDelivery(rawArgs: unknown, context: any): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -92,5 +92,5 @@ export async function retryWebhookDelivery(rawArgs: unknown, context: any): Prom
   return {
     queued: true,
     delivery_id: retryDelivery.id,
-  };
+  } as any;
 }

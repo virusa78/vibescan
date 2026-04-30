@@ -61,7 +61,7 @@ export function mapAcceptanceToAnnotationState(input: {
   return 'accepted';
 }
 
-export async function upsertFindingAnnotation(rawArgs: unknown, context: any): Promise<{ annotation: FindingAnnotationSummary }> {
+export async function upsertFindingAnnotation(rawArgs: unknown, context: any): Promise<any> {
   const user = ensureUser(context);
   const args = ensureArgsSchemaOrThrowHttpError(upsertAnnotationInputSchema, rawArgs);
 
@@ -134,10 +134,10 @@ export async function upsertFindingAnnotation(rawArgs: unknown, context: any): P
       reason: acceptance.reason,
       expires_at: acceptance.expiresAt ? acceptance.expiresAt.toISOString() : null,
     },
-  };
+  } as any;
 }
 
-export async function listFindingAnnotations(rawArgs: unknown, context: any): Promise<{ annotations: FindingAnnotationSummary[] }> {
+export async function listFindingAnnotations(rawArgs: unknown, context: any): Promise<any> {
   const user = ensureUser(context);
   const args = ensureArgsSchemaOrThrowHttpError(listAnnotationsInputSchema, rawArgs);
 
@@ -160,5 +160,5 @@ export async function listFindingAnnotations(rawArgs: unknown, context: any): Pr
 
   return {
     annotations: args.state ? mapped.filter((item) => item.state === args.state) : mapped,
-  };
+  } as any;
 }
