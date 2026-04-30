@@ -9,7 +9,8 @@ import { Input } from '../client/components/ui/input';
 import { Label } from '../client/components/ui/label';
 import { Skeleton } from '../client/components/ui/skeleton';
 import { useAsyncState } from '../client/hooks/useAsyncState';
-import { getApiKeyDetails, revokeApiKey, type ApiKeyDetailsResponse } from './operations';
+import { getApiKeyDetails, type ApiKeyDetailsResponse } from './client';
+import { revokeApiKey } from 'wasp/client/operations';
 
 type ApiKeyListItem = Awaited<ReturnType<typeof listApiKeys>>[number];
 

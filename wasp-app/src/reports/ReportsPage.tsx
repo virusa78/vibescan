@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { AlertCircle, FileText, ShieldCheck } from 'lucide-react';
-import { api } from 'wasp/client/api';
 import { ToggleChipGroup } from '../client/components/common/ToggleChipGroup';
 import { Link as ExternalLink } from '../client/components/common/VibeUI';
 import { Button } from '../client/components/ui/button';
@@ -20,6 +19,7 @@ import { toast } from '../client/hooks/use-toast';
 import { isEditableTarget } from '../client/utils/keyboard';
 import { buildPatchSnippet } from './patchSnippet';
 import { resolveCveId, buildGitHubAdvisoryUrl, buildNvdUrl, buildPackageUrl } from './linkHelpers';
+import { api } from '../client/utils/api';
 
 type SeveritySummary = {
   critical?: number;
