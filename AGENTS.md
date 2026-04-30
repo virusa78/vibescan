@@ -330,6 +330,43 @@ wasp db push                            # Sync schema to DB (development)
 
 **Detection**: Any endpoint returning 401 with `context.user: undefined` in logs → check if it's a custom `api {}` handler → convert to operation.
 
+14. **🔴 CRITICAL: Wasp v0.23 Code Generator Module Path Resolution Bug**
+
+**Problem**: When declaring operations in nested directories (e.g., `@src/server/operations/dashboard`), Wasp's code generator creates incorrect module paths in the generated SDK.
+
+**Root Cause**: Wasp's import path transformation has a bug with nested operation directories.
+- Input: `fn: import { getDashboardMetrics } from "@src/server/operations/dashboard"`
+- Expected output: Module path resolvable in Wasp SDK
+- Actual output: `'wasp/src/server/operations/dashboard'` (path doesn't exist)
+- Result: TypeScript compilation error in generated code
+
+**Impact**: Cannot declare operations in subdirectories like `operations/dashboard/`, `operations/reports/`, etc. Only simple, non-nested import paths work.
+
+**Evidence**: 
+- Works: `@src/server/operations/auth/refreshToken` → compiles fine
+- Fails: `@src/server/operations/dashboard` → TypeScript error
+- Issue appears to be inconsistent or context-dependent
+
+**Workaround (Current)**:
+1. Keep custom HTTP `api {}` endpoints as-is for dashboard/reports/webhook queries
+2. Use existing Wasp operations (submitScan, getScans, getReport, etc.) from frontend
+3. Import from `wasp/client/operations` instead of calling custom APIs
+4. This gets auth context injected for existing operations
+5. Custom APIs remain but aren't called from authenticated pages (gradual migration)
+
+**TODO for Next Agent**:
+- [ ] Test if Wasp v0.24+ fixes this issue (currently on v0.23)
+- [ ] If unfixed, file issue with Wasp team: https://github.com/wasp-lang/wasp/issues
+- [ ] Alternatively, flatten operation directory structure: move `operations/dashboard/` → `operations/dashboardMetrics.ts` (single file)
+- [ ] Or use Bearer token auth (Option B) as permanent solution for custom endpoints
+
+**Prevention Rule**:
+```
+❌ NEVER declare operations in deeply nested directories (e.g., @src/server/operations/dashboard)
+✅ ALWAYS use flat operation files: @src/server/operations/operationName.ts
+✅ OR use existing operations from wasp/client/operations instead of custom HTTP endpoints
+```
+
 ## Context Reset Contract
 
 When work spans multiple turns, preserve a context-reset-safe plan:
