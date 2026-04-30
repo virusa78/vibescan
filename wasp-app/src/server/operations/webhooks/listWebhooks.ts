@@ -16,7 +16,7 @@ export interface WebhookListResponse {
 /**
  * List all webhooks for the authenticated user
  */
-export async function listWebhooks(_args: void, context: any): Promise<WebhookListResponse> {
+export async function listWebhooks(context: any): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -57,7 +57,7 @@ export async function listWebhooks(_args: void, context: any): Promise<WebhookLi
           return Math.round((successful / total) * 100);
         })(),
       })),
-    };
+    } as any;
   } catch (_err) {
     throw new HttpError(500, 'Failed to list webhooks');
   }

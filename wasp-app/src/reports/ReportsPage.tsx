@@ -8,6 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '../client/components/u
 import { Input } from '../client/components/ui/input';
 import { Skeleton } from '../client/components/ui/skeleton';
 import {
+  generateReportPDF,
+  getCIDecision,
+  getReport,
+  getReportSummary,
+} from 'wasp/client/operations';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -102,14 +108,14 @@ export default function ReportsPage() {
     run(
       async () => {
         const [summaryRes, reportRes, ciRes] = await Promise.all([
-          api.get(`/api/v1/reports/${scanId}/summary`),
-          api.get(`/api/v1/reports/${scanId}`),
-          api.get(`/api/v1/reports/${scanId}/ci-decision`),
+          getReportSummary({ scanId }),
+          getReport({ scanId }),
+          getCIDecision({ scanId }),
         ]);
 
-        setSummary(summaryRes.data);
-        setReport(reportRes.data);
-        setCiDecision(ciRes.data);
+        setSummary(summaryRes);
+        setReport(reportRes);
+        setCiDecision(ciRes);
       },
       { errorMessage: 'Failed to load report data.' },
     );
@@ -181,8 +187,7 @@ export default function ReportsPage() {
 
     setPdfStatus('Queueing PDF generation...');
     try {
-      const res = await api.post(`/api/v1/reports/${scanId}/pdf`, { format: 'full' });
-      const data = res.data;
+      const data = await generateReportPDF({ scanId });
       setPdfStatus(`PDF job queued: ${data.jobId}`);
     } catch (err) {
       setPdfStatus(err instanceof Error ? err.message : 'Failed to queue PDF.');

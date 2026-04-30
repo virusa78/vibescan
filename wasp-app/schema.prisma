@@ -106,6 +106,7 @@ model User {
   findings                  Finding[]
   organizations             Organization[]  @relation("members")
   quotaLedger               QuotaLedger[]
+  projectNotificationSettings ProjectNotificationSetting[]
 
   @@map("users")
 }
@@ -153,6 +154,24 @@ model ApiKeyUsageEvent {
 
   @@index([apiKeyId, createdAt])
   @@map("api_key_usage_events")
+}
+
+model ProjectNotificationSetting {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  userId                String   @map("user_id") @db.Uuid
+  projectKey            String   @map("project_key")
+  emailOnScanComplete   Boolean  @default(true) @map("email_on_scan_complete")
+  emailOnVulnerability  Boolean  @default(true) @map("email_on_vulnerability")
+  weeklyDigest          Boolean  @default(false) @map("weekly_digest")
+  smsEnabled            Boolean  @default(false) @map("sms_enabled")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectKey], map: "idx_project_notification_unique")
+  @@index([userId], map: "project_notification_settings_user_id_idx")
+  @@map("project_notification_settings")
 }
 
 // Scans - core entity

@@ -5,7 +5,15 @@ import { Skeleton } from '../client/components/ui/skeleton';
 import { Plus, Trash2, Check, X, Webhook as WebhookIcon } from 'lucide-react';
 import { useAsyncState } from '../client/hooks/useAsyncState';
 import { toast } from '../client/hooks/use-toast';
-import { api } from '../client/utils/api';
+import {
+  createWebhook,
+  deleteWebhook,
+  listWebhookDeliveries,
+  listWebhooks,
+  retryWebhookDelivery,
+  testWebhookDelivery,
+  updateWebhook,
+} from 'wasp/client/operations';
 import { ToggleChipGroup } from '../client/components/common/ToggleChipGroup';
 
 type DrawerTab = 'overview' | 'deliveries' | 'payloads' | 'settings';
@@ -72,7 +80,7 @@ export default function WebhooksPage() {
   const loadWebhooks = async () => {
     await run(
       async () => {
-        const data = (await api.get('/api/v1/webhooks')).data;
+        const data = await listWebhooks();
         setWebhooks((data.webhooks ?? []) as Webhook[]);
       },
       { errorMessage: 'Failed to load webhooks.' },
@@ -84,14 +92,11 @@ export default function WebhooksPage() {
   }, []);
 
   const loadDeliveries = async (webhookId: string, cursor?: string) => {
-    const response = await api.get(`/api/v1/webhooks/${webhookId}/deliveries`, {
-      params: {
-        limit: 100,
-        ...(cursor ? { cursor } : {}),
-      },
+    const data = await listWebhookDeliveries({
+      webhookId,
+      limit: 100,
+      ...(cursor ? { cursor } : {}),
     });
-
-    const data = response.data;
     const nextItems = Array.isArray(data.deliveries) ? (data.deliveries as DeliveryItem[]) : [];
     setDeliveries((previous) => (cursor ? [...previous, ...nextItems] : nextItems));
     setDeliveryCursor(data.next_cursor ?? null);
@@ -116,7 +121,7 @@ export default function WebhooksPage() {
 
     await run(
       async () => {
-        await api.post('/api/v1/webhooks', {
+        await createWebhook({
           url: newWebhookUrl.trim(),
           events: ['scan_complete', 'report_ready', 'scan_failed'],
         });
@@ -132,7 +137,7 @@ export default function WebhooksPage() {
   const handleDeleteWebhook = async (id: string) => {
     await run(
       async () => {
-        await api.delete(`/api/v1/webhooks/${id}`);
+        await deleteWebhook({ webhookId: id });
         setWebhooks((previous) => previous.filter((webhook) => webhook.id !== id));
         if (selectedWebhook?.id === id) {
           setSelectedWebhook(null);
@@ -148,7 +153,7 @@ export default function WebhooksPage() {
 
     await run(
       async () => {
-        await api.put(`/api/v1/webhooks/${id}`, { enabled: !current.enabled });
+        await updateWebhook({ webhookId: id, enabled: !current.enabled });
         setWebhooks((previous) =>
           previous.map((webhook) => (webhook.id === id ? { ...webhook, enabled: !webhook.enabled } : webhook)),
         );
@@ -164,7 +169,7 @@ export default function WebhooksPage() {
     if (!selectedWebhook) return;
 
     try {
-      await api.post(`/api/v1/webhooks/${selectedWebhook.id}/test`);
+      await testWebhookDelivery({ webhookId: selectedWebhook.id });
       toast({ title: 'Test delivery queued' });
       await loadDeliveries(selectedWebhook.id);
       await loadWebhooks();
@@ -178,7 +183,7 @@ export default function WebhooksPage() {
     if (!selectedWebhook) return;
 
     try {
-      await api.post(`/api/v1/webhooks/${selectedWebhook.id}/deliveries/${deliveryId}/retry`);
+      await retryWebhookDelivery({ webhookId: selectedWebhook.id, deliveryId });
       toast({ title: 'Retry queued' });
       await loadDeliveries(selectedWebhook.id);
     } catch (retryError) {
