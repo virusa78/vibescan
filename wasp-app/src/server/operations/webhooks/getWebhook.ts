@@ -45,7 +45,7 @@ export interface WebhookDetailResponse {
 export async function getWebhook(
   rawArgs: any,
   context: any
-): Promise<WebhookDetailResponse> {
+): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -120,7 +120,7 @@ export async function getWebhook(
         payload: d.payload ?? null,
         response: d.responseBody ?? null,
       })),
-    };
+    } as any;
   } catch (err) {
     if (err instanceof HttpError) {
       throw err;

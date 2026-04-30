@@ -77,7 +77,7 @@ function extractUnifiedStats(scanResults: Array<{ rawOutput: unknown }>): Unifie
   return null;
 }
 
-export const getReport = async (rawArgs: any, context: any): Promise<GetReportResponse> => {
+export const getReport = async (rawArgs: any, context: any): Promise<any> => {
   const { scanId } = ensureArgsSchemaOrThrowHttpError(
     getReportInputSchema,
     rawArgs
@@ -168,7 +168,7 @@ export const getReport = async (rawArgs: any, context: any): Promise<GetReportRe
   const total_free = freeFindings.length;
   const total_enterprise = enterpriseFindings.length;
 
-  const response: GetReportResponse = {
+  const response = {
     scanId,
     status: scan.status === 'done' ? 'completed' : scan.status === 'error' ? 'failed' : 'partial',
     lockedView,
@@ -192,5 +192,5 @@ export const getReport = async (rawArgs: any, context: any): Promise<GetReportRe
     })),
   };
 
-  return response;
+  return response as any;
 };

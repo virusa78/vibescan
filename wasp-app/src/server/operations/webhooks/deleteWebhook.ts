@@ -19,7 +19,7 @@ export interface ActionResponse {
 export async function deleteWebhook(
   rawArgs: any,
   context: any
-): Promise<ActionResponse> {
+): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -59,7 +59,7 @@ export async function deleteWebhook(
     return {
       success: true,
       message: 'Webhook deleted successfully',
-    };
+    } as any;
   } catch (err) {
     if (err instanceof HttpError) {
       throw err;

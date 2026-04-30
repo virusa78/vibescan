@@ -33,7 +33,7 @@ export interface ListWebhookDeliveriesResponse {
 export async function listWebhookDeliveries(
   rawArgs: unknown,
   context: any,
-): Promise<ListWebhookDeliveriesResponse> {
+): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -76,5 +76,5 @@ export async function listWebhookDeliveries(
       manual_retry_of_id: delivery.manualRetryOfId ?? null,
     })),
     next_cursor: hasMore ? pageItems[pageItems.length - 1]?.id ?? null : null,
-  };
+  } as any;
 }

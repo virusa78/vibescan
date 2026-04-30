@@ -4,7 +4,7 @@ import { ensureArgsSchemaOrThrowHttpError } from "../../validation";
 
 const schema = z.object({ scanId: z.string().nonempty() });
 
-export const getReportSummary = async (rawArgs: any, context: any) => {
+export const getReportSummary = async (rawArgs: any, context: any): Promise<any> => {
   const { scanId } = ensureArgsSchemaOrThrowHttpError(schema, rawArgs);
 
   if (!context.user) throw new HttpError(401, "Authentication required");
@@ -25,5 +25,5 @@ export const getReportSummary = async (rawArgs: any, context: any) => {
       critical: findings.filter((f: any) => f.severity === "critical").length,
       high: findings.filter((f: any) => f.severity === "high").length,
     },
-  };
+  } as any;
 };

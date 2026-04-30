@@ -37,7 +37,7 @@ export async function createWebhookApiHandler(request: HandlerRequest, response:
 
 export async function listWebhooksApiHandler(_request: HandlerRequest, response: Response, context: HandlerContext) {
   try {
-    const result = await listWebhooks(undefined, {
+    const result = await listWebhooks({
       user: await resolveRequestUser(_request, context),
       entities: context.entities,
     });

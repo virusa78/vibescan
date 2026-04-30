@@ -4,7 +4,7 @@ import { ensureArgsSchemaOrThrowHttpError } from "../../validation";
 
 const schema = z.object({ scanId: z.string().nonempty() });
 
-export const getCIDecision = async (rawArgs: any, context: any) => {
+export const getCIDecision = async (rawArgs: any, context: any): Promise<any> => {
   const { scanId } = ensureArgsSchemaOrThrowHttpError(schema, rawArgs);
 
   if (!context.user) throw new HttpError(401, "Authentication required");
@@ -25,5 +25,5 @@ export const getCIDecision = async (rawArgs: any, context: any) => {
     decision: criticalIssues === 0 ? "pass" : "fail",
     reason: criticalIssues === 0 ? "No critical vulnerabilities" : `${criticalIssues} critical vulnerabilities`,
     criticalIssues,
-  };
+  } as any;
 };

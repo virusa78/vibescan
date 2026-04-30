@@ -384,100 +384,90 @@ api exportScansApi {
 //#endregion
 
 //#region Reports & Analysis
-
-// GET /api/v1/reports/:scanId - Get full report
-api getReportApi {
-  fn: import { getReportApiHandler } from "@src/server/operations/reports/handlers",
-  entities: [User, Scan, Finding],
-  httpRoute: (GET, "/api/v1/reports/:scanId")
+query getReport {
+  fn: import { getReport } from "@src/server/operations/reportOperations",
+  entities: [User, Scan, Finding, VulnAcceptance],
+  auth: true
 }
 
-// GET /api/v1/reports/:scanId/summary - Get report summary
-api getReportSummaryApi {
-  fn: import { getReportSummaryApiHandler } from "@src/server/operations/reports/handlers",
+query getReportSummary {
+  fn: import { getReportSummary } from "@src/server/operations/reportOperations",
   entities: [User, Scan, Finding],
-  httpRoute: (GET, "/api/v1/reports/:scanId/summary")
+  auth: true
 }
 
-// POST /api/v1/reports/:scanId/pdf - Queue PDF generation
-api generateReportPDFApi {
-  fn: import { generateReportPDFApiHandler } from "@src/server/operations/reports/handlers",
+action generateReportPDF {
+  fn: import { generateReportPDF } from "@src/server/operations/reportOperations",
   entities: [User, Scan],
-  httpRoute: (POST, "/api/v1/reports/:scanId/pdf")
+  auth: true
 }
 
-// GET /api/v1/reports/:scanId/ci-decision - Get CI decision
-api getCIDecisionApi {
-  fn: import { getCIDecisionApiHandler } from "@src/server/operations/reports/handlers",
+query getCIDecision {
+  fn: import { getCIDecision } from "@src/server/operations/reportOperations",
   entities: [User, Scan, Finding],
-  httpRoute: (GET, "/api/v1/reports/:scanId/ci-decision")
+  auth: true
 }
 
-api listFindingAnnotationsApi {
-  fn: import { listFindingAnnotationsApiHandler } from "@src/server/operations/reports/handlers",
+query listFindingAnnotations {
+  fn: import { listFindingAnnotations } from "@src/server/operations/reportOperations",
   entities: [User, Scan, Finding, VulnAcceptance],
-  httpRoute: (GET, "/api/v1/reports/:scanId/annotations")
+  auth: true
 }
 
-api upsertFindingAnnotationApi {
-  fn: import { upsertFindingAnnotationApiHandler } from "@src/server/operations/reports/handlers",
+action upsertFindingAnnotation {
+  fn: import { upsertFindingAnnotation } from "@src/server/operations/reportOperations",
   entities: [User, Scan, Finding, VulnAcceptance],
-  httpRoute: (POST, "/api/v1/reports/:scanId/findings/:findingId/annotation")
+  auth: true
 }
 //#endregion
 
 //#region Webhooks & Notifications
-// POST /api/v1/webhooks - Create webhook
-api createWebhookApi {
-  fn: import { createWebhookApiHandler } from "@src/server/operations/webhooks/handlers",
+action createWebhook {
+  fn: import { createWebhook } from "@src/server/operations/webhookOperations",
   entities: [User, Webhook],
-  httpRoute: (POST, "/api/v1/webhooks")
+  auth: true
 }
 
-// GET /api/v1/webhooks - List webhooks
-api listWebhooksApi {
-  fn: import { listWebhooksApiHandler } from "@src/server/operations/webhooks/handlers",
+query listWebhooks {
+  fn: import { listWebhooks } from "@src/server/operations/webhookOperations",
   entities: [User, Webhook],
-  httpRoute: (GET, "/api/v1/webhooks")
+  auth: true
 }
 
-// GET /api/v1/webhooks/:webhookId - Get webhook details
-api getWebhookApi {
-  fn: import { getWebhookApiHandler } from "@src/server/operations/webhooks/handlers",
+query getWebhook {
+  fn: import { getWebhook } from "@src/server/operations/webhookOperations",
   entities: [User, Webhook, WebhookDelivery],
-  httpRoute: (GET, "/api/v1/webhooks/:webhookId")
+  auth: true
 }
 
-// PUT /api/v1/webhooks/:webhookId - Update webhook
-api updateWebhookApi {
-  fn: import { updateWebhookApiHandler } from "@src/server/operations/webhooks/handlers",
+action updateWebhook {
+  fn: import { updateWebhook } from "@src/server/operations/webhookOperations",
   entities: [User, Webhook, WebhookDelivery],
-  httpRoute: (PUT, "/api/v1/webhooks/:webhookId")
+  auth: true
 }
 
-// DELETE /api/v1/webhooks/:webhookId - Delete webhook
-api deleteWebhookApi {
-  fn: import { deleteWebhookApiHandler } from "@src/server/operations/webhooks/handlers",
+action deleteWebhook {
+  fn: import { deleteWebhook } from "@src/server/operations/webhookOperations",
   entities: [User, Webhook, WebhookDelivery],
-  httpRoute: (DELETE, "/api/v1/webhooks/:webhookId")
+  auth: true
 }
 
-api listWebhookDeliveriesApi {
-  fn: import { listWebhookDeliveriesApiHandler } from "@src/server/operations/webhooks/handlers",
+query listWebhookDeliveries {
+  fn: import { listWebhookDeliveries } from "@src/server/operations/webhookOperations",
   entities: [User, Webhook, WebhookDelivery],
-  httpRoute: (GET, "/api/v1/webhooks/:webhookId/deliveries")
+  auth: true
 }
 
-api testWebhookDeliveryApi {
-  fn: import { testWebhookDeliveryApiHandler } from "@src/server/operations/webhooks/handlers",
+action testWebhookDelivery {
+  fn: import { testWebhookDelivery } from "@src/server/operations/webhookOperations",
   entities: [User, Webhook, WebhookDelivery, Scan, ScanDelta],
-  httpRoute: (POST, "/api/v1/webhooks/:webhookId/test")
+  auth: true
 }
 
-api retryWebhookDeliveryApi {
-  fn: import { retryWebhookDeliveryApiHandler } from "@src/server/operations/webhooks/handlers",
+action retryWebhookDelivery {
+  fn: import { retryWebhookDelivery } from "@src/server/operations/webhookOperations",
   entities: [User, Webhook, WebhookDelivery],
-  httpRoute: (POST, "/api/v1/webhooks/:webhookId/deliveries/:deliveryId/retry")
+  auth: true
 }
 //#endregion
 

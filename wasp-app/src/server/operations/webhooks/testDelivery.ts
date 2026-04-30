@@ -46,7 +46,7 @@ async function getOrCreateSyntheticScanId(userId: string): Promise<string> {
   return syntheticScan.id;
 }
 
-export async function testWebhookDelivery(rawArgs: unknown, context: any): Promise<{ queued: true; delivery_id: string }> {
+export async function testWebhookDelivery(rawArgs: unknown, context: any): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -113,5 +113,5 @@ export async function testWebhookDelivery(rawArgs: unknown, context: any): Promi
   return {
     queued: true,
     delivery_id: delivery.id,
-  };
+  } as any;
 }
