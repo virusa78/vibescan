@@ -22,7 +22,10 @@ export function Link({
       {...props}
       target={resolvedTarget}
       rel={resolvedRel}
-      className={cn("inline-flex items-center gap-1 hover:underline", className)}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-sm transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+        className,
+      )}
     >
       <span>{children}</span>
       {withIcon ? <SquareArrowOutUpRight className="h-3 w-3" aria-hidden="true" /> : null}

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import {
@@ -28,7 +29,7 @@ interface ScanTableProps {
   onRefresh?: () => void;
   sortField: DashboardSortField;
   sortDirection: DashboardSortDirection;
-  onSortChange: (field: DashboardSortField) => void;
+  onSortChange: (field: DashboardSortField, event?: React.MouseEvent<HTMLButtonElement>) => void;
   statusFilters: DashboardStatus[];
   statusCounts: Record<DashboardStatus, number>;
   onToggleStatus: (status: DashboardStatus) => void;
@@ -63,9 +64,15 @@ const STATUS_OPTIONS: Array<{ value: DashboardStatus; label: string }> = [
 
 const CANCELLABLE_STATUSES = new Set(['pending', 'scanning']);
 
-function getSortIndicator(active: boolean, direction: DashboardSortDirection): string {
-  if (!active) return '↕';
-  return direction === 'asc' ? '↑' : '↓';
+// SortHeader icon component
+function SortHeaderIcon({ active, direction }: { active: boolean; direction: DashboardSortDirection }) {
+  if (!active) {
+    return <div className="w-4 h-4 opacity-40 transition-opacity" />;
+  }
+  if (direction === 'asc') {
+    return <ChevronUp className="w-4 h-4 transition-transform" />;
+  }
+  return <ChevronDown className="w-4 h-4 transition-transform" />;
 }
 
 function getReadableStatusLabel(status: string): string {
@@ -266,42 +273,60 @@ export function ScanTable({
           )}
         </div>
 
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-2">
-            <Input
-              ref={searchInputRef}
-              value={searchQuery}
-              onChange={(event) => onSearchQueryChange(event.target.value)}
-              placeholder="Search by target, scan id, CVE"
-              className="w-72"
-              aria-label="Search recent scans"
-            />
-            <span className="rounded-md border border-border/50 px-2 py-1 text-xs text-muted-foreground" aria-live="polite">
-              {filteredCount}/{totalCount}
-            </span>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 md:w-72">
+                <Input
+                  ref={searchInputRef}
+                  value={searchQuery}
+                  onChange={(event) => onSearchQueryChange(event.target.value)}
+                  placeholder="Search scans by target, ID, or CVE..."
+                  className="w-full"
+                  aria-label="Search recent scans"
+                />
+                {searchQuery && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
+                    {filteredCount}
+                  </span>
+                )}
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-md border border-border/50 px-2 py-1.5 text-xs text-muted-foreground whitespace-nowrap">
+                <span>{filteredCount}</span>
+                <span>/</span>
+                <span>{totalCount}</span>
+              </span>
+            </div>
+            {searchQuery && filteredCount === 0 && (
+              <p className="text-xs text-muted-foreground">No matching scans found</p>
+            )}
           </div>
           <div className="text-xs text-muted-foreground">
             Shortcuts: j/k move, Enter open, x cancel, c copy id
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter scans by status">
+        <div className="flex flex-wrap items-center gap-3 pt-2" role="group" aria-label="Filter scans by status">
           {STATUS_OPTIONS.map((option) => {
             const active = statusFilters.includes(option.value);
+            const count = statusCounts[option.value] ?? 0;
             return (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => onToggleStatus(option.value)}
-                className={`rounded-full border px-3 py-1 text-xs transition ${
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
                   active
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border/60 text-muted-foreground hover:text-foreground'
+                    ? 'border-primary/40 bg-primary/10 text-primary'
+                    : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground hover:bg-accent/5'
                 }`}
                 aria-pressed={active}
-                aria-label={`${option.label} (${statusCounts[option.value] ?? 0})`}
+                aria-label={`${option.label} (${count})`}
               >
-                {option.label} ({statusCounts[option.value] ?? 0})
+                <span>{option.label}</span>
+                <span className={`text-xs font-semibold ${active ? 'text-primary' : 'text-muted-foreground'}`}>
+                  {count}
+                </span>
               </button>
             );
           })}
@@ -364,14 +389,16 @@ export function ScanTable({
                       >
                         <button
                           type="button"
-                          className={`inline-flex items-center gap-1 transition ${
-                            active ? 'text-foreground' : 'hover:text-foreground'
+                          className={`inline-flex items-center gap-2 px-2 py-1 rounded transition-all ${
+                            active 
+                              ? 'text-foreground bg-accent/10' 
+                              : 'text-muted-foreground hover:text-foreground hover:bg-accent/5'
                           }`}
-                          onClick={() => onSortChange(column.field)}
+                          onClick={(event) => onSortChange(column.field, event)}
                           aria-label={`Sort by ${column.label.toLowerCase()} ${active && sortDirection === 'asc' ? 'descending' : 'ascending'}`}
                         >
                           {column.label}
-                          <span aria-hidden="true">{getSortIndicator(active, sortDirection)}</span>
+                          <SortHeaderIcon active={active} direction={sortDirection} />
                         </button>
                       </th>
                     );

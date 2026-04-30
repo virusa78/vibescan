@@ -1,6 +1,4 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import * as bcrypt from 'bcrypt';
-import { generateApiKeyPrefix } from '../../wasp-app/src/shared/apiKey';
 import { prisma } from '../mocks/wasp-server';
 import { resolveRequestUser } from '../../wasp-app/src/server/services/requestAuth';
 
@@ -9,13 +7,11 @@ jest.mock('bcrypt', () => ({
 }));
 
 const prismaMock = prisma;
-const compareMock = bcrypt.compare as jest.MockedFunction<typeof bcrypt.compare>;
-
 describe('resolveRequestUser', () => {
   beforeEach(() => {
     prismaMock.apiKey.findMany.mockReset();
     prismaMock.apiKey.update.mockReset();
-    compareMock.mockReset();
+    prismaMock.apiKeyUsageEvent.create.mockReset();
   });
 
   it('returns context user when present', async () => {
@@ -28,20 +24,18 @@ describe('resolveRequestUser', () => {
   });
 
   it('skips expired keys', async () => {
-    const token = 'vsk_1234567890abcdef';
-    const prefix = generateApiKeyPrefix(token);
+    const token = 'vsk_1234567890abcdef1234567890abcdef';
 
     prismaMock.apiKey.findMany.mockImplementationOnce(async () => [
       {
         id: 'key-expired',
         keyHash: 'hashed',
-        keyPrefix: prefix,
+        keyPrefix: 'vsk_12345678',
         enabled: true,
         expiresAt: new Date(Date.now() - 1000),
         user: { id: 'user-3' },
       },
     ]);
-    compareMock.mockImplementationOnce(async () => true);
 
     const result = await resolveRequestUser(
       { headers: { authorization: `Bearer ${token}` } },
@@ -50,5 +44,7 @@ describe('resolveRequestUser', () => {
 
     expect(result).toBeNull();
     expect(prismaMock.apiKey.update).not.toHaveBeenCalled();
+    expect(prismaMock.apiKeyUsageEvent.create).not.toHaveBeenCalled();
   });
+
 });

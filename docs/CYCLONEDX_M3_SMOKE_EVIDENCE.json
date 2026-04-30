@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-04-23T07:39:08.206Z",
+  "driftBlockerThreshold": 0.1,
+  "suite": "cyclonedx-m3-smoke",
+  "checks": [
+    {
+      "id": "gate-allows-promote-at-drift-<=-0.10",
+      "passed": true,
+      "details": "status=allow_cutover, canary=allow_promote, drift=0.1000"
+    },
+    {
+      "id": "gate-blocks-promote-at-drift->-0.10",
+      "passed": true,
+      "details": "status=block_cutover, canary=block_promote"
+    },
+    {
+      "id": "gate-blocks-on-validation-error",
+      "passed": true,
+      "details": "status=block_cutover, blockers=validation_error"
+    },
+    {
+      "id": "rollback-forces-rollback-required",
+      "passed": true,
+      "details": "status=not_applicable, canary=rollback_required"
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "promotionReady": true,
+    "blockerErrors": [
+      "validation_error"
+    ],
+    "rollbackVerified": true
+  }
+}

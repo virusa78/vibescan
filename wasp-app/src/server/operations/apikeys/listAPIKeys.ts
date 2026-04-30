@@ -5,8 +5,9 @@ export type APIKeyInfo = {
   name: string;
   masked_key: string; // Last 4 chars only
   created_at: string;
+  expires_at: string | null;
   last_used_at: string | null;
-  status: 'active' | 'revoked';
+  status: 'active' | 'revoked' | 'expired';
 };
 
 export type APIKeyListResponse = {
@@ -25,6 +26,14 @@ export async function listAPIKeys(
     where: {
       userId: context.user.id,
     },
+    select: {
+      id: true,
+      name: true,
+      enabled: true,
+      createdAt: true,
+      expiresAt: true,
+      lastUsedAt: true,
+    },
     orderBy: {
       createdAt: 'desc',
     },
@@ -35,14 +44,16 @@ export async function listAPIKeys(
     // In reality, we'd need to extract the last 4 chars of the original key which we don't have
     // So we'll use the ID's last 4 chars for display
     const maskedKey = `****${key.id.slice(-4)}`;
+    const isExpired = key.expiresAt ? new Date() > key.expiresAt : false;
 
     return {
       id: key.id,
       name: key.name,
       masked_key: maskedKey,
       created_at: key.createdAt.toISOString(),
+      expires_at: key.expiresAt?.toISOString() || null,
       last_used_at: key.lastUsedAt?.toISOString() || null,
-      status: key.enabled ? 'active' : 'revoked',
+      status: key.enabled ? (isExpired ? 'expired' : 'active') : 'revoked',
     };
   });
 

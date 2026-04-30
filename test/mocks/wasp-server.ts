@@ -15,6 +15,14 @@ export const prisma = {
     apiKey: {
         findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         update: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        findUnique: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        delete: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        create: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+    },
+    apiKeyUsageEvent: {
+        create: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        count: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
     },
     aiFixPrompt: {
         findFirst: jest.fn() as jest.MockedFunction<() => Promise<any>>,

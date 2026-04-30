@@ -21,7 +21,7 @@ function getAuthorizationHeader(request: RequestLike): string | undefined {
   return Array.isArray(header) ? header[0] : header;
 }
 
-async function authenticateBearerApiKey(authorization: string | undefined): Promise<AuthenticatedUser | null> {
+export async function authenticateBearerApiKey(authorization: string | undefined): Promise<AuthenticatedUser | null> {
   if (!authorization?.startsWith('Bearer ')) {
     return null;
   }
@@ -74,6 +74,16 @@ async function authenticateBearerApiKey(authorization: string | undefined): Prom
       where: { id: candidate.id },
       data: { lastUsedAt: new Date() },
     });
+
+    try {
+      await (prisma as any).apiKeyUsageEvent.create({
+        data: {
+          apiKeyId: candidate.id,
+        },
+      });
+    } catch (usageError) {
+      console.warn('[RequestAuth] Failed to record API key usage event', usageError);
+    }
 
     return candidate.user;
   }

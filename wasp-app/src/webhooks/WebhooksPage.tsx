@@ -5,6 +5,7 @@ import { Plus, Trash2, Check, X, Webhook as WebhookIcon } from 'lucide-react';
 import { useAsyncState } from '../client/hooks/useAsyncState';
 import { api } from 'wasp/client/api';
 import { toast } from '../client/hooks/use-toast';
+import { ToggleChipGroup } from '../client/components/common/ToggleChipGroup';
 
 type DrawerTab = 'overview' | 'deliveries' | 'payloads' | 'settings';
 
@@ -12,6 +13,7 @@ interface Webhook {
   id: string;
   url: string;
   enabled: boolean;
+  events?: string[];
   created_at: string;
   lastTriggeredAt?: string | null;
   deliverySuccessRate?: number;
@@ -43,6 +45,7 @@ export default function WebhooksPage() {
   const [deliveries, setDeliveries] = useState<DeliveryItem[]>([]);
   const [deliveryCursor, setDeliveryCursor] = useState<string | null>(null);
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string>('');
+  const [editingEvents, setEditingEvents] = useState<string[]>([]);
 
   const selectedDelivery = useMemo(
     () => deliveries.find((delivery) => delivery.id === selectedDeliveryId) ?? deliveries[0] ?? null,
@@ -262,9 +265,18 @@ export default function WebhooksPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
-                    <div className="text-right mr-4">
-                      <p className="text-sm font-semibold text-foreground">{webhook.deliverySuccessRate ?? 0}%</p>
-                      <p className="text-xs text-muted-foreground">success rate</p>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-foreground">{webhook.deliverySuccessRate ?? 0}%</p>
+                        <p className="text-xs text-muted-foreground">success rate</p>
+                      </div>
+                      <div className="w-px h-8 bg-border/40" />
+                      <div className="inline-flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-1 text-xs font-medium ${webhook.enabled ? 'text-green-600' : 'text-gray-600'}`}>
+                          <span className={`w-2 h-2 rounded-full ${webhook.enabled ? 'bg-green-500' : 'bg-gray-500'}`} />
+                          {webhook.enabled ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => void handleToggleActive(webhook.id)}>
                       {webhook.enabled ? 'Disable' : 'Enable'}
@@ -403,17 +415,32 @@ export default function WebhooksPage() {
             )}
 
             {drawerTab === 'settings' && (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={() => void handleToggleActive(selectedWebhook.id)}>
-                  {selectedWebhook.enabled ? 'Disable webhook' : 'Enable webhook'}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-red-500/30 hover:bg-red-500/10 hover:text-red-600"
-                  onClick={() => void handleDeleteWebhook(selectedWebhook.id)}
-                >
-                  Delete webhook
-                </Button>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Event Types</p>
+                  <ToggleChipGroup
+                    options={[
+                      { value: 'scan_complete', label: 'Scan Complete' },
+                      { value: 'report_ready', label: 'Report Ready' },
+                      { value: 'scan_failed', label: 'Scan Failed' },
+                    ]}
+                    value={selectedWebhook?.events?.[0] ?? 'scan_complete'}
+                    onChange={(value) => setEditingEvents([value])}
+                    ariaLabel="Webhook event types"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={() => void handleToggleActive(selectedWebhook.id)}>
+                    {selectedWebhook.enabled ? 'Disable webhook' : 'Enable webhook'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-red-500/30 hover:bg-red-500/10 hover:text-red-600"
+                    onClick={() => void handleDeleteWebhook(selectedWebhook.id)}
+                  >
+                    Delete webhook
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
