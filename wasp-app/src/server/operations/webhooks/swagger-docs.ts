@@ -155,6 +155,44 @@
  *     operationId: listWebhookDeliveries
  *     tags:
  *       - Webhooks
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - name: webhookId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - name: limit
+ *         in: query
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Delivery timeline
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties: true
+ *       404:
+ *         description: Webhook not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *
  * /api/v1/webhooks/{webhookId}/test:
  *   post:
@@ -162,6 +200,35 @@
  *     operationId: testWebhookDelivery
  *     tags:
  *       - Webhooks
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - name: webhookId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       202:
+ *         description: Test delivery queued
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ActionResponse'
+ *       404:
+ *         description: Webhook not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *
  * /api/v1/webhooks/{webhookId}/deliveries/{deliveryId}/retry:
  *   post:
@@ -169,4 +236,39 @@
  *     operationId: retryWebhookDelivery
  *     tags:
  *       - Webhooks
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - name: webhookId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - name: deliveryId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       202:
+ *         description: Delivery retry queued
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ActionResponse'
+ *       404:
+ *         description: Delivery not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */

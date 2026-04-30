@@ -170,6 +170,7 @@
  * /api/v1/dashboard/saved-views:
  *   get:
  *     summary: List saved dashboard views
+ *     operationId: listSavedViews
  *     tags:
  *       - Dashboard
  *     security:
@@ -182,8 +183,21 @@
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/SavedViewsResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *   post:
  *     summary: Create saved dashboard view
+ *     operationId: createSavedView
  *     tags:
  *       - Dashboard
  *     security:
@@ -198,10 +212,23 @@
  *     responses:
  *       201:
  *         description: Saved view created
+ *       400:
+ *         description: Invalid request body
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *
  * /api/v1/dashboard/saved-views/{viewId}:
  *   put:
  *     summary: Update saved dashboard view
+ *     operationId: updateSavedView
  *     tags:
  *       - Dashboard
  *     security:
@@ -214,11 +241,36 @@
  *         schema:
  *           type: string
  *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateSavedViewRequest'
  *     responses:
  *       200:
  *         description: Saved view updated
+ *       400:
+ *         description: Invalid request body
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Saved view not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *   delete:
  *     summary: Delete saved dashboard view
+ *     operationId: deleteSavedView
  *     tags:
  *       - Dashboard
  *     security:
@@ -234,20 +286,148 @@
  *     responses:
  *       200:
  *         description: Saved view deleted
+ *       404:
+ *         description: Saved view not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *
  * /api/v1/dashboard/scans/bulk-cancel:
  *   post:
  *     summary: Bulk cancel scans
+ *     operationId: bulkCancelScans
  *     tags:
  *       - Dashboard
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [scanIds]
+ *             properties:
+ *               scanIds:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *     responses:
+ *       200:
+ *         description: Bulk cancellation completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ActionResponse'
+ *       400:
+ *         description: Invalid request body
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  * /api/v1/dashboard/scans/bulk-rerun:
  *   post:
  *     summary: Bulk rerun scans
+ *     operationId: bulkRerunScans
  *     tags:
  *       - Dashboard
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [scanIds]
+ *             properties:
+ *               scanIds:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *     responses:
+ *       200:
+ *         description: Bulk rerun submitted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ActionResponse'
+ *       400:
+ *         description: Invalid request body
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  * /api/v1/dashboard/scans/export:
  *   post:
  *     summary: Export selected scans
+ *     operationId: exportScans
  *     tags:
  *       - Dashboard
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [scanIds]
+ *             properties:
+ *               scanIds:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *               format:
+ *                 type: string
+ *                 enum: [json, csv]
+ *                 default: json
+ *     responses:
+ *       200:
+ *         description: Export generated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties: true
+ *       400:
+ *         description: Invalid request body
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */

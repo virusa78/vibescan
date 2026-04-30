@@ -129,6 +129,7 @@
  * /api/v1/reports/{scanId}/annotations:
  *   get:
  *     summary: List finding annotations for a report
+ *     operationId: listFindingAnnotations
  *     tags:
  *       - Reports
  *     security:
@@ -147,10 +148,31 @@
  *         schema:
  *           type: string
  *           enum: [accepted, snoozed, rejected, expired]
+ *     responses:
+ *       200:
+ *         description: Annotation list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties: true
+ *       404:
+ *         description: Scan not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *
  * /api/v1/reports/{scanId}/findings/{findingId}/annotation:
  *   post:
  *     summary: Upsert finding annotation
+ *     operationId: upsertFindingAnnotation
  *     tags:
  *       - Reports
  *     security:
@@ -169,4 +191,31 @@
  *         schema:
  *           type: string
  *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties: true
+ *     responses:
+ *       200:
+ *         description: Annotation saved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties: true
+ *       404:
+ *         description: Scan or finding not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
