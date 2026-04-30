@@ -28,7 +28,7 @@ export interface WebhookResponse {
 export async function createWebhook(
   rawArgs: any,
   context: any
-): Promise<WebhookResponse> {
+): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -71,13 +71,13 @@ export async function createWebhook(
       signingSecret.length - 8
     )}`;
 
-    return {
+      return {
       id: webhook.id,
       url: webhook.url,
       created_at: webhook.createdAt,
       events: webhook.events,
       secret_preview: secretPreview,
-    };
+    } as any;
   } catch (_err) {
     if ((_err as any).code === 'P2002') {
       throw new HttpError(409, 'Webhook already exists for this URL');

@@ -30,7 +30,7 @@ export interface WebhookResponse {
 export async function updateWebhook(
   rawArgs: any,
   context: any
-): Promise<WebhookResponse> {
+): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -81,13 +81,13 @@ export async function updateWebhook(
       data: updateData,
     });
 
-    return {
+      return {
       id: updatedWebhook.id,
       url: updatedWebhook.url,
       events: updatedWebhook.events,
       enabled: updatedWebhook.enabled,
       updated_at: updatedWebhook.updatedAt || new Date(),
-    };
+    } as any;
   } catch (_err) {
     if (_err instanceof HttpError) {
       throw _err;
