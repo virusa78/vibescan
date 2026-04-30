@@ -18,6 +18,7 @@ import {
 } from './urlState';
 import { isEditableTarget } from '../client/utils/keyboard';
 import { api } from '../client/utils/api';
+import { submitScan } from 'wasp/client/operations';
 
 type DashboardTimeRange = '7d' | '30d' | 'all';
 
@@ -401,9 +402,9 @@ export default function DashboardPage() {
     }
 
     try {
-      await api.post('/api/v1/scans', {
+      await submitScan({
         inputRef: sourceScan.inputRef,
-        inputType: sourceScan.inputType,
+        inputType: sourceScan.inputType as 'github' | 'sbom' | 'source_zip',
       });
 
       toast({ title: 'Re-run queued', description: sourceScan.inputRef });
