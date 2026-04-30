@@ -6,8 +6,18 @@ import { toast } from '../client/hooks/use-toast';
 import { MetricCard } from '../client/components/common/MetricCard';
 import { ScanTable } from '../client/components/common/ScanTable';
 import { SeverityChart } from '../client/components/common/SeverityChart';
+import { TrendChart } from '../client/components/common/TrendChart';
 import { EmptyState } from '../client/components/common/EmptyState';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
+import { Input } from '../client/components/ui/input';
+import { Button } from '../client/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../client/components/ui/select';
 import { useAsyncState } from '../client/hooks/useAsyncState';
 import {
   type DashboardSortDirection,
@@ -309,6 +319,47 @@ export default function DashboardPage() {
       })),
     [scans],
   );
+
+  // Trends: bucket recent scans by day and count findings
+  const [categories, scansSeries, findingsSeries] = useMemo(() => {
+    const now = new Date();
+    const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : Math.max(90, 30);
+    const end = now;
+    const start = timeRange === 'all' ? new Date(0) : new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const buckets: Record<string, { scans: number; findings: number }> = {};
+    const dayList: string[] = [];
+    const cur = new Date(start);
+    while (cur <= end) {
+      const key = cur.toISOString().slice(0, 10);
+      buckets[key] = { scans: 0, findings: 0 };
+      dayList.push(key);
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    scans.forEach(s => {
+      const d = new Date(s.createdAt).toISOString().slice(0, 10);
+      if (buckets[d]) {
+        buckets[d].scans += 1;
+        buckets[d].findings += s.findingsCount || 0;
+      }
+    });
+
+    const scansSeries = dayList.map(d => buckets[d]?.scans ?? 0);
+    const findingsSeries = dayList.map(d => buckets[d]?.findings ?? 0);
+    return [dayList, scansSeries, findingsSeries] as const;
+  }, [scans, timeRange]);
+
+  // Apply simple table filters
+  const filteredTableScans = useMemo(() => {
+    const q = scanQuery.trim().toLowerCase();
+    return tableScans.filter(s => {
+      if (scanStatusFilter !== 'all' && s.status.toLowerCase() !== scanStatusFilter) return false;
+      if (scanTypeFilter !== 'all' && s.inputType.toLowerCase() !== scanTypeFilter) return false;
+      if (!q) return true;
+      return s.id.toLowerCase().includes(q) || (s.inputRef ?? '').toLowerCase().includes(q);
+    });
+  }, [tableScans, scanQuery, scanStatusFilter, scanTypeFilter]);
 
   const statCards = [
     {
@@ -671,7 +722,30 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="lg:col-span-2">
-          <SeverityChart data={severity} loading={isLoading} />
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-medium">Trends</h3>
+                <p className="text-sm text-muted-foreground">Scans and findings over time</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Select value={timeRange} onValueChange={(v) => setTimeRange(v as any)}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7d">7d</SelectItem>
+                    <SelectItem value="30d">30d</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <TrendChart categories={categories} series={[{ name: 'Scans', data: scansSeries }, { name: 'Findings', data: findingsSeries }]} loading={isLoading} />
+            <div>
+              <SeverityChart data={severity} loading={isLoading} />
+            </div>
+          </div>
         </div>
 
         <div className="space-y-6">

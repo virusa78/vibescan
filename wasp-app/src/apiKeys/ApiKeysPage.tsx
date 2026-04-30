@@ -226,7 +226,8 @@ export default function ApiKeysPage() {
     setSuccessMessage(null);
     await runList(
       async () => {
-        const result = await generateApiKey({ name: newKeyName });
+        const res = await api.post('/api/v1/api-keys', { name: newKeyName });
+        const result = res.data;
         setGeneratedKey(result);
         setNewKeyName('');
         setShowNewKeyForm(false);
@@ -248,8 +249,8 @@ export default function ApiKeysPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (revokeApiKey as any)({ id: keyId });
         setSuccessMessage('API key revoked');
-        const keys = await listApiKeys();
-        setApiKeys(keys);
+        const reload = await api.get('/api/v1/api-keys');
+        setApiKeys(reload.data || []);
       },
       { errorMessage: 'Failed to revoke API key' },
     );

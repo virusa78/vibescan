@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "lib": ["ES2022"],
+    "module": "ES2022",
+    "lib": ["ES2022", "DOM"],
     "outDir": "./dist",
     "rootDir": "./wasp-app/src",
     "strict": false,
@@ -15,7 +15,7 @@
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
-    "moduleResolution": "NodeNext",
+    "moduleResolution": "bundler","module": "esnext","jsx": "react-jsx",
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "types": ["node"],
@@ -27,5 +27,5 @@
     "noPropertyAccessFromIndexSignature": false
   },
   "include": ["wasp-app/src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts", ".wasp"]
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts", ".wasp", "wasp-app/.wasp"]
 }

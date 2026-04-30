@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../client/components/u
 import { Checkbox } from "../client/components/ui/checkbox";
 import { Input } from "../client/components/ui/input";
 import { Label } from "../client/components/ui/label";
+import { Switch } from "../client/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -226,16 +227,70 @@ export default function SettingsPage() {
     );
   };
 
-  const renderHealthBadge = (snapshot: ScannerHealthSnapshot) => {
-    if (!snapshot.configured) {
-      return <Badge variant="outline">Not configured</Badge>;
+  // Notification settings UI state
+  const [projectKey, setProjectKey] = useState("");
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifSuccess, setNotifSuccess] = useState<string | null>(null);
+  const [notifError, setNotifError] = useState<string | null>(null);
+  const [emailOnScanComplete, setEmailOnScanComplete] = useState(true);
+  const [emailOnVulnerability, setEmailOnVulnerability] = useState(true);
+  const [weeklyDigest, setWeeklyDigest] = useState(false);
+  const [smsEnabled, setSmsEnabled] = useState(false);
+
+  const projectKeyRegex = /^[a-zA-Z0-9._-]+$/;
+
+  const loadNotificationSettings = async () => {
+    setNotifError(null);
+    setNotifSuccess(null);
+    if (!projectKey || !projectKeyRegex.test(projectKey)) {
+      setNotifError("Project key is required and must be alphanumeric, dot, underscore or hyphen.");
+      return;
     }
 
-    if (snapshot.healthy) {
-      return <Badge>Healthy</Badge>;
+    setNotifLoading(true);
+    try {
+      const res = await api.get(`/api/v1/settings/notifications?project_key=${encodeURIComponent(projectKey)}`);
+      const data = res.data;
+      setEmailOnScanComplete(Boolean(data.email_on_scan_complete));
+      setEmailOnVulnerability(Boolean(data.email_on_vulnerability));
+      setWeeklyDigest(Boolean(data.weekly_digest));
+      setSmsEnabled(Boolean(data.sms_enabled));
+      setNotifSuccess("Settings loaded.");
+    } catch (e: any) {
+      setNotifError(e?.message ?? "Failed to load notification settings.");
+    } finally {
+      setNotifLoading(false);
+    }
+  };
+
+  const saveNotificationSettings = async () => {
+    setNotifError(null);
+    setNotifSuccess(null);
+    if (!projectKey || !projectKeyRegex.test(projectKey)) {
+      setNotifError("Project key is required and must be alphanumeric, dot, underscore or hyphen.");
+      return;
     }
 
-    return <Badge variant="destructive">Unhealthy</Badge>;
+    setNotifSaving(true);
+    try {
+      const body = {
+        project_key: projectKey,
+        email_on_scan_complete: emailOnScanComplete,
+        email_on_vulnerability: emailOnVulnerability,
+        weekly_digest: weeklyDigest,
+      };
+      const res = await api.post(`/api/v1/settings/notifications`, body);
+      const data = res.data;
+      setNotifSuccess("Notification settings saved.");
+      setEmailOnScanComplete(Boolean(data.email_on_scan_complete));
+      setEmailOnVulnerability(Boolean(data.email_on_vulnerability));
+      setWeeklyDigest(Boolean(data.weekly_digest));
+    } catch (e: any) {
+      setNotifError(e?.message ?? "Failed to save notification settings.");
+    } finally {
+      setNotifSaving(false);
+    }
   };
 
   return (
@@ -403,68 +458,72 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Notification Preferences */}
       <Card className="mb-4 lg:m-8">
         <CardHeader>
-          <CardTitle>Scanner Access and Health</CardTitle>
+          <CardTitle>Notification Preferences</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {scannerAccessError && (
+        <CardContent className="space-y-4">
+          {notifError && (
             <Alert variant="destructive">
-              <AlertDescription>{scannerAccessError}</AlertDescription>
+              <AlertDescription>{notifError}</AlertDescription>
             </Alert>
           )}
-          {scannerAccessSuccessMessage && (
+          {notifSuccess && (
             <Alert>
-              <AlertDescription>{scannerAccessSuccessMessage}</AlertDescription>
+              <AlertDescription>{notifSuccess}</AlertDescription>
             </Alert>
           )}
 
-          <form className="space-y-4" onSubmit={onSaveScannerAccessSettings}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-1">
-                <div className="text-sm font-medium">Johnny host</div>
-                <div className="text-xs text-muted-foreground">
-                  {scannerHealth?.johnny.host ?? "Not configured"}
-                </div>
-              </div>
-              {scannerHealth ? renderHealthBadge(scannerHealth.johnny) : <Badge variant="outline">Unknown</Badge>}
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-1">
-                <div className="text-sm font-medium">Snyk runtime</div>
-                <div className="text-xs text-muted-foreground">
-                  {scannerHealth?.snyk.host ?? "Not configured"}
-                </div>
-              </div>
-              {scannerHealth ? renderHealthBadge(scannerHealth.snyk) : <Badge variant="outline">Unknown</Badge>}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="projectKey">Project key</Label>
+              <Input id="projectKey" placeholder="project-key" value={projectKey} onChange={(e) => setProjectKey(e.target.value)} className="w-48" />
+              <Button onClick={loadNotificationSettings} disabled={notifLoading}>{notifLoading ? "Loading..." : "Load"}</Button>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="w-full space-y-2">
-                <Label htmlFor="snykApiKey">Snyk API key</Label>
-                <Input
-                  id="snykApiKey"
-                  type="password"
-                  placeholder={snykApiKeyAttached ? snykApiKeyPreview ?? "Key attached" : "Paste your Snyk API key"}
-                  value={snykApiKey}
-                  onChange={(event) => setSnykApiKey(event.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Stored encrypted at rest. Leave blank to clear the attached key.
-                </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-center justify-between border p-3 rounded">
+                <div>
+                  <p className="text-sm font-medium">Email on scan complete</p>
+                  <p className="text-xs text-muted-foreground">Receive email when a scan finishes</p>
+                </div>
+                <Switch checked={emailOnScanComplete} onCheckedChange={(v) => setEmailOnScanComplete(Boolean(v))} aria-label="Email on scan complete" />
               </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={onRefreshScannerAccess} disabled={isScannerAccessLoading}>
-                  {isScannerAccessLoading ? "Refreshing..." : "Refresh"}
-                </Button>
-                <Button type="submit" disabled={isScannerAccessLoading}>
-                  {isScannerAccessLoading ? "Saving..." : "Save key"}
-                </Button>
+
+              <div className="flex items-center justify-between border p-3 rounded">
+                <div>
+                  <p className="text-sm font-medium">Email on vulnerability</p>
+                  <p className="text-xs text-muted-foreground">Receive email when new vulnerability found</p>
+                </div>
+                <Switch checked={emailOnVulnerability} onCheckedChange={(v) => setEmailOnVulnerability(Boolean(v))} aria-label="Email on vulnerability" />
+              </div>
+
+              <div className="flex items-center justify-between border p-3 rounded">
+                <div>
+                  <p className="text-sm font-medium">Weekly digest</p>
+                  <p className="text-xs text-muted-foreground">Receive a weekly summary</p>
+                </div>
+                <Switch checked={weeklyDigest} onCheckedChange={(v) => setWeeklyDigest(Boolean(v))} aria-label="Weekly digest" />
               </div>
             </div>
-          </form>
+
+            <div className="flex items-center gap-2">
+              <Button onClick={saveNotificationSettings} disabled={notifSaving}>{notifSaving ? "Saving..." : "Save notification settings"}</Button>
+              <Button variant="ghost" onClick={() => { setProjectKey(''); setNotifError(null); setNotifSuccess(null); }}>Reset</Button>
+              <div className="ml-auto text-xs text-muted-foreground">
+                {smsEnabled ? "SMS enabled (read-only)" : "SMS disabled"}
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">Tip: project key links to the project page.</p>
+            {projectKey && (
+              <a href={`/projects/${encodeURIComponent(projectKey)}`} className="text-sm text-primary underline">Open project</a>
+            )}
+          </div>
         </CardContent>
       </Card>
+
     </div>
   );
 }

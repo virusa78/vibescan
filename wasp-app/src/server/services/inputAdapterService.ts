@@ -12,6 +12,7 @@ import {
   fromCycloneDX,
   validateCycloneDX,
 } from '../../ingestion/cyclonedx-contracts.js';
+import { execSync } from 'child_process';
 
 /**
  * Normalized component format - consistent across all input sources
@@ -36,6 +37,24 @@ function ensureTrustedScanInputRoot() {
   const root = process.env.VIBESCAN_SCAN_INPUT_DIR ?? defaultTrustedScanInputRoot;
   mkdirSync(root, { recursive: true });
   return root;
+}
+
+export function isJohnnyInstalled(): boolean {
+  try {
+    execSync('johnny --version', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function isSyftInstalled(): boolean {
+  try {
+    execSync('syft --version', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function resolveTrustedScanInputPath(inputRef: string): string {
@@ -170,7 +189,7 @@ export async function loadScanArtifacts(inputType: string, inputRef: string): Pr
   switch (normalizeScanInputType(inputType)) {
     case 'github': {
       validateGitHubUrl(inputRef);
-      const components = await normalizeComponents(await cloneGitHubAndScanWithSyft(inputRef));
+      const components = await normalizeComponents(await cloneGitHubAndScanWithSBOMGenerator(inputRef));
       return {
         components,
         sbomRaw: buildCycloneDxSbom(components),
@@ -186,7 +205,7 @@ export async function loadScanArtifacts(inputType: string, inputRef: string): Pr
       };
     }
     case 'source_zip': {
-      const components = await extractZipAndScanWithSyft(resolveTrustedScanInputPath(inputRef));
+      const components = await extractZipAndScanWithSBOMGenerator(resolveTrustedScanInputPath(inputRef));
       return {
         components,
         sbomRaw: buildCycloneDxSbom(components),
@@ -402,9 +421,9 @@ function collectRepoComponents(repoPath: string): NormalizedComponent[] {
  * 
  * @param filePath Absolute path to ZIP file
  * @param timeoutMs Timeout in milliseconds (default: 5 minutes)
- * @returns Normalized components from Syft scan
+ * @returns Normalized components from scan
  */
-export async function extractZipAndScanWithSyft(
+export async function extractZipAndScanWithSBOMGenerator(
   filePath: string,
   timeoutMs: number = 300000
 ): Promise<NormalizedComponent[]> {
@@ -458,37 +477,35 @@ export async function extractZipAndScanWithSyft(
       );
     }
 
-    try {
-      const syftOutput = execFileSync(
-        'syft',
-        [`dir:${extractDir}`, '-o', 'cyclonedx-json'],
-        { timeout: timeoutMs, encoding: 'utf8' },
-      );
-
-      const parsed = JSON.parse(syftOutput);
-      const components = Array.isArray(parsed?.components)
-        ? parsed.components
-            .map((component: any) => {
-              if (!component?.name) return null;
-              return {
-                name: String(component.name),
-                version: String(component.version || 'unknown'),
-                purl: component.purl || undefined,
-                type: component.type || 'library',
-              } satisfies NormalizedComponent;
-            })
-            .filter((component: NormalizedComponent | null): component is NormalizedComponent => component !== null)
-        : [];
-
-      if (components.length > 0) {
-        return normalizeComponents(components);
+    // Try Johnny first if installed (as requested by user integration snippet), then Syft
+    if (isJohnnyInstalled()) {
+      try {
+        console.log(`[InputAdapter] Using Johnny to scan ZIP: ${filePath}`);
+        const johnnyOutput = execFileSync(
+          'johnny',
+          ['--input', extractDir, '--output-format', 'cyclonedx-json'],
+          { timeout: timeoutMs, encoding: 'utf8' },
+        );
+        return parseCycloneDXOutput(johnnyOutput);
+      } catch (error) {
+        console.warn(`[InputAdapter] Johnny scan failed for ZIP ${filePath}:`, error instanceof Error ? error.message : String(error));
       }
-    } catch (error) {
-      console.warn(
-        `[InputAdapter] syft scan unavailable for ZIP ${filePath}, falling back to manifest parsing: ${error instanceof Error ? error.message : String(error)}`,
-      );
     }
 
+    if (isSyftInstalled()) {
+      try {
+        const syftOutput = execFileSync(
+          'syft',
+          [`dir:${extractDir}`, '-o', 'cyclonedx-json'],
+          { timeout: timeoutMs, encoding: 'utf8' },
+        );
+        return parseCycloneDXOutput(syftOutput);
+      } catch (error) {
+        console.warn(`[InputAdapter] syft scan failed for ZIP ${filePath}:`, error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    console.warn(`[InputAdapter] No SBOM generators (Johnny/Syft) available or successful for ZIP ${filePath}, falling back to manifest parsing`);
     return normalizeComponents(collectRepoComponents(extractDir));
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
@@ -496,14 +513,36 @@ export async function extractZipAndScanWithSyft(
 }
 
 /**
- * Clone GitHub repo and scan with Syft
+ * Helper to parse CycloneDX output from Johnny or Syft
+ */
+async function parseCycloneDXOutput(jsonOutput: string): Promise<NormalizedComponent[]> {
+  const parsed = JSON.parse(jsonOutput);
+  const components = Array.isArray(parsed?.components)
+    ? parsed.components
+        .map((component: any) => {
+          if (!component?.name) return null;
+          return {
+            name: String(component.name),
+            version: String(component.version || 'unknown'),
+            purl: component.purl || undefined,
+            type: component.type || 'library',
+          } satisfies NormalizedComponent;
+        })
+        .filter((component: NormalizedComponent | null): component is NormalizedComponent => component !== null)
+    : [];
+
+  return await normalizeComponents(components);
+}
+
+/**
+ * Clone GitHub repo and scan with best available SBOM generator (Johnny or Syft)
  * Returns normalized components array
  * 
  * @param url GitHub repository URL
- * @param timeoutMs Timeout in milliseconds (default: 5 minutes for Syft + 30s for clone)
- * @returns Normalized components from Syft scan
+ * @param timeoutMs Timeout in milliseconds
+ * @returns Normalized components from scan
  */
-export async function cloneGitHubAndScanWithSyft(
+export async function cloneGitHubAndScanWithSBOMGenerator(
   url: string,
   timeoutMs: number = 330000
 ): Promise<NormalizedComponent[]> {
@@ -526,37 +565,35 @@ export async function cloneGitHubAndScanWithSyft(
       );
     }
 
-    try {
-      const syftOutput = execFileSync(
-        'syft',
-        [`dir:${repoPath}`, '-o', 'cyclonedx-json'],
-        { timeout: timeoutMs, encoding: 'utf8' },
-      );
-
-      const parsed = JSON.parse(syftOutput);
-      const components = Array.isArray(parsed?.components)
-        ? parsed.components
-            .map((component: any) => {
-              if (!component?.name) return null;
-              return {
-                name: String(component.name),
-                version: String(component.version || 'unknown'),
-                purl: component.purl || undefined,
-                type: component.type || 'library',
-              } satisfies NormalizedComponent;
-            })
-            .filter((component: NormalizedComponent | null): component is NormalizedComponent => component !== null)
-        : [];
-
-      if (components.length > 0) {
-        return normalizeComponents(components);
+    // Try Johnny first if installed, then Syft
+    if (isJohnnyInstalled()) {
+      try {
+        console.log(`[InputAdapter] Using Johnny to scan repo: ${url}`);
+        const johnnyOutput = execFileSync(
+          'johnny',
+          ['--input', repoPath, '--output-format', 'cyclonedx-json'],
+          { timeout: timeoutMs, encoding: 'utf8' },
+        );
+        return parseCycloneDXOutput(johnnyOutput);
+      } catch (error) {
+        console.warn(`[InputAdapter] Johnny scan failed for ${url}:`, error instanceof Error ? error.message : String(error));
       }
-    } catch (error) {
-      console.warn(
-        `[InputAdapter] syft scan unavailable for ${url}, falling back to manifest parsing: ${error instanceof Error ? error.message : String(error)}`,
-      );
     }
 
+    if (isSyftInstalled()) {
+      try {
+        const syftOutput = execFileSync(
+          'syft',
+          [`dir:${repoPath}`, '-o', 'cyclonedx-json'],
+          { timeout: timeoutMs, encoding: 'utf8' },
+        );
+        return parseCycloneDXOutput(syftOutput);
+      } catch (error) {
+        console.warn(`[InputAdapter] syft scan failed for ${url}:`, error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    console.warn(`[InputAdapter] No SBOM generators available or successful for ${url}, falling back to manifest parsing`);
     return normalizeComponents(collectRepoComponents(repoPath));
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });

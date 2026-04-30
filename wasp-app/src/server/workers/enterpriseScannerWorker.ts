@@ -57,7 +57,7 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
     }
 
     // Get components from scan record (stored as JSON, so parse/cast safely)
-    const components = Array.isArray(scan.components) 
+    const components = Array.isArray(scan.components)
       ? (scan.components as unknown as NormalizedComponent[])
       : ([] as NormalizedComponent[]);
 
@@ -233,11 +233,11 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
       // Determine expected scanners based on plan at submission
       const isEnterprisePlan = currentScan.planAtSubmission === 'enterprise';
       const expectedScanners: ScanSource[] = isEnterprisePlan ? ['free', 'enterprise'] : ['free'];
-      
+
       // Check which scanners have completed
       const completedScanners: ScanSource[] = currentScan.scanResults.map((r) => r.source as ScanSource);
       const allExpectedComplete = expectedScanners.every((scanner) => completedScanners.includes(scanner));
-      
+
       if (allExpectedComplete) {
         // All expected scanners completed, mark as done
         const completedAt = new Date();
@@ -296,7 +296,7 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
 
     if (existingScan && existingScan.status === 'scanning') {
       const isEnterprisePlan = existingScan.planAtSubmission === 'enterprise';
-      
+
       // For enterprise plans, check if free succeeded
       if (isEnterprisePlan) {
         const freeResult = existingScan.scanResults.some((r) => r.source === 'free');
