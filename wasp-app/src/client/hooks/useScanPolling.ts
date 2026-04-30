@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { api } from '../utils/api';
+import { getScanById, useQuery } from 'wasp/client/operations';
 
 export interface ScanPollingState {
   scan: {
@@ -43,12 +43,12 @@ const RATE_LIMIT_INITIAL_BACKOFF_MS = 5000; // 5 seconds for first 429
 const MAX_BACKOFF_MS = 60000; // Max 60 seconds
 
 /**
- * Hook for polling scan status
+ * Hook for polling scan status using Wasp operation
  * @param scanId - The scan ID to poll
  * @returns Polling state (scan, isPolling, status, progress, error)
  */
 export function useScanPolling(scanId: string) {
-  const [state, setState] = useState<ScanPollingState>({
+  const [displayState, setDisplayState] = useState<ScanPollingState>({
     scan: null,
     isPolling: true,
     status: 'idle',
@@ -57,30 +57,35 @@ export function useScanPolling(scanId: string) {
   });
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const backoffRef = useRef(RATE_LIMIT_INITIAL_BACKOFF_MS);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const pollScan = useCallback(async () => {
+  // Use Wasp operation for fetching scan data (has auth context)
+  const {
+    data: scanData,
+    isLoading,
+    error: queryError,
+    refetch,
+  } = useQuery(
+    getScanById,
+    { scanId: scanId || '' },
+    {
+      enabled: !!scanId,
+    }
+  );
+
+  // Process scan data and manage polling state
+  useEffect(() => {
     if (!scanId) return;
 
-    try {
-      abortControllerRef.current = new AbortController();
-      
-      const response = await api.get(`/api/v1/scans/${scanId}`, {
-        signal: abortControllerRef.current.signal,
-      });
+    const updateDisplayState = () => {
+      if (!scanData) {
+        return;
+      }
 
-      // Reset backoff on successful response
-      backoffRef.current = RATE_LIMIT_INITIAL_BACKOFF_MS;
+      // The operation returns ScanWithDetails directly
+      const scan = scanData;
 
-      const data: PollResponse = response.data;
-
-      if (!data?.scan) {
-         throw new Error('Invalid scan response');
-       }
-
-       // Determine current status
-       const scanStatus = data.scan.status.toLowerCase();
+      // Determine current status
+      const scanStatus = scan.status.toLowerCase();
       const isRunning = ['pending', 'scanning', 'running'].includes(scanStatus);
       const isCompleted = scanStatus === 'done';
       const isFailed = scanStatus === 'error' || scanStatus === 'failed';
@@ -93,85 +98,60 @@ export function useScanPolling(scanId: string) {
 
       const newState: ScanPollingState = {
         scan: {
-          id: data.scan.id,
-          status: data.scan.status,
-          planAtSubmission: data.scan.planAtSubmission,
-          createdAt: new Date(data.scan.created_at),
-          completedAt: data.scan.completed_at ? new Date(data.scan.completed_at) : null,
-          errorMessage: data.scan.error_message,
-          inputType: data.scan.inputType,
-          inputRef: data.scan.inputRef,
+          id: scan.id,
+          status: scan.status,
+          planAtSubmission: scan.planAtSubmission,
+          createdAt: new Date(scan.createdAt),
+          completedAt: scan.completedAt ? new Date(scan.completedAt) : null,
+          errorMessage: scan.errorMessage || null,
+          inputType: scan.inputType,
+          inputRef: scan.inputRef,
         },
         isPolling: !isCompleted && !isFailed,
         status: isFailed ? 'failed' : isCompleted ? 'completed' : 'running',
         progress,
-        error: isFailed ? data.scan.error_message : null,
+        error: isFailed ? (scan.errorMessage || null) : null,
       };
 
-      setState(newState);
+      setDisplayState(newState);
 
       // Stop polling if scan is complete or failed
       if (!newState.isPolling && intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-    } catch (err) {
-      // Don't set error if aborted (user navigated away)
-      if (err instanceof Error && err.name === 'AbortError') {
-        return;
-      }
+    };
 
-      const response = typeof err === 'object' && err && 'response' in err
-        ? (err as {
-            response?: {
-              status?: number;
-              data?: { message?: string; error?: string };
-            };
-          }).response
-        : undefined;
+    updateDisplayState();
+  }, [scanData, scanId]);
 
-      if (response?.status === 429) {
-        console.warn(`Rate limited polling scan ${scanId}, backing off for ${backoffRef.current}ms`);
-        setState(prev => ({
-          ...prev,
-          error: 'Rate limited - retrying...',
-        }));
-
-        await new Promise(resolve => setTimeout(resolve, backoffRef.current));
-        backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF_MS);
-        return;
-      }
-
-      const errorMsg =
-        response?.data?.message ||
-        response?.data?.error ||
-        (err instanceof Error ? err.message : 'Unknown error');
+  // Handle query errors
+  useEffect(() => {
+    if (queryError) {
+      const errorMsg = queryError instanceof Error ? queryError.message : 'Unknown error';
       console.error(`Polling error for scan ${scanId}:`, errorMsg);
-      
-      setState(prev => ({
+      setDisplayState(prev => ({
         ...prev,
         error: errorMsg,
         isPolling: false,
         status: 'error',
       }));
 
-      // Stop polling on error
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
     }
-  }, [scanId]);
+  }, [queryError, scanId]);
 
-  // Setup polling interval
+  // Setup polling interval using refetch
   useEffect(() => {
     if (!scanId) return;
 
-    // Poll immediately on mount
-    pollScan();
-
     // Setup interval for continuous polling
-    intervalRef.current = setInterval(pollScan, POLL_INTERVAL_MS);
+    intervalRef.current = setInterval(() => {
+      refetch();
+    }, POLL_INTERVAL_MS);
 
     // Cleanup on unmount
     return () => {
@@ -179,11 +159,8 @@ export function useScanPolling(scanId: string) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
     };
-  }, [scanId, pollScan]);
+  }, [scanId, refetch]);
 
-  return state;
+  return displayState;
 }
