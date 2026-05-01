@@ -4,9 +4,11 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - 'src/**'
+      - 'wasp-app/**'
       - 'package.json'
+      - 'package-lock.json'
       - 'Dockerfile'
+      - 'Dockerfile.worker'
   workflow_dispatch:
 
 jobs:

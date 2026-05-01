@@ -1,15 +1,14 @@
-import type { User } from 'wasp/entities';
 import { HttpError } from 'wasp/server';
 
 export interface QuotaStatusResponse {
   used: number;
   limit: number;
   percentage: number;
-  monthly_reset_date: Date;
+  monthly_reset_date: string;
   usage_trend: 'increasing' | 'decreasing' | 'stable';
 }
 
-export async function getQuotaStatus(rawArgs: any, context: any): Promise<QuotaStatusResponse> {
+export async function getQuotaStatus(rawArgs: any, context: any): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -70,7 +69,7 @@ export async function getQuotaStatus(rawArgs: any, context: any): Promise<QuotaS
     used: user.monthlyQuotaUsed,
     limit: user.monthlyQuotaLimit,
     percentage,
-    monthly_reset_date: user.quotaResetDate,
+    monthly_reset_date: user.quotaResetDate.toISOString(),
     usage_trend: usageTrend,
-  };
+  } as any;
 }

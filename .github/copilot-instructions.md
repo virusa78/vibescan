@@ -16,15 +16,15 @@
 - Run one Jest file: `npm test -- test/unit/property-tests.test.ts`
 - Run one Jest test by name: `npm test -- test/integration/integration-tests.test.ts -t "scan flow"`
 
-### Frontend (`vibescan-ui/`)
-- Install: `cd vibescan-ui && npm install`
-- Dev server: `cd vibescan-ui && npm run dev`
-- Build: `cd vibescan-ui && npm run build`
-- Lint: `cd vibescan-ui && npm run lint`
+### App (`wasp-app/`)
+- Install: `cd wasp-app && npm install`
+- Dev server: `cd wasp-app && PORT=3555 wasp start`
+- Build: `cd wasp-app && wasp build`
+- Lint: `npm run lint`
 
 ## High-level architecture
 
-VibeScan is a Fastify API + Next.js UI system that runs a dual-scanner pipeline per scan and returns full vulnerability detail in reports.
+VibeScan is a Wasp full-stack app that runs a dual-scanner pipeline per scan and returns full vulnerability detail in reports.
 
 Core runtime flow:
 1. API startup (`src/index.ts`) initializes migrations, Redis, S3 buckets, BullMQ queues, and workers, then exposes both legacy and `/v1/*` routes.

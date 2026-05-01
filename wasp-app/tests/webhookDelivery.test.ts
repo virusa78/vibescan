@@ -4,7 +4,7 @@
  */
 
 import * as crypto from 'crypto';
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from './testGlobals';
 import { signWebhookPayload, verifyWebhookSignature } from '../src/server/services/webhookSigner';
 import { encryptWebhookSecret, decryptWebhookSecret } from '../src/server/utils/webhookEncryption';
 

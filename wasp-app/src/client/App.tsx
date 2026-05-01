@@ -23,7 +23,7 @@ import { getAuthRedirectPath } from './utils/routeGuard';
 import { appNavigationItems, marketingNavigationItems } from './components/NavBar/constants';
 import CookieConsentBanner from './components/cookie-consent/Banner';
 import { DocsUrl } from '../shared/common';
-import { api } from './utils/api';
+import { getRecentScans } from 'wasp/client/operations';
 
 type PaletteScan = {
   id: string;
@@ -157,15 +157,13 @@ export default function App() {
     let cancelled = false;
     void (async () => {
       try {
-        const response = await api.get('/api/v1/dashboard/recent-scans', {
-          params: {
-            limit: 25,
-            sort: 'submitted:desc',
-          },
+        const response = await getRecentScans({
+          limit: 25,
+          sort: [{ field: 'submitted', direction: 'desc' }],
         });
 
         if (!cancelled) {
-          const scans = Array.isArray(response.data?.scans) ? response.data.scans : [];
+          const scans = Array.isArray(response.scans) ? response.scans : [];
           setPaletteScans(scans);
         }
       } catch (error) {

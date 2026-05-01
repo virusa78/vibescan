@@ -17,8 +17,8 @@ as `/docs` and `/docs/swagger.json`.
 
 ## Access
 
-- **UI:** `http://192.168.1.17:3555/docs`
-- **JSON:** `http://192.168.1.17:3555/docs/swagger.json`
+- **UI:** `http://127.0.0.1:3555/docs`
+- **JSON:** `http://127.0.0.1:3555/docs/swagger.json`
 
 ## Documented REST Endpoints
 

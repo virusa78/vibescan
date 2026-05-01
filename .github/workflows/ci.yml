@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
 
       - name: Install dependencies
@@ -55,11 +55,19 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
+
+      - name: Install Wasp CLI
+        run: |
+          curl -sSL https://get.wasp-lang.dev/installer.sh | sh
+          echo "$HOME/.wasp/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install Wasp app dependencies
+        run: cd wasp-app && npm ci
 
       - name: Build TypeScript
         run: npm run build
@@ -68,7 +76,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
-          path: dist/
+          path: wasp-app/.wasp/build/
 
   docker:
     name: Build and Push Docker Image

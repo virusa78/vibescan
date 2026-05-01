@@ -15,8 +15,8 @@ VibeScan is a SaaS vulnerability scanning platform with dual-scanner architectur
 - **Architecture**: Wasp-only with 20 operations
 
 ### Service Configuration
-- **Frontend**: http://192.168.1.17:3000 (Vite via Wasp)
-- **Backend**: http://192.168.1.17:3555 (Wasp + Node.js)
+- **Frontend**: http://127.0.0.1:3000 (Vite via Wasp)
+- **Backend**: http://127.0.0.1:3555 (Wasp + Node.js)
 - **Database**: PostgreSQL on localhost:5432
 - **Cache**: Redis on localhost:6379
 - **Storage**: MinIO (S3-compatible) on localhost:9000
@@ -160,7 +160,7 @@ VibeScan is a SaaS vulnerability scanning platform with dual-scanner architectur
 - Critical: Avoids port conflict with the older root launcher/backend setup
 
 **Frontend API URL**:
-- Configured in `.env.local`: `REACT_APP_API_URL=http://192.168.1.17:3555`
+- Configured in `.env.local`: `REACT_APP_API_URL=http://127.0.0.1:3555`
 - Frontend automatically routes all API calls to this URL
 - Set before Wasp dev server starts
 
@@ -696,7 +696,7 @@ CODESCORING_API_KEY=your-key
 
 ### Client (`.env.local`)
 ```
-REACT_APP_API_URL=http://192.168.1.17:3555
+REACT_APP_API_URL=http://127.0.0.1:3555
 ```
 
 ## Contributing Guidelines
@@ -712,9 +712,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ### Local Development
 1. `cd wasp-app && PORT=3555 wasp start`
-2. Frontend: http://192.168.1.17:3000
-3. Backend: http://192.168.1.17:3555
-4. API Docs: http://192.168.1.17:3555/docs
+2. Frontend: http://127.0.0.1:3000
+3. Backend: http://127.0.0.1:3555
+4. API Docs: http://127.0.0.1:3555/docs
 
 ### Production (Railway)
 ```bash

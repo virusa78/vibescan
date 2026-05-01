@@ -9,7 +9,7 @@ import { useScanPolling } from '../client/hooks/useScanPolling';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
 import { Badge } from '../client/components/ui/badge';
 import { AlertTriangle, CheckCircle, Clock, Zap, ArrowLeft } from 'lucide-react';
-import { api } from '../client/utils/api';
+import { getReport } from 'wasp/client/operations';
 
 interface Report {
   scanId: string;
@@ -67,8 +67,7 @@ export function ScanDetailsPage() {
           setReportLoading(true);
           setReportError(null);
           
-          const response = await api.get(`/api/v1/reports/${scanId}`);
-          const data: Report = response.data;
+          const data = await getReport({ scanId });
           setReport(data);
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Failed to load report';

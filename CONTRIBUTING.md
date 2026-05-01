@@ -61,7 +61,7 @@ Before running E2E tests, ensure API and frontend are running and reachable:
 ```bash
 docker compose up -d
 npm run migrate
-cd vibescan-ui && npm run dev
+cd wasp-app && PORT=3555 wasp start
 ```
 
 Then run:

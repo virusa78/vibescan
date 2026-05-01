@@ -31,7 +31,7 @@ function getScannerAccessPreview(encryptedKey: Buffer | null): string | null {
 export async function getScannerAccessSettings(
   _args: any,
   context: any
-): Promise<ScannerAccessResponse> {
+): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -52,5 +52,5 @@ export async function getScannerAccessSettings(
     snyk_api_key_attached: !!user.snykApiKeyEncrypted,
     snyk_api_key_preview: getScannerAccessPreview(user.snykApiKeyEncrypted),
     scanner_health: getScannerHealthSnapshot(),
-  };
+  } as any;
 }

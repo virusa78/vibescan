@@ -3,16 +3,13 @@
  * Defines free and enterprise scan queues with priority levels
  */
 
-import { Queue, Worker, QueueEvents } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
+import { getRedisConnectionConfig } from '../config/runtime.js';
 import { freeScannerWorker } from '../workers/freeScannerWorker.js';
 import { enterpriseScannerWorker } from '../workers/enterpriseScannerWorker.js';
 import { webhookDeliveryWorker } from '../workers/webhookDeliveryWorker.js';
 
-// Redis connection config
-const redisConfig = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
-};
+const redisConfig = getRedisConnectionConfig();
 
 // Queue names
 export const QUEUE_NAMES = {

@@ -72,7 +72,7 @@ function getDateRangeStart(
   return startOfUtcDay(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
 }
 
-export async function getTrendSeries(rawArgs: any, context: any): Promise<TrendSeriesResponse> {
+export async function getTrendSeries(rawArgs: any, context: any): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -199,5 +199,5 @@ export async function getTrendSeries(rawArgs: any, context: any): Promise<TrendS
     granularity,
     buckets,
     totals,
-  };
+  } as any;
 }

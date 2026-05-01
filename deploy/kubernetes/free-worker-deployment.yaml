@@ -24,7 +24,9 @@ spec:
           imagePullPolicy: Always
           command:
             - node
-            - dist/workers/freeScannerWorker.js
+            - --import
+            - tsx
+            - wasp-app/src/server/workers/freeScannerWorker.ts
           envFrom:
             - configMapRef:
                 name: vibescan-config

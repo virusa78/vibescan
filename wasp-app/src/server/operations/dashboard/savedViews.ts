@@ -129,13 +129,13 @@ function hasDuplicateName(views: ScanSavedView[], name: string, excludeId?: stri
   return views.some((view) => view.id !== excludeId && view.name.toLowerCase() === normalized);
 }
 
-export async function listScanSavedViews(_rawArgs: unknown, context: any): Promise<{ views: ScanSavedView[] }> {
+export async function listScanSavedViews(_rawArgs: unknown, context: any): Promise<any> {
   const user = ensureUser(context);
   const preferences = await readPreferencesForUser(user.id);
-  return { views: preferences.scanSavedViews };
+  return { views: preferences.scanSavedViews } as any;
 }
 
-export async function createScanSavedView(rawArgs: unknown, context: any): Promise<{ view: ScanSavedView }> {
+export async function createScanSavedView(rawArgs: unknown, context: any): Promise<any> {
   const user = ensureUser(context);
   const args = ensureArgsSchemaOrThrowHttpError(createSavedViewInputSchema, rawArgs);
   const preferences = await readPreferencesForUser(user.id);
@@ -171,10 +171,10 @@ export async function createScanSavedView(rawArgs: unknown, context: any): Promi
   };
 
   await writePreferencesForUser(user.id, nextPreferences);
-  return { view };
+  return { view } as any;
 }
 
-export async function updateScanSavedView(rawArgs: unknown, context: any): Promise<{ view: ScanSavedView }> {
+export async function updateScanSavedView(rawArgs: unknown, context: any): Promise<any> {
   const user = ensureUser(context);
   const args = ensureArgsSchemaOrThrowHttpError(updateSavedViewInputSchema, rawArgs);
   const preferences = await readPreferencesForUser(user.id);
@@ -205,10 +205,10 @@ export async function updateScanSavedView(rawArgs: unknown, context: any): Promi
   };
 
   await writePreferencesForUser(user.id, nextPreferences);
-  return { view: nextView };
+  return { view: nextView } as any;
 }
 
-export async function deleteScanSavedView(rawArgs: unknown, context: any): Promise<{ success: true }> {
+export async function deleteScanSavedView(rawArgs: unknown, context: any): Promise<any> {
   const user = ensureUser(context);
   const args = ensureArgsSchemaOrThrowHttpError(deleteSavedViewInputSchema, rawArgs);
   const preferences = await readPreferencesForUser(user.id);
@@ -223,5 +223,5 @@ export async function deleteScanSavedView(rawArgs: unknown, context: any): Promi
     scanSavedViews: nextViews,
   });
 
-  return { success: true };
+  return { success: true } as any;
 }

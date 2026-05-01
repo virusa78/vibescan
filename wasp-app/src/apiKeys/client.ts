@@ -1,4 +1,4 @@
-import { api } from '../client/utils/api';
+import { getAPIKeyDetails as getAPIKeyDetailsOperation } from 'wasp/client/operations';
 
 export type ApiKeyUsagePoint = {
   date: string;
@@ -17,6 +17,5 @@ export type ApiKeyDetailsResponse = {
 };
 
 export async function getApiKeyDetails(keyId: string): Promise<ApiKeyDetailsResponse> {
-  const response = await api.get<ApiKeyDetailsResponse>(`/api/v1/api-keys/${keyId}`);
-  return response.data;
+  return await getAPIKeyDetailsOperation({ keyId });
 }

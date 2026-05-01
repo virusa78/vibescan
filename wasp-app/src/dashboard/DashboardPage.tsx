@@ -27,8 +27,20 @@ import {
   parseDashboardSearch,
 } from './urlState';
 import { isEditableTarget } from '../client/utils/keyboard';
-import { api } from '../client/utils/api';
-import { submitScan } from 'wasp/client/operations';
+import {
+  bulkCancelScans,
+  bulkRerunScans,
+  createScanSavedView,
+  deleteScanSavedView,
+  exportScans,
+  getQuotaStatus,
+  getRecentScans,
+  getSeverityBreakdown,
+  getTrendSeries,
+  listScanSavedViews,
+  updateScanSavedView,
+  submitScan,
+} from 'wasp/client/operations';
 
 type DashboardTimeRange = '7d' | '30d' | 'all';
 
@@ -226,16 +238,13 @@ export default function DashboardPage() {
   useEffect(() => {
     run(
       async () => {
-        const scansRes = await api.get('/api/v1/dashboard/recent-scans', {
-          params: {
-            limit: 10,
-            sort: `${parsedSearch.sortField}:${parsedSearch.sortDirection}`,
-            ...(parsedSearch.statuses.length > 0 ? { status: parsedSearch.statuses.join(',') } : {}),
-            ...(parsedSearch.query ? { q: parsedSearch.query } : {}),
-          },
+        const scansData = await getRecentScans({
+          limit: 10,
+          sort: [{ field: parsedSearch.sortField, direction: parsedSearch.sortDirection }],
+          status: parsedSearch.statuses,
+          ...(parsedSearch.query ? { q: parsedSearch.query } : {}),
         });
 
-        const scansData = scansRes.data;
         const formattedScans = ((scansData.scans || []) as RecentScanApiRecord[]).map((scan) => {
           const createdAtValue = scan.createdAt ?? scan.created_at ?? Date.now();
           const completedAtValue = scan.completedAt ?? scan.completed_at;
@@ -258,20 +267,16 @@ export default function DashboardPage() {
         setFilteredCount(Number(scansData.filtered_count ?? formattedScans.length));
 
         const [quotaRes, severityRes, trendsRes, savedViewsRes] = await Promise.all([
-          api.get('/api/v1/dashboard/quota'),
-          api.get('/api/v1/dashboard/severity-breakdown', {
-            params: { time_range: timeRange },
-          }),
-          api.get('/api/v1/dashboard/trends', {
-            params: { time_range: timeRange },
-          }),
-          api.get('/api/v1/dashboard/saved-views'),
+          getQuotaStatus({}),
+          getSeverityBreakdown({ time_range: timeRange }),
+          getTrendSeries({ time_range: timeRange }),
+          listScanSavedViews({}),
         ]);
 
-        setQuota(quotaRes.data);
-        setSeverity(severityRes.data);
-        setTrends(trendsRes.data);
-        setSavedViews(Array.isArray(savedViewsRes.data?.views) ? savedViewsRes.data.views : []);
+        setQuota(quotaRes);
+        setSeverity(severityRes);
+        setTrends(trendsRes);
+        setSavedViews(Array.isArray(savedViewsRes.views) ? savedViewsRes.views : []);
       },
       {
         errorMessage: 'Failed to load dashboard',
@@ -436,7 +441,7 @@ export default function DashboardPage() {
 
   const handleCancelScan = async (scanId: string) => {
     try {
-      await api.delete(`/api/v1/scans/${scanId}`);
+      await bulkCancelScans({ scanIds: [scanId] });
       toast({ title: 'Scan cancelled', description: scanId });
       handleRefresh();
     } catch (error) {
@@ -478,8 +483,7 @@ export default function DashboardPage() {
 
   const handleBulkCancel = async (scanIds: string[]) => {
     try {
-      const response = await api.post('/api/v1/dashboard/scans/bulk-cancel', { scanIds });
-      const data = response.data;
+      const data = await bulkCancelScans({ scanIds });
       toast({
         title: 'Bulk cancel finished',
         description: `${data.succeeded}/${data.requested} cancelled`,
@@ -493,8 +497,7 @@ export default function DashboardPage() {
 
   const handleBulkRerun = async (scanIds: string[]) => {
     try {
-      const response = await api.post('/api/v1/dashboard/scans/bulk-rerun', { scanIds });
-      const data = response.data;
+      const data = await bulkRerunScans({ scanIds });
       toast({
         title: 'Bulk re-run finished',
         description: `${data.succeeded}/${data.requested} queued`,
@@ -520,8 +523,7 @@ export default function DashboardPage() {
 
   const handleBulkExport = async (scanIds: string[], format: 'csv' | 'jsonl') => {
     try {
-      const response = await api.post('/api/v1/dashboard/scans/export', { scanIds, format });
-      const data = response.data;
+      const data = await exportScans({ scanIds, format });
       const mimeType = format === 'csv' ? 'text/csv;charset=utf-8' : 'application/x-ndjson;charset=utf-8';
       downloadFile(data.filename ?? `vibescan-scans.${format}`, data.content ?? '', mimeType);
       toast({
@@ -542,7 +544,7 @@ export default function DashboardPage() {
     }
 
     try {
-      const response = await api.post('/api/v1/dashboard/saved-views', {
+      const response = await createScanSavedView({
         name,
         config: {
           sortField: parsedSearch.sortField,
@@ -551,7 +553,7 @@ export default function DashboardPage() {
           query: parsedSearch.query,
         },
       });
-      const created = response.data?.view as SavedView;
+      const created = response.view as SavedView;
       setSavedViews((previous) => [created, ...previous]);
       setSavedViewName('');
       setActiveSavedViewId(created.id);
@@ -581,7 +583,8 @@ export default function DashboardPage() {
     if (!selectedView) return;
 
     try {
-      const response = await api.put(`/api/v1/dashboard/saved-views/${selectedView.id}`, {
+      const response = await updateScanSavedView({
+        viewId: selectedView.id,
         config: {
           sortField: parsedSearch.sortField,
           sortDirection: parsedSearch.sortDirection,
@@ -589,7 +592,7 @@ export default function DashboardPage() {
           query: parsedSearch.query,
         },
       });
-      const updated = response.data?.view as SavedView;
+      const updated = response.view as SavedView;
       setSavedViews((previous) => previous.map((view) => (view.id === updated.id ? updated : view)));
       toast({ title: 'Saved view updated', description: updated.name });
     } catch (error) {
@@ -603,7 +606,7 @@ export default function DashboardPage() {
     if (!selectedView) return;
 
     try {
-      await api.delete(`/api/v1/dashboard/saved-views/${selectedView.id}`);
+      await deleteScanSavedView({ viewId: selectedView.id });
       setSavedViews((previous) => previous.filter((view) => view.id !== selectedView.id));
       setActiveSavedViewId('');
       toast({ title: 'Saved view deleted', description: selectedView.name });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it } from './testGlobals';
 import { validateWebhookTargetUrl } from '../src/shared/webhookTarget';
 
 describe('Webhook target validation', () => {

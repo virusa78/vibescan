@@ -50,10 +50,14 @@ export const prisma = {
     user: {
         findUnique: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         update: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        create: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        delete: jest.fn() as jest.MockedFunction<() => Promise<any>>,
     },
     quotaLedger: {
         create: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        findFirst: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        deleteMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
     },
     $transaction: jest.fn() as jest.MockedFunction<() => Promise<any>>,
 };

@@ -229,6 +229,12 @@ action revokeApiKey {
   auth: true
 }
 
+query getAPIKeyDetails {
+  fn: import { getAPIKeyDetails } from "@src/server/operations/apiKeyOperations",
+  entities: [User, ApiKey],
+  auth: true
+}
+
 //#endregion
 
 //#region Scans & Core Features
@@ -299,87 +305,77 @@ api getScanStatsApi {
 }
 
 //#region Dashboard & Analytics
-// GET /api/v1/dashboard/metrics - Get dashboard metrics
-api getDashboardMetricsApi {
-  fn: import { getDashboardMetricsApiHandler } from "@src/server/operations/dashboard/handlers",
+query getDashboardMetrics {
+  fn: import { getDashboardMetrics } from "@src/server/operations/dashboardOperations",
   entities: [User, Scan, Finding],
-  httpRoute: (GET, "/api/v1/dashboard/metrics")
+  auth: true
 }
 
-// GET /api/v1/dashboard/recent-scans - Get recent scans
-api getRecentScansApi {
-  fn: import { getRecentScansApiHandler } from "@src/server/operations/dashboard/handlers",
+query getRecentScans {
+  fn: import { getRecentScans } from "@src/server/operations/dashboardOperations",
   entities: [User, Scan, ScanResult],
-  httpRoute: (GET, "/api/v1/dashboard/recent-scans")
+  auth: true
 }
 
-// GET /api/v1/dashboard/severity-breakdown - Get severity breakdown
-api getSeverityBreakdownApi {
-  fn: import { getSeverityBreakdownApiHandler } from "@src/server/operations/dashboard/handlers",
+query getSeverityBreakdown {
+  fn: import { getSeverityBreakdown } from "@src/server/operations/dashboardOperations",
   entities: [User, Finding],
-  httpRoute: (GET, "/api/v1/dashboard/severity-breakdown")
+  auth: true
 }
 
-// GET /api/v1/dashboard/trends - Get trend series for scans/findings/delta
-api getDashboardTrendsApi {
-  fn: import { getTrendSeriesApiHandler } from "@src/server/operations/dashboard/handlers",
+query getTrendSeries {
+  fn: import { getTrendSeries } from "@src/server/operations/dashboardOperations",
   entities: [User, Scan, Finding, ScanDelta],
-  httpRoute: (GET, "/api/v1/dashboard/trends")
+  auth: true
 }
 
-// GET /api/v1/dashboard/quota - Get quota status
-api getQuotaStatusApi {
-  fn: import { getQuotaStatusApiHandler } from "@src/server/operations/dashboard/handlers",
+query getQuotaStatus {
+  fn: import { getQuotaStatus } from "@src/server/operations/dashboardOperations",
   entities: [User, Scan],
-  httpRoute: (GET, "/api/v1/dashboard/quota")
+  auth: true
 }
 
-api listScanSavedViewsApi {
-  fn: import { listScanSavedViewsApiHandler } from "@src/server/operations/dashboard/handlers",
+query listScanSavedViews {
+  fn: import { listScanSavedViews } from "@src/server/operations/dashboardOperations",
   entities: [User],
-  httpRoute: (GET, "/api/v1/dashboard/saved-views")
+  auth: true
 }
 
-api createScanSavedViewApi {
-  fn: import { createScanSavedViewApiHandler } from "@src/server/operations/dashboard/handlers",
+action createScanSavedView {
+  fn: import { createScanSavedView } from "@src/server/operations/dashboardOperations",
   entities: [User],
-  httpRoute: (POST, "/api/v1/dashboard/saved-views")
+  auth: true
 }
 
-api updateScanSavedViewApi {
-  fn: import { updateScanSavedViewApiHandler } from "@src/server/operations/dashboard/handlers",
+action updateScanSavedView {
+  fn: import { updateScanSavedView } from "@src/server/operations/dashboardOperations",
   entities: [User],
-  httpRoute: (PUT, "/api/v1/dashboard/saved-views/:viewId")
+  auth: true
 }
 
-api deleteScanSavedViewApi {
-  fn: import { deleteScanSavedViewApiHandler } from "@src/server/operations/dashboard/handlers",
+action deleteScanSavedView {
+  fn: import { deleteScanSavedView } from "@src/server/operations/dashboardOperations",
   entities: [User],
-  httpRoute: (DELETE, "/api/v1/dashboard/saved-views/:viewId")
+  auth: true
 }
 
-api bulkCancelScansApi {
-  fn: import { bulkCancelScansApiHandler } from "@src/server/operations/dashboard/handlers",
+action bulkCancelScans {
+  fn: import { bulkCancelScans } from "@src/server/operations/dashboardOperations",
   entities: [User, Scan, ScanDelta],
-  httpRoute: (POST, "/api/v1/dashboard/scans/bulk-cancel")
+  auth: true
 }
 
-api bulkRerunScansApi {
-  fn: import { bulkRerunScansApiHandler } from "@src/server/operations/dashboard/handlers",
+action bulkRerunScans {
+  fn: import { bulkRerunScans } from "@src/server/operations/dashboardOperations",
   entities: [User, Scan, ScanDelta],
-  httpRoute: (POST, "/api/v1/dashboard/scans/bulk-rerun")
+  auth: true
 }
 
-api exportScansApi {
-  fn: import { exportScansApiHandler } from "@src/server/operations/dashboard/handlers",
+action exportScans {
+  fn: import { exportScans } from "@src/server/operations/dashboardOperations",
   entities: [User, Scan],
-  httpRoute: (POST, "/api/v1/dashboard/scans/export")
+  auth: true
 }
-
-// Dashboard Wasp queries (for frontend integration)
-// Dashboard & Analytics operations
-// Use HTTP API instead (/api/v1/dashboard/metrics, etc.)
-// These are available via REST endpoints, not Wasp queries
 //#endregion Dashboard & Analytics
 //#endregion
 
@@ -533,46 +529,40 @@ api revokeAPIKeyApi {
 //#endregion API Keys
 
 //#region Settings
-// GET /api/v1/settings/profile - Get user profile settings
-api getProfileSettingsApi {
-  fn: import { getProfileSettingsApiHandler } from "@src/server/operations/settings/handlers",
+query getProfileSettings {
+  fn: import { getProfileSettings } from "@src/server/operations/settingsOperations",
   entities: [User, Organization],
-  httpRoute: (GET, "/api/v1/settings/profile")
+  auth: true
 }
 
-// POST /api/v1/settings/profile - Update user profile settings
-api updateProfileSettingsApi {
-  fn: import { updateProfileSettingsApiHandler } from "@src/server/operations/settings/handlers",
+action updateProfileSettings {
+  fn: import { updateProfileSettings } from "@src/server/operations/settingsOperations",
   entities: [User, Organization],
-  httpRoute: (POST, "/api/v1/settings/profile")
+  auth: true
 }
 
-// GET /api/v1/settings/notifications - Get user notification settings
-api getNotificationSettingsApi {
-  fn: import { getNotificationSettingsApiHandler } from "@src/server/operations/settings/handlers",
+query getNotificationSettings {
+  fn: import { getNotificationSettings } from "@src/server/operations/settingsOperations",
   entities: [User],
-  httpRoute: (GET, "/api/v1/settings/notifications")
+  auth: true
 }
 
-// POST /api/v1/settings/notifications - Update user notification settings
-api updateNotificationSettingsApi {
-  fn: import { updateNotificationSettingsApiHandler } from "@src/server/operations/settings/handlers",
+action updateNotificationSettings {
+  fn: import { updateNotificationSettings } from "@src/server/operations/settingsOperations",
   entities: [User],
-  httpRoute: (POST, "/api/v1/settings/notifications")
+  auth: true
 }
 
-// GET /api/v1/settings/scanner-access - Get scanner access settings and health
-api getScannerAccessSettingsApi {
-  fn: import { getScannerAccessSettingsApiHandler } from "@src/server/operations/settings/handlers",
+query getScannerAccessSettings {
+  fn: import { getScannerAccessSettings } from "@src/server/operations/settingsOperations",
   entities: [User],
-  httpRoute: (GET, "/api/v1/settings/scanner-access")
+  auth: true
 }
 
-// POST /api/v1/settings/scanner-access - Update scanner access settings
-api updateScannerAccessSettingsApi {
-  fn: import { updateScannerAccessSettingsApiHandler } from "@src/server/operations/settings/handlers",
+action updateScannerAccessSettings {
+  fn: import { updateScannerAccessSettings } from "@src/server/operations/settingsOperations",
   entities: [User],
-  httpRoute: (POST, "/api/v1/settings/scanner-access")
+  auth: true
 }
 //#endregion Settings
 

@@ -8,6 +8,8 @@
     "build": "cd wasp-app && wasp build",
     "dev": "cd wasp-app && wasp start",
     "start": "cd wasp-app && wasp start",
+    "migrate": "cd wasp-app && wasp db migrate-dev",
+    "seed:mock-data": "node --import tsx scripts/fill-mock-data.ts",
     "wasp:up": "./scripts/wasp-dev.sh",
     "wasp:down": "./scripts/wasp-dev.sh --stop",
     "wasp:dev": "./run-wasp.sh",
@@ -15,10 +17,13 @@
     "test:targeted:pr3b4": "npx jest --runInBand --forceExit test/unit/dashboard.test.ts test/unit/dashboardTrends.test.ts test/unit/dashboardUrlState.test.ts test/unit/reports-annotations-mapping.test.ts test/unit/getAPIKeyDetails.test.ts test/unit/scannerAccessSettings.test.ts test/unit/webhookTarget.test.ts",
     "test:use-scan-polling": "cd wasp-app && npm test -- --runInBand --env=jsdom tests/useScanPolling.test.ts",
     "verify:m6:pr3b4": "npm run lint && npm run openapi:contract && npm run test:targeted:pr3b4 && npm run test:use-scan-polling && (cd wasp-app && wasp build)",
-    "test": "npm run test:wasp",
+    "test": "jest",
     "test:wasp": "cd wasp-app && wasp test client",
-    "test:e2e": "FRONTEND_URL=${FRONTEND_URL:-http://192.168.1.17:3000} playwright test -c playwright.wasp.config.ts",
+    "test:e2e": "API_URL=${API_URL:-http://127.0.0.1:3555} FRONTEND_URL=${FRONTEND_URL:-http://127.0.0.1:3000} playwright test -c playwright.wasp.config.ts",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test:coverage:gate": "COVERAGE_GATE_MODE=staged jest --coverage",
+    "test:coverage:strict": "COVERAGE_GATE_MODE=strict jest --coverage",
     "smoke:cyclonedx:m3": "node --import tsx scripts/cyclonedx-m3-smoke.ts",
     "smoke:cyclonedx:m4": "node --import tsx scripts/cyclonedx-m4-acceptance.ts",
     "retention:cyclonedx:m3": "node --import tsx scripts/cyclonedx-artifact-retention.ts"
@@ -35,7 +40,7 @@
     "lucide-react": "^1.8.0",
     "pg": "^8.20.0",
     "redis": "^5.11.0",
-    "uuid": "^9.0.1",
+    "uuid": "^14.0.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -65,8 +70,11 @@
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   },
+  "overrides": {
+    "fast-xml-parser": "5.7.2"
+  },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.14.1"
   },
   "main": "jest.config.js",
   "directories": {
