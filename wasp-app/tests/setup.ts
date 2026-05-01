@@ -9,3 +9,7 @@ dotenv.config({ path: envPath });
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/vibescan_wasp';
 }
+
+if (!process.env.JWT_SECRET) {
+  process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing';
+}

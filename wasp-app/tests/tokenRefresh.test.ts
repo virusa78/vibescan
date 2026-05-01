@@ -3,18 +3,30 @@
  * Unit tests for JWT token generation, verification, and blacklisting
  */
 
+import { beforeAll, describe, test, expect } from './testGlobals';
+
 // Mock process.env for testing
 process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing';
 process.env.REDIS_HOST = 'localhost';
 process.env.REDIS_PORT = '6379';
 
-import {
-  generateTokenPair,
-  verifyRefreshToken,
-  verifyAccessToken,
-  type TokenPayload,
-} from '../src/server/services/tokenService';
-import { TOKEN_CONFIG, isTokenExpired, getTokenExpiry } from '../src/server/config/tokens';
+let generateTokenPair: typeof import('../src/server/services/tokenService').generateTokenPair;
+let verifyRefreshToken: typeof import('../src/server/services/tokenService').verifyRefreshToken;
+let verifyAccessToken: typeof import('../src/server/services/tokenService').verifyAccessToken;
+let TOKEN_CONFIG: typeof import('../src/server/config/tokens').TOKEN_CONFIG;
+let isTokenExpired: typeof import('../src/server/config/tokens').isTokenExpired;
+let getTokenExpiry: typeof import('../src/server/config/tokens').getTokenExpiry;
+
+beforeAll(async () => {
+  const tokenService = await import('../src/server/services/tokenService');
+  const tokenConfig = await import('../src/server/config/tokens');
+  generateTokenPair = tokenService.generateTokenPair;
+  verifyRefreshToken = tokenService.verifyRefreshToken;
+  verifyAccessToken = tokenService.verifyAccessToken;
+  TOKEN_CONFIG = tokenConfig.TOKEN_CONFIG;
+  isTokenExpired = tokenConfig.isTokenExpired;
+  getTokenExpiry = tokenConfig.getTokenExpiry;
+});
 
 describe('Token Service', () => {
   describe('generateTokenPair', () => {

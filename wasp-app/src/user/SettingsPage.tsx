@@ -16,7 +16,12 @@ import {
   SelectValue,
 } from "../client/components/ui/select";
 import { useAsyncState } from "../client/hooks/useAsyncState";
-import { api } from "../client/utils/api";
+import {
+  getNotificationSettings,
+  getScannerAccessSettings,
+  updateNotificationSettings,
+  updateScannerAccessSettings,
+} from "wasp/client/operations";
 
 type NotificationSettingsResponse = {
   project_key?: string;
@@ -105,10 +110,7 @@ export default function SettingsPage() {
 
     await runNotification(
       async () => {
-        const response = await api.get("/api/v1/settings/notifications", {
-          params: { project_key: normalizedProjectKey },
-        });
-        const data = response.data as NotificationSettingsResponse;
+        const data = await getNotificationSettings({ project_key: normalizedProjectKey }) as NotificationSettingsResponse;
 
         setProjectKey(data.project_key ?? normalizedProjectKey);
         setEmailOnScanComplete(data.email_on_scan_complete ?? true);
@@ -123,8 +125,7 @@ export default function SettingsPage() {
   const loadScannerAccessSettings = useCallback(async () => {
     await runScannerAccess(
       async () => {
-        const response = await api.get("/api/v1/settings/scanner-access");
-        const data = response.data as ScannerAccessResponse;
+        const data = await getScannerAccessSettings({}) as ScannerAccessResponse;
 
         setSnykApiKey("");
         setSnykApiKeyAttached(data.snyk_api_key_attached);
@@ -175,14 +176,14 @@ export default function SettingsPage() {
 
     await runNotification(
       async () => {
-        const response = await api.post("/api/v1/settings/notifications", {
+        const response = await updateNotificationSettings({
           project_key: normalizedProjectKey,
           email_on_scan_complete: emailOnScanComplete,
           email_on_vulnerability: emailOnVulnerability,
           weekly_digest: weeklyDigest,
         });
 
-        const data = response.data as NotificationSettingsResponse;
+        const data = response as NotificationSettingsResponse;
         setProjectKey(data.project_key ?? normalizedProjectKey);
         setEmailOnScanComplete(data.email_on_scan_complete ?? emailOnScanComplete);
         setEmailOnVulnerability(data.email_on_vulnerability ?? emailOnVulnerability);
@@ -207,11 +208,11 @@ export default function SettingsPage() {
 
     await runScannerAccess(
       async () => {
-        const response = await api.post("/api/v1/settings/scanner-access", {
+        const response = await updateScannerAccessSettings({
           snyk_api_key: snykApiKey,
         });
 
-        const data = response.data as ScannerAccessResponse;
+        const data = response as ScannerAccessResponse;
         setSnykApiKey("");
         setSnykApiKeyAttached(data.snyk_api_key_attached);
         setSnykApiKeyPreview(data.snyk_api_key_preview);

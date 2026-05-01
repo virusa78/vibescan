@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { describe, expect, it, jest } from './testGlobals';
 import { parseJsonBodyWithLimit } from '../src/server/http/requestGuards';
 import { sendOperationError } from '../src/server/http/httpErrors';
 

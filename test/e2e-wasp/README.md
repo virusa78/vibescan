@@ -91,8 +91,8 @@ Reusable test helpers:
 
 ### `global-setup.ts`
 Global test initialization:
-- Verifies backend (http://192.168.1.17:3555) is running
-- Verifies frontend (http://192.168.1.17:3000) is running
+- Verifies backend (http://127.0.0.1:3555) is running
+- Verifies frontend (http://127.0.0.1:3000) is running
 - Clears browser cache and cookies
 
 ## Test Fixtures
@@ -119,10 +119,10 @@ Sample source code ZIP file with:
    cd /home/virus/vibescan/wasp-app
    PORT=3555 wasp start
    ```
-   Wait for: `✓ Server running at http://192.168.1.17:3555`
+   Wait for: `✓ Server running at http://127.0.0.1:3555`
 
 2. **Verify frontend loads:**
-   - Frontend should be available at http://192.168.1.17:3000
+   - Frontend should be available at http://127.0.0.1:3000
    - Wasp start command handles this automatically
 
 ### Run All E2E Tests
@@ -132,6 +132,9 @@ cd /home/virus/vibescan
 
 # Run all E2E tests
 npm run test:e2e
+
+# Override endpoints explicitly
+API_URL=http://127.0.0.1:3555 FRONTEND_URL=http://127.0.0.1:3000 npm run test:e2e
 
 # Run with headed browser (see UI)
 npx playwright test test/e2e-wasp --headed

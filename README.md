@@ -1,5 +1,7 @@
 # VibeScan - Dual-Scanner Vulnerability Scanning Platform
 
+See `docs/ARCHITECTURE.md` for the current repo layout and active/archive boundaries.
+
 A SaaS vulnerability scanning platform that provides dual-scanner architecture (Grype free + Codescoring/BlackDuck enterprise) with delta comparison, tiered pricing, GitHub integration, webhook notifications, and API keys for CI/CD integration.
 
 [![CI/CD](https://github.com/vibescan/vibescan/actions/workflows/ci.yml/badge.svg)](https://github.com/vibescan/vibescan/actions/workflows/ci.yml)
@@ -60,7 +62,7 @@ Data Layer
 ## Tech Stack
 
 ### Backend
-- **Runtime**: Node.js 20+ LTS with TypeScript (ES modules)
+- **Runtime**: Node.js 24.14.1+ with TypeScript (ES modules)
 - **Framework**: Wasp 0.23+ (full-stack: Node.js + React)
 - **Database**: PostgreSQL 15 with Prisma ORM (pgcrypto extension)
 - **Cache/Queues**: Redis v4 with BullMQ 5.14.0
@@ -100,6 +102,8 @@ The easiest way to start VibeScan:
 git clone https://github.com/vibescan/vibescan.git
 cd vibescan
 npm install
+cd wasp-app && npm install
+cd ..
 
 # Start everything (Docker services + frontend)
 ./run.sh
@@ -117,7 +121,7 @@ The script will:
 ### Manual Setup
 
 **Prerequisites:**
-- Node.js 24.14.1+ (use `nvm use 24`)
+- Node.js 24.14.1+ (use `nvm use 24.14.1`)
 - Docker & Docker Compose
 
 **Step 1: Start Docker services**
@@ -171,6 +175,7 @@ Then access the frontend at the URL shown in your terminal.
 1. Install dependencies:
    ```bash
    npm install
+   cd wasp-app && npm install
    ```
 
 2. Start local services:
@@ -369,7 +374,6 @@ npm run build        # Build production bundle
 npm run lint         # Run ESLint
 npm run lint:fix     # Fix linting issues
 npm run migrate      # Run database migrations
-npm run migrate:rollback  # Rollback migrations
 ```
 
 ## Deployment

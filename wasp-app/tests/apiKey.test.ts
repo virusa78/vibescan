@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it } from './testGlobals';
 import { isApiKeyToken, API_KEY_PREFIX, LEGACY_API_KEY_PREFIX } from '../src/shared/apiKey';
 
 describe('api key tokens', () => {

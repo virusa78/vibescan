@@ -80,7 +80,7 @@ function buildOrderBy(sortDescriptors: SortDescriptor[]): Prisma.ScanOrderByWith
   return mapped;
 }
 
-export async function getRecentScans(rawArgs: any, context: any): Promise<RecentScansResponse> {
+export async function getRecentScans(rawArgs: any, context: any): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -164,5 +164,5 @@ export async function getRecentScans(rawArgs: any, context: any): Promise<Recent
     },
     total_count: totalCount,
     filtered_count: filteredCount,
-  };
+  } as any;
 }

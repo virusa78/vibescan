@@ -1,4 +1,5 @@
 import { schemas } from './schemas';
+import { getBackendBaseUrl } from '../config/runtime.js';
 import {
   getRepoRoot,
   getV1FallbackSwaggerGlobsAbsolute,
@@ -38,7 +39,7 @@ const baseDefinition: OpenApiDocument = {
   },
   servers: [
     {
-      url: process.env.WASP_SERVER_URL || 'http://192.168.1.17:3555',
+      url: getBackendBaseUrl(),
       description: 'Development server',
     },
     {

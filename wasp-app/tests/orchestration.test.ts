@@ -5,7 +5,7 @@
  * For now, we skip this test and focus on unit tests.
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from './testGlobals';
 
 describe.skip('Dual-Scanner Orchestration', () => {
   it('should orchestrate scan', async () => {

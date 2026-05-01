@@ -1,4 +1,20 @@
-import { chromium, FullConfig } from "@playwright/test";
+import { FullConfig } from "@playwright/test";
+
+function getBackendBaseUrl(): string {
+  return (
+    process.env.API_URL ||
+    process.env.WASP_SERVER_URL ||
+    "http://127.0.0.1:3555"
+  ).replace(/\/$/, "");
+}
+
+function getFrontendBaseUrl(): string {
+  return (
+    process.env.FRONTEND_URL ||
+    process.env.WASP_WEB_CLIENT_URL ||
+    "http://127.0.0.1:3000"
+  ).replace(/\/$/, "");
+}
 
 /**
  * Global setup for Playwright E2E tests
@@ -12,14 +28,11 @@ async function globalSetup(config: FullConfig) {
   
   for (let i = 0; i < maxRetries; i++) {
     try {
-      const response = await fetch(
-        "http://192.168.1.17:3000/api/v1/dashboard/recent-scans?limit=1",
-        {
-          method: "GET",
-        },
-      ).catch(() => null);
+      const response = await fetch(`${getBackendBaseUrl()}/health`, {
+        method: "GET",
+      }).catch(() => null);
 
-      if (response && [200, 401, 403].includes(response.status)) {
+      if (response && response.ok) {
         isBackendReady = true;
         console.log("✓ Backend is ready");
         break;
@@ -41,15 +54,15 @@ async function globalSetup(config: FullConfig) {
   
   // Test frontend connectivity
   try {
-    const frontendUrl = process.env.FRONTEND_URL || "http://192.168.1.17:3000";
-    const response = await fetch(frontendUrl);
+    const frontendUrl = getFrontendBaseUrl();
+    const response = await fetch(`${frontendUrl}/login`);
     if (response.ok) {
       console.log(`✓ Frontend is ready at ${frontendUrl}`);
     }
   } catch (err) {
     console.warn(
       `⚠ Frontend may not be ready at ${
-        process.env.FRONTEND_URL || "http://192.168.1.17:3000"
+        getFrontendBaseUrl()
       }`
     );
   }

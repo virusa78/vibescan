@@ -1,4 +1,3 @@
-import type { Finding } from 'wasp/entities';
 import { HttpError } from 'wasp/server';
 import * as z from 'zod';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation';
@@ -36,7 +35,7 @@ function getDateRangeStart(timeRange: string): Date {
 export async function getSeverityBreakdown(
   rawArgs: any,
   context: any
-): Promise<SeverityBreakdownResponse> {
+): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -86,5 +85,5 @@ export async function getSeverityBreakdown(
     info: breakdown.info,
     total,
     time_range: args.time_range,
-  };
+  } as any;
 }

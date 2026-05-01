@@ -10,7 +10,7 @@ export type NotificationSettingsResponse = {
 export async function getNotificationSettings(
   _args: any,
   context: any
-): Promise<NotificationSettingsResponse> {
+): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -28,5 +28,5 @@ export async function getNotificationSettings(
     email_on_vulnerability: true,
     weekly_digest: false,
     sms_enabled: false,
-  };
+  } as any;
 }

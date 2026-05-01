@@ -3,16 +3,122 @@
  * Unit and integration tests for quota consumption, refunds, and auditability
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { prisma } from 'wasp/server';
-import { quotaService, QuotaService } from '../services/quotaService';
-import { HttpError } from 'wasp/server';
+import { describe, it, expect, beforeEach, afterEach, jest } from './testGlobals';
+
+jest.mock('wasp/server', async () => import('../../test/mocks/wasp-server'));
+
+import { prisma, HttpError } from 'wasp/server';
+import { quotaService, QuotaService } from '../src/server/services/quotaService';
+
+type TestUser = {
+  id: string;
+  email: string;
+  plan: string;
+  monthlyQuotaLimit: number;
+  monthlyQuotaUsed: number;
+  quotaResetDate: Date;
+};
+
+let users: TestUser[] = [];
+let ledgerEntries: Array<{
+  id: string;
+  userId: string;
+  action: string;
+  amount: number;
+  reason?: string;
+  balanceBefore: number;
+  balanceAfter: number;
+  relatedScanId?: string;
+  createdAt: Date;
+}> = [];
+let transactionChain: Promise<void> = Promise.resolve();
+
+function installPrismaMocks() {
+  prisma.user.create.mockImplementation(async ({ data }: any) => {
+    const user: TestUser = {
+      id: `user-${users.length + 1}`,
+      email: data.email,
+      plan: data.plan,
+      monthlyQuotaLimit: data.monthlyQuotaLimit,
+      monthlyQuotaUsed: data.monthlyQuotaUsed,
+      quotaResetDate: data.quotaResetDate,
+    };
+    users.push(user);
+    return user;
+  });
+
+  prisma.user.findUnique.mockImplementation(async ({ where }: any) => {
+    return users.find((user) => user.id === where.id) ?? null;
+  });
+
+  prisma.user.update.mockImplementation(async ({ where, data }: any) => {
+    const index = users.findIndex((user) => user.id === where.id);
+    if (index === -1) {
+      return null;
+    }
+    users[index] = { ...users[index], ...data };
+    return users[index];
+  });
+
+  prisma.user.delete.mockImplementation(async ({ where }: any) => {
+    users = users.filter((user) => user.id !== where.id);
+    return null;
+  });
+
+  prisma.quotaLedger.create.mockImplementation(async ({ data }: any) => {
+    const entry = {
+      id: `ledger-${ledgerEntries.length + 1}`,
+      userId: data.userId,
+      action: data.action,
+      amount: data.amount,
+      reason: data.reason,
+      balanceBefore: data.balanceBefore,
+      balanceAfter: data.balanceAfter,
+      relatedScanId: data.relatedScanId,
+      createdAt: new Date(),
+    };
+    ledgerEntries.unshift(entry);
+    return entry;
+  });
+
+  prisma.quotaLedger.findMany.mockImplementation(async ({ where, take }: any) => {
+    const entries = ledgerEntries.filter((entry) => !where?.userId || entry.userId === where.userId);
+    return typeof take === 'number' ? entries.slice(0, take) : entries;
+  });
+
+  prisma.quotaLedger.findFirst.mockImplementation(async ({ where }: any) => {
+    return (
+      ledgerEntries.find((entry) => {
+        if (where?.userId && entry.userId !== where.userId) return false;
+        if (where?.action && entry.action !== where.action) return false;
+        return true;
+      }) ?? null
+    );
+  });
+
+  prisma.quotaLedger.deleteMany.mockImplementation(async ({ where }: any) => {
+    ledgerEntries = ledgerEntries.filter((entry) => entry.userId !== where.userId);
+    return null;
+  });
+
+  prisma.$transaction.mockImplementation(async (callback: any) => {
+    const resultPromise = transactionChain.then(() => callback(prisma));
+    transactionChain = resultPromise.then(() => undefined, () => undefined);
+    return resultPromise;
+  });
+}
 
 describe('QuotaService', () => {
   let testUserId: string;
   let testUser: any;
 
   beforeEach(async () => {
+    users = [];
+    ledgerEntries = [];
+    transactionChain = Promise.resolve();
+    jest.clearAllMocks();
+    installPrismaMocks();
+
     // Create a test user for each test
     testUser = await prisma.user.create({
       data: {

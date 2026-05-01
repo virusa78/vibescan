@@ -149,11 +149,6 @@ OPENSAAS_PLATFORM_OWNED=auth,api_keys,billing,settings
 npm run migrate
 ```
 
-### Rollback Migration
-```bash
-npm run migrate:rollback
-```
-
 ### View Database
 ```bash
 # Connect to PostgreSQL

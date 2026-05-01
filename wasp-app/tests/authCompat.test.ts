@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { describe, expect, it, jest } from './testGlobals';
 import { emailSignupCompatApi } from '../src/server/authCompat';
 
 describe('auth compat api', () => {

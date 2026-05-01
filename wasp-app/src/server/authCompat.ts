@@ -1,23 +1,21 @@
 import type { Request, Response } from "express";
 import { parseJsonBodyWithLimit, enforceRateLimit, getRateLimitKey } from "./http/requestGuards";
 import { sendOperationError } from "./http/httpErrors";
+import { getBackendBaseUrl } from "./config/runtime.js";
 
-function getBackendBaseUrl(request: Request): string {
-  if (process.env.WASP_SERVER_URL) {
-    return process.env.WASP_SERVER_URL.replace(/\/$/, "");
-  }
-
+function resolveBackendBaseUrl(request: Request): string {
+  const configuredBaseUrl = getBackendBaseUrl();
   const forwardedProto = request.headers["x-forwarded-proto"];
   const protocol = Array.isArray(forwardedProto)
     ? forwardedProto[0]
     : forwardedProto?.split(",")[0] ?? request.protocol;
   const host = request.get("host");
 
-  if (host) {
+  if (host && configuredBaseUrl === "http://127.0.0.1:3555") {
     return `${protocol}://${host}`.replace(/\/$/, "");
   }
 
-  return `http://127.0.0.1:${process.env.PORT || "3555"}`;
+  return configuredBaseUrl;
 }
 
 async function proxyAuthRequest(
@@ -33,7 +31,7 @@ async function proxyAuthRequest(
       windowSeconds: 60,
     });
 
-    const upstream = await fetch(`${getBackendBaseUrl(request)}${targetPath}`, {
+    const upstream = await fetch(`${resolveBackendBaseUrl(request)}${targetPath}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

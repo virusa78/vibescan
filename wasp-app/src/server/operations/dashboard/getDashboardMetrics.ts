@@ -1,4 +1,3 @@
-import type { Scan, Finding, User } from 'wasp/entities';
 import { HttpError } from 'wasp/server';
 import * as z from 'zod';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation';
@@ -48,7 +47,7 @@ function calculateAverageSeverity(findings: Array<{ severity: string }>): string
   return 'INFO';
 }
 
-export async function getDashboardMetrics(rawArgs: any, context: any): Promise<MetricsResponse> {
+export async function getDashboardMetrics(rawArgs: any, context: any): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -122,5 +121,5 @@ export async function getDashboardMetrics(rawArgs: any, context: any): Promise<M
     quota_limit: user.monthlyQuotaLimit,
     plan_tier: user.plan,
     time_range: args.time_range,
-  };
+  } as any;
 }

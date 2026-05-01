@@ -45,10 +45,9 @@ kubectl apply -f free-worker-deployment.yaml
 
 # Enterprise Scanner Worker
 kubectl apply -f enterprise-worker-deployment.yaml
-
-# Auth Service
-kubectl apply -f auth-service-deployment.yaml
 ```
+
+> `auth-service-deployment.yaml` and `scan-orchestrator-deployment.yaml` are legacy snapshots kept for reference only. The active Wasp-era deployment surface is `api + free-worker + enterprise-worker`.
 
 ### 5. Apply Network Policies
 ```bash

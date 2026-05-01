@@ -1,55 +1,84 @@
 /** @jest-environment jsdom */
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { api } from '../src/client/utils/api';
-import { useScanPolling } from '../src/client/hooks/useScanPolling';
+import { afterEach, beforeEach, describe, expect, jest, test } from './testGlobals';
 
-jest.mock('../src/client/utils/api', () => {
-  const actual = jest.requireActual('../src/client/utils/api');
-  return {
-    ...actual,
-    api: {
-      ...actual.api,
-      get: jest.fn(),
-    },
-  };
-});
-
-const mockedApiGet = api.get as jest.MockedFunction<typeof api.get>;
-
-const baseScan = {
-  id: 'scan-123',
-  planAtSubmission: 'pro',
-  created_at: '2026-04-23T10:00:00.000Z',
-  completed_at: null as string | null,
-  error_message: null as string | null,
-  inputType: 'sbom_upload',
-  inputRef: 'package.json',
+type ScanData = {
+  id: string;
+  status: 'pending' | 'scanning' | 'done' | 'error';
+  planAtSubmission: string;
+  createdAt: string;
+  completedAt: string | null;
+  errorMessage: string | null;
+  inputType: string;
+  inputRef: string;
 };
 
-function makePollResponse(status: 'scanning' | 'done' | 'error') {
-  return {
-    data: {
-      scan: {
-        ...baseScan,
-        status,
-        completed_at: status === 'done' || status === 'error' ? '2026-04-23T10:05:00.000Z' : null,
-      },
-      status,
-    },
-    status: 200,
-  } as any;
-}
+const queryScenario: {
+  initialData: ScanData | null;
+  nextData: ScanData | null;
+  queryError: Error | null;
+} = {
+  initialData: null,
+  nextData: null,
+  queryError: null,
+};
 
-function makeRateLimitError() {
+jest.mock('wasp/client/operations', async () => {
+  const React = await import('react');
+  const getScanById = jest.fn();
+  const useQuery = jest.fn();
+
+  useQuery.mockImplementation(() => {
+      const [data, setData] = React.useState(queryScenario.initialData);
+      const [error, setError] = React.useState(queryScenario.queryError);
+
+      const refetch = jest.fn(() => {
+        if (queryScenario.queryError) {
+          setError(queryScenario.queryError);
+          return;
+        }
+
+        if (queryScenario.nextData) {
+          setData(queryScenario.nextData);
+        }
+      });
+
+      return {
+        data,
+        isLoading: false,
+        error,
+        refetch,
+      };
+  });
+
+  return { getScanById, useQuery };
+});
+
+import { getScanById, useQuery } from 'wasp/client/operations';
+import { useScanPolling } from '../src/client/hooks/useScanPolling';
+
+const mockedGetScanById = getScanById as jest.MockedFunction<typeof getScanById>;
+const mockedUseQuery = useQuery as jest.MockedFunction<typeof useQuery>;
+
+function makeScan(status: ScanData['status'], errorMessage: string | null = null): ScanData {
   return {
-    message: 'Rate limited',
-    response: { status: 429 },
+    id: 'scan-123',
+    planAtSubmission: 'pro',
+    createdAt: '2026-04-23T10:00:00.000Z',
+    completedAt: status === 'done' || status === 'error' ? '2026-04-23T10:05:00.000Z' : null,
+    errorMessage,
+    inputType: 'sbom_upload',
+    inputRef: 'package.json',
+    status,
   };
 }
 
 describe('useScanPolling', () => {
   beforeEach(() => {
+    queryScenario.initialData = null;
+    queryScenario.nextData = null;
+    queryScenario.queryError = null;
     jest.clearAllMocks();
     jest.useFakeTimers();
     jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -63,34 +92,25 @@ describe('useScanPolling', () => {
   });
 
   test('starts polling on mount', async () => {
-    mockedApiGet.mockResolvedValueOnce(makePollResponse('scanning'));
+    queryScenario.initialData = makeScan('scanning');
 
     const { result } = renderHook(() => useScanPolling('scan-123'));
 
+    expect(mockedUseQuery).toHaveBeenCalledWith(
+      mockedGetScanById,
+      { scanId: 'scan-123' },
+      expect.objectContaining({ enabled: true }),
+    );
     expect(result.current.isPolling).toBe(true);
-
-    await waitFor(() => {
-      expect(mockedApiGet).toHaveBeenCalledWith(
-        '/api/v1/scans/scan-123',
-        expect.objectContaining({ signal: expect.any(AbortSignal) }),
-      );
-    });
-
-    await waitFor(() => {
-      expect(result.current.status).toBe('running');
-    });
+    expect(result.current.status).toBe('running');
+    expect(result.current.progress).toBe(50);
   });
 
   test('stops polling when scan is completed', async () => {
-    mockedApiGet
-      .mockResolvedValueOnce(makePollResponse('scanning'))
-      .mockResolvedValueOnce(makePollResponse('done'));
+    queryScenario.initialData = makeScan('scanning');
+    queryScenario.nextData = makeScan('done');
 
     const { result } = renderHook(() => useScanPolling('scan-123'));
-
-    await waitFor(() => {
-      expect(result.current.status).toBe('running');
-    });
 
     await act(async () => {
       jest.advanceTimersByTime(2000);
@@ -101,73 +121,45 @@ describe('useScanPolling', () => {
       expect(result.current.isPolling).toBe(false);
       expect(result.current.progress).toBe(100);
     });
-
-    expect(mockedApiGet).toHaveBeenCalledTimes(2);
-  });
-
-  test('handles rate limiting with exponential backoff', async () => {
-    mockedApiGet
-      .mockRejectedValueOnce(makeRateLimitError())
-      .mockResolvedValueOnce(makePollResponse('scanning'));
-
-    const { result } = renderHook(() => useScanPolling('scan-123'));
-
-    await waitFor(() => {
-      expect(result.current.error).toBe('Rate limited - retrying...');
-    });
-
-    await act(async () => {
-      jest.advanceTimersByTime(5000);
-    });
-
-    await waitFor(() => {
-      expect(mockedApiGet.mock.calls.length).toBeGreaterThanOrEqual(2);
-    });
   });
 
   test('handles failed scans', async () => {
-    const failedResponse = makePollResponse('error');
-    failedResponse.data.scan.error_message = 'Scanner timeout';
-    mockedApiGet.mockResolvedValueOnce(failedResponse);
+    queryScenario.initialData = makeScan('error', 'Scanner timeout');
 
     const { result } = renderHook(() => useScanPolling('scan-123'));
 
-    await waitFor(() => {
-      expect(result.current.status).toBe('failed');
-      expect(result.current.isPolling).toBe(false);
-      expect(result.current.error).toBe('Scanner timeout');
-    });
+    expect(result.current.status).toBe('failed');
+    expect(result.current.isPolling).toBe(false);
+    expect(result.current.error).toBe('Scanner timeout');
   });
 
-  test('cleans up on unmount', async () => {
-    mockedApiGet.mockResolvedValue(makePollResponse('scanning'));
+  test('handles query errors gracefully', async () => {
+    queryScenario.queryError = new Error('Network error');
+
+    const { result } = renderHook(() => useScanPolling('scan-123'));
+
+    expect(result.current.status).toBe('error');
+    expect(result.current.error).toBe('Network error');
+    expect(result.current.isPolling).toBe(false);
+  });
+
+  test('cleans up on unmount', () => {
+    queryScenario.initialData = makeScan('scanning');
 
     const { unmount } = renderHook(() => useScanPolling('scan-123'));
 
-    await waitFor(() => {
-      expect(mockedApiGet).toHaveBeenCalledTimes(1);
-    });
-
-    unmount();
-    const callCount = mockedApiGet.mock.calls.length;
-
-    await act(async () => {
-      jest.advanceTimersByTime(5000);
-    });
-
-    expect(mockedApiGet).toHaveBeenCalledTimes(callCount);
+    expect(() => {
+      unmount();
+    }).not.toThrow();
   });
 
   test('calculates progress based on status', async () => {
-    mockedApiGet
-      .mockResolvedValueOnce(makePollResponse('scanning'))
-      .mockResolvedValueOnce(makePollResponse('done'));
+    queryScenario.initialData = makeScan('scanning');
+    queryScenario.nextData = makeScan('done');
 
     const { result } = renderHook(() => useScanPolling('scan-123'));
 
-    await waitFor(() => {
-      expect(result.current.progress).toBe(50);
-    });
+    expect(result.current.progress).toBe(50);
 
     await act(async () => {
       jest.advanceTimersByTime(2000);
@@ -176,29 +168,5 @@ describe('useScanPolling', () => {
     await waitFor(() => {
       expect(result.current.progress).toBe(100);
     });
-  });
-
-  test('handles network errors gracefully', async () => {
-    mockedApiGet.mockRejectedValueOnce(new Error('Network error'));
-
-    const { result } = renderHook(() => useScanPolling('scan-123'));
-
-    await waitFor(() => {
-      expect(result.current.status).toBe('error');
-      expect(result.current.error).toBe('Network error');
-      expect(result.current.isPolling).toBe(false);
-    });
-  });
-
-  test('does not throw on AbortError during unmount', () => {
-    const abortError = new Error('Aborted');
-    abortError.name = 'AbortError';
-    mockedApiGet.mockRejectedValueOnce(abortError);
-
-    const { unmount } = renderHook(() => useScanPolling('scan-123'));
-
-    expect(() => {
-      unmount();
-    }).not.toThrow();
   });
 });

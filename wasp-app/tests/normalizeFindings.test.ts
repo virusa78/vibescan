@@ -2,7 +2,7 @@
  * Unit tests for finding normalization
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from './testGlobals';
 import {
   normalizeGrypeFindings,
   normalizeCodescoringFindings,

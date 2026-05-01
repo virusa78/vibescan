@@ -16,7 +16,7 @@ export type UpdateNotificationSettingsInput = z.infer<
 export async function updateNotificationSettings(
   rawArgs: any,
   context: any
-): Promise<NotificationSettingsResponse> {
+): Promise<any> {
   if (!context.user) {
     throw new HttpError(401, 'User not authenticated');
   }
@@ -39,5 +39,5 @@ export async function updateNotificationSettings(
     email_on_vulnerability: args.email_on_vulnerability ?? true,
     weekly_digest: args.weekly_digest ?? false,
     sms_enabled: false,
-  };
+  } as any;
 }

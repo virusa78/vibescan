@@ -1,10 +1,11 @@
 import { wasp } from "wasp/client/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, loadEnv } from "vite";
+import { getBackendBaseUrl } from "./src/server/config/runtime.js";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const proxyTarget = env.VITE_API_PROXY_TARGET || env.WASP_SERVER_URL || "http://192.168.1.17:3555";
+  const proxyTarget = getBackendBaseUrl(env);
 
   return {
     plugins: [wasp(), tailwindcss()],

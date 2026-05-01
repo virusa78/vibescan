@@ -8,10 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '../client/components/u
 import { Input } from '../client/components/ui/input';
 import { Skeleton } from '../client/components/ui/skeleton';
 import {
+  generateCveRemediation,
   generateReportPDF,
   getCIDecision,
   getReport,
   getReportSummary,
+  upsertFindingAnnotation,
 } from 'wasp/client/operations';
 import {
   Select,
@@ -25,7 +27,6 @@ import { toast } from '../client/hooks/use-toast';
 import { isEditableTarget } from '../client/utils/keyboard';
 import { buildPatchSnippet } from './patchSnippet';
 import { resolveCveId, buildGitHubAdvisoryUrl, buildNvdUrl, buildPackageUrl } from './linkHelpers';
-import { api } from '../client/utils/api';
 
 type SeveritySummary = {
   critical?: number;
@@ -712,11 +713,12 @@ export default function ReportsPage() {
                               payload.expiresAt = new Date(`${draft.expiresAt}T23:59:59.000Z`).toISOString();
                             }
 
-                            const response = await api.post(
-                              `/api/v1/reports/${scanId}/findings/${findingId}/annotation`,
-                              payload,
-                            );
-                            const annotation = response.data?.annotation;
+                            const response = await upsertFindingAnnotation({
+                              scanId,
+                              findingId,
+                              ...payload,
+                            });
+                            const annotation = response.annotation;
                             if (annotation) {
                               updateFindingAnnotationInState(findingId, annotation);
                               toast({ title: 'Annotation saved' });
@@ -760,14 +762,16 @@ export default function ReportsPage() {
                           if (!scanId || !findingId) return;
                           setRemediationLoading((prev) => ({ ...prev, [fid]: true }));
                           try {
-                            const res = await api.post(
-                              `/api/v1/reports/${scanId}/findings/${findingId}/remediation`,
-                              { promptType: 'quick_fix' },
-                            );
-                            const data = res.data;
+                            const requestKey = `${scanId}:${findingId}:${Date.now()}`;
+                            await generateCveRemediation({
+                              scanId,
+                              findingId,
+                              requestKey,
+                              promptType: 'quick_fix',
+                            });
                             setRemediationTimestamp((prev) => ({
                               ...prev,
-                              [fid]: data.createdAt ?? new Date().toISOString(),
+                              [fid]: new Date().toISOString(),
                             }));
                           } catch (generationError) {
                             console.error(generationError);

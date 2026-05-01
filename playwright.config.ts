@@ -9,7 +9,7 @@ export default defineConfig({
   reporter: 'html',
   // globalSetup: './test/e2e/global-setup.ts', // Disabled - no tests in test/e2e
   use: {
-    baseURL: process.env.FRONTEND_URL || 'http://192.168.1.17:3000',
+    baseURL: process.env.FRONTEND_URL || 'http://127.0.0.1:3000',
     screenshot: 'on',
   },
 

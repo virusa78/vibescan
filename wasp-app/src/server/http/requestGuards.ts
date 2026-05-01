@@ -1,3 +1,5 @@
+import { getRedisConnectionConfig } from '../config/runtime.js';
+
 type RedisClient = {
   connect(): Promise<void>;
   quit(): Promise<void>;
@@ -44,10 +46,11 @@ export function parseJsonBodyWithLimit<T extends Record<string, unknown>>(
 
 async function createRedisClient(): Promise<RedisClient> {
   const redisModule = await import('redis');
+  const redisConfig = getRedisConnectionConfig();
   return redisModule.createClient({
     socket: {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
+      host: redisConfig.host,
+      port: redisConfig.port,
     },
   }) as unknown as RedisClient;
 }
