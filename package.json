@@ -9,7 +9,7 @@
     "dev": "cd wasp-app && wasp start",
     "start": "cd wasp-app && wasp start",
     "migrate": "cd wasp-app && wasp db migrate-dev",
-    "seed:mock-data": "node --import tsx scripts/fill-mock-data.ts",
+    "seed:mock-data": "DATABASE_URL=${DATABASE_URL:-postgresql://vibescan:vibescan@localhost:5432/vibescan} node --import tsx scripts/fill-mock-data.ts",
     "wasp:up": "./scripts/wasp-dev.sh",
     "wasp:down": "./scripts/wasp-dev.sh --stop",
     "wasp:dev": "./run-wasp.sh",
@@ -35,6 +35,7 @@
   "dependencies": {
     "@apidevtools/json-schema-ref-parser": "^15.3.5",
     "@aws-sdk/s3-request-presigner": "^3.1024.0",
+    "@prisma/client": "^5.19.1",
     "ajv": "8.18.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.73.0",

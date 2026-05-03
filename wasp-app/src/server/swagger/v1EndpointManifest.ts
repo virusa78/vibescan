@@ -19,6 +19,11 @@ function detectRepoRootFromCwd(): string {
   if (fs.existsSync(path.resolve(cwd, 'main.wasp'))) {
     return path.resolve(cwd, '..');
   }
+  for (let dir = cwd; dir !== path.dirname(dir); dir = path.dirname(dir)) {
+    if (fs.existsSync(path.resolve(dir, 'wasp-app/main.wasp'))) {
+      return dir;
+    }
+  }
   return cwd;
 }
 
