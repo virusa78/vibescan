@@ -1,11 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
-import bcrypt from 'bcrypt';
 import { PrismaClient } from '../wasp-app/node_modules/@prisma/client';
+import { hashPassword } from '../wasp-app/node_modules/@wasp.sh/lib-auth/dist/node.js';
 import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 
-const BCRYPT_ROUNDS = 10;
 const NUM_MONTHS = Number(process.env.DEMO_MONTHS || 6);
 const RESET_DEMO_DATA = (process.env.RESET_DEMO_DATA || 'true') === 'true';
 const CVE_PER_SCAN_MIN = 5;
@@ -137,29 +136,45 @@ async function main() {
   console.log('Starting mock data generation (Prisma)...\n');
 
   for (const ud of DEMO_USERS) {
-    const passwordHash = await bcrypt.hash(ud.password, BCRYPT_ROUNDS);
-
     const existing = await prisma.user.findUnique({ where: { email: ud.email } });
 
     if (existing) {
       await prisma.user.update({
         where: { id: existing.id },
-        data: { passwordHash, plan: ud.plan, region: ud.region, displayName: ud.name, monthlyQuotaLimit: ud.quotaLimit },
+        data: { plan: ud.plan, region: ud.region, displayName: ud.name, monthlyQuotaLimit: ud.quotaLimit },
       });
       console.log(`Upserted user: ${ud.email} (${ud.plan})`);
       continue;
     }
 
+    const hashedPassword = await hashPassword(ud.password);
+    const providerData = JSON.stringify({
+      hashedPassword,
+      isEmailVerified: true,
+      emailVerificationSentAt: null,
+      passwordResetSentAt: null,
+    });
+
     await prisma.user.create({
       data: {
         email: ud.email,
-        passwordHash,
         displayName: ud.name,
         username: ud.email.split('@')[0],
         plan: ud.plan,
         region: ud.region,
         monthlyQuotaLimit: ud.quotaLimit,
         subscriptionStatus: 'active',
+        auth: {
+          create: {
+            identities: {
+              create: {
+                providerName: 'email',
+                providerUserId: ud.email,
+                providerData,
+              },
+            },
+          },
+        },
       },
     });
     console.log(`Created user: ${ud.email} (${ud.plan})`);
