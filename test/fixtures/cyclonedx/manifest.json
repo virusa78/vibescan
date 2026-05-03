@@ -1,0 +1,36 @@
+[
+  {
+    "id": "free-basic-1-4",
+    "scannerId": "free",
+    "specVersion": "1.4",
+    "filePath": "test/fixtures/cyclonedx/free-basic-1.4.json",
+    "expected": {
+      "status": "ingested",
+      "componentCount": 1,
+      "vulnerabilityCount": 1,
+      "severityCounts": { "high": 1 }
+    }
+  },
+  {
+    "id": "enterprise-1-6-unknowns",
+    "scannerId": "enterprise",
+    "specVersion": "1.6",
+    "filePath": "test/fixtures/cyclonedx/enterprise-1.6-unknowns.json",
+    "expected": {
+      "status": "ingested",
+      "componentCount": 1,
+      "vulnerabilityCount": 1,
+      "severityCounts": { "critical": 1 }
+    }
+  },
+  {
+    "id": "invalid-missing-bomformat",
+    "scannerId": "free",
+    "specVersion": "unknown",
+    "filePath": "test/fixtures/cyclonedx/invalid-missing-bomformat.json",
+    "expected": {
+      "status": "rejected",
+      "errorType": "validation_error"
+    }
+  }
+]

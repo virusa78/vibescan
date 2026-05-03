@@ -1,0 +1,701 @@
+app OpenSaaS {
+  wasp: {
+    version: "^0.23.0"
+  },
+
+  title: "VibeScan",
+
+  head: [
+    "<link rel='icon' href='/favicon.ico' />",
+
+    "<meta name='description' content='VibeScan: vulnerability scanning SaaS with dashboard, GitHub scans, and plan-based reporting.' />",
+    "<meta name='author' content='VibeScan' />",
+    "<meta name='keywords' content='vulnerability scanning, sbom, github security, devsecops, saas' />",
+
+    "<meta property='og:type' content='website' />",
+    "<meta property='og:title' content='VibeScan' />",
+    "<meta property='og:site_name' content='VibeScan' />",
+    "<meta property='og:url' content='https://vibescan.app' />",
+    "<meta property='og:description' content='Run GitHub scans, monitor scan status, and manage security workflows from one dashboard.' />",
+    "<meta property='og:image' content='https://vibescan.app/public-banner.webp' />",
+    "<meta name='twitter:image' content='https://vibescan.app/public-banner.webp' />",
+    "<meta name='twitter:image:width' content='800' />",
+    "<meta name='twitter:image:height' content='400' />",
+    "<meta name='twitter:card' content='summary_large_image' />",
+    // TODO: You can put your Plausible analytics scripts below (https://docs.opensaas.sh/guides/analytics/):
+    // NOTE: Plausible does not use Cookies, so you can simply add the scripts here.
+    // Google, on the other hand, does, so you must instead add the script dynamically
+    // via the Cookie Consent component after the user clicks the "Accept" cookies button.
+    "<script async data-domain='<your-site-id>' src='https://plausible.io/js/script.js'></script>",  // for production
+    "<script async data-domain='<your-site-id>' src='https://plausible.io/js/script.local.js'></script>",  // for development
+  ],
+
+  // 🔐 Auth out of the box! https://wasp.sh/docs/auth/overview
+  auth: {
+    userEntity: User,
+    methods: {
+      // NOTE: If you decide to not use email auth, make sure to also delete the related routes and pages below.
+      //   (RequestPasswordReset(Route|Page), PasswordReset(Route|Page), EmailVerification(Route|Page))
+        email: {
+          fromField: {
+            name: "VibeScan",
+            email: "noreply@vibescan.app"
+          },
+          emailVerification: {
+            clientRoute: EmailVerificationRoute,
+            getEmailContentFn: import { getVerificationEmailContent } from "@src/auth/email-and-pass/emails",
+          },
+          passwordReset: {
+            clientRoute: PasswordResetRoute,
+            getEmailContentFn: import { getPasswordResetEmailContent } from "@src/auth/email-and-pass/emails",
+          },
+        userSignupFields: import { getEmailUserFields } from "@src/auth/userSignupFields",
+      },
+      // Uncomment to enable Google Auth (check https://wasp.sh/docs/auth/social-auth/google for setup instructions):
+      // google: { // Guide for setting up Auth via Google
+      //   userSignupFields: import { getGoogleUserFields } from "@src/auth/userSignupFields",
+      //   configFn: import { getGoogleAuthConfig } from "@src/auth/userSignupFields",
+      // },
+      // Uncomment to enable GitHub Auth (check https://wasp.sh/docs/auth/social-auth/github for setup instructions):
+      // gitHub: {
+      //   userSignupFields: import { getGitHubUserFields } from "@src/auth/userSignupFields",
+      //   configFn: import { getGitHubAuthConfig } from "@src/auth/userSignupFields",
+      // },
+      // Uncomment to enable Discord Auth (check https://wasp.sh/docs/auth/social-auth/discord for setup instructions):
+      // discord: {
+      //   userSignupFields: import { getDiscordUserFields } from "@src/auth/userSignupFields",
+      //   configFn: import { getDiscordAuthConfig } from "@src/auth/userSignupFields"
+      // }
+    },
+    onAuthFailedRedirectTo: "/login",
+    onAuthSucceededRedirectTo: "/dashboard",
+  },
+
+  db: {
+    // Run `wasp db seed` to seed the database with the seed functions below:
+    seeds: [
+      // Populates the database with a bunch of fake users to work with during development.
+      import { seedMockUsers } from "@src/server/scripts/dbSeeds",
+    ]
+  },
+
+  client: {
+    rootComponent: import App from "@src/client/App",
+  },
+
+  server: {
+    envValidationSchema: import { serverEnvValidationSchema } from "@src/env",
+  },
+
+  emailSender: {
+    provider: SendGrid,
+    defaultFrom: {
+      name: "VibeScan",
+      // When using SendGrid, you must use the same email address that you configured your account to send out emails with!
+      email: "noreply@vibescan.app"
+    },
+  },
+}
+
+route LandingPageRoute { path: "/landing", to: LandingPage }
+page LandingPage {
+  component: import LandingPage from "@src/landing-page/LandingPage"
+}
+
+route RootRoute { path: "/", to: DashboardPage }
+route DashboardRoute { path: "/dashboard", to: DashboardPage }
+route OnboardingRoute { path: "/onboarding", to: OnboardingPage }
+page DashboardPage {
+  authRequired: true,
+  component: import DashboardPage from "@src/dashboard/DashboardPage"
+}
+page OnboardingPage {
+  authRequired: true,
+  component: import OnboardingPage from "@src/onboarding/OnboardingPage"
+}
+
+//#region Auth Pages
+route LoginRoute { path: "/login", to: LoginPage }
+page LoginPage {
+  component: import Login from "@src/auth/LoginPage"
+}
+
+route SignupRoute { path: "/signup", to: SignupPage }
+page SignupPage {
+  component: import { Signup } from "@src/auth/SignupPage"
+}
+
+route RequestPasswordResetRoute { path: "/request-password-reset", to: RequestPasswordResetPage }
+page RequestPasswordResetPage {
+  component: import { RequestPasswordResetPage } from "@src/auth/email-and-pass/RequestPasswordResetPage",
+}
+
+route PasswordResetRoute { path: "/password-reset", to: PasswordResetPage }
+page PasswordResetPage {
+  component: import { PasswordResetPage } from "@src/auth/email-and-pass/PasswordResetPage",
+}
+
+route EmailVerificationRoute { path: "/email-verification", to: EmailVerificationPage }
+page EmailVerificationPage {
+  component: import { EmailVerificationPage } from "@src/auth/email-and-pass/EmailVerificationPage",
+}
+//#endregion
+
+//#region User
+route AccountRoute { path: "/account", to: AccountPage }
+page AccountPage {
+  authRequired: true,
+  component: import Account from "@src/user/AccountPage"
+}
+
+route SettingsRoute { path: "/settings", to: SettingsPage }
+page SettingsPage {
+  authRequired: true,
+  component: import SettingsPage from "@src/user/SettingsPage"
+}
+
+route ApiKeysRoute { path: "/api-keys", to: ApiKeysPage }
+page ApiKeysPage {
+  authRequired: true,
+  component: import ApiKeysPage from "@src/apiKeys/ApiKeysPage"
+}
+
+route ReportsRoute { path: "/reports/:scanId", to: ReportsPage }
+page ReportsPage {
+  authRequired: true,
+  component: import ReportsPage from "@src/reports/ReportsPage"
+}
+
+route ScanDetailsRoute { path: "/scans/:scanId", to: ScanDetailsPage }
+page ScanDetailsPage {
+  authRequired: true,
+  component: import { ScanDetailsPage } from "@src/dashboard/ScanDetailsPage"
+}
+
+route WebhooksRoute { path: "/webhooks", to: WebhooksPage }
+page WebhooksPage {
+  authRequired: true,
+  component: import WebhooksPage from "@src/webhooks/WebhooksPage"
+}
+
+query getPaginatedUsers {
+  fn: import { getPaginatedUsers } from "@src/user/operations",
+  entities: [User],
+  auth: true
+}
+
+action updateIsUserAdminById {
+  fn: import { updateIsUserAdminById } from "@src/user/operations",
+  entities: [User],
+  auth: true
+}
+
+action updateUserSettings {
+  fn: import { updateUserSettings } from "@src/user/operations",
+  entities: [User],
+  auth: true
+}
+
+// Refresh Token Action - Implements token rotation and new token pair generation
+action refreshToken {
+  fn: import { refreshToken } from "@src/server/operations/auth/refreshToken",
+  entities: [],
+  auth: false
+}
+
+// Auth compatibility for legacy email form endpoints used by current UI components.
+api emailSignupCompatApi {
+  fn: import { emailSignupCompatApi } from "@src/server/authCompat",
+  entities: [User],
+  httpRoute: (POST, "/auth/email/signup")
+}
+
+api emailLoginCompatApi {
+  fn: import { emailLoginCompatApi } from "@src/server/authCompat",
+  entities: [User],
+  httpRoute: (POST, "/auth/email/login")
+}
+
+action generateApiKey {
+  fn: import { generateApiKey } from "@src/apiKeys/operations",
+  entities: [User, ApiKey],
+  auth: true
+}
+
+query listApiKeys {
+  fn: import { listApiKeys } from "@src/apiKeys/operations",
+  entities: [User, ApiKey],
+  auth: true
+}
+
+action revokeApiKey {
+  fn: import { revokeApiKey } from "@src/apiKeys/operations",
+  entities: [User, ApiKey],
+  auth: true
+}
+
+query getAPIKeyDetails {
+  fn: import { getAPIKeyDetails } from "@src/server/operations/apiKeyOperations",
+  entities: [User, ApiKey],
+  auth: true
+}
+
+//#endregion
+
+//#region Scans & Core Features
+route NewScanRoute { path: "/new-scan", to: NewScanPage }
+page NewScanPage {
+  authRequired: true,
+  component: import NewScanPage from "@src/scans/NewScanPage"
+}
+
+query getScans {
+  fn: import { getScans } from "@src/scans/operations",
+  entities: [User, Scan],
+  auth: true
+}
+
+query getScanById {
+  fn: import { getScanById } from "@src/scans/operations",
+  entities: [User, Scan],
+  auth: true
+}
+
+action submitScan {
+  fn: import { submitScan } from "@src/scans/operations",
+  entities: [User, Scan, Finding, FindingHistory, ScanDelta],
+  auth: true
+}
+
+action generateCveRemediation {
+  fn: import { generateCveRemediation } from "@src/server/operations/remediation/generateCveRemediation",
+  entities: [User, Scan, Finding, AiFixPrompt, RemediationPromptUsage, RegionPolicy, UserPolicyOverride],
+  auth: true
+}
+
+// Phase 2: Wasp-only HTTP API routes for scan operations
+// POST /api/v1/scans - Submit a new scan
+api submitScanApi {
+  fn: import { submitScanApiHandler } from "@src/server/operations/scans/handlers",
+  entities: [User, Scan, ScanDelta],
+  httpRoute: (POST, "/api/v1/scans")
+}
+
+// GET /api/v1/scans - List user's scans with pagination
+api listScansApi {
+  fn: import { listScansApiHandler } from "@src/server/operations/scans/handlers",
+  entities: [User, Scan],
+  httpRoute: (GET, "/api/v1/scans")
+}
+
+// GET /api/v1/scans/:scanId - Get scan details
+api getScanApi {
+  fn: import { getScanApiHandler } from "@src/server/operations/scans/handlers",
+  entities: [User, Scan, ScanResult, ScanDelta, Finding],
+  httpRoute: (GET, "/api/v1/scans/:scanId")
+}
+
+// DELETE /api/v1/scans/:scanId - Cancel a scan
+api cancelScanApi {
+  fn: import { cancelScanApiHandler } from "@src/server/operations/scans/handlers",
+  entities: [User, Scan],
+  httpRoute: (DELETE, "/api/v1/scans/:scanId")
+}
+
+// GET /api/v1/scans/stats - Get scan statistics
+api getScanStatsApi {
+  fn: import { getScanStatsApiHandler } from "@src/server/operations/scans/handlers",
+  entities: [User, Scan, Finding],
+  httpRoute: (GET, "/api/v1/scans/stats")
+}
+
+api githubWebhookApi {
+  fn: import { githubWebhookApiHandler } from "@src/server/operations/github",
+  entities: [User, Scan, ScanDelta, GithubInstallation, Workspace, Organization],
+  httpRoute: (POST, "/github/webhook")
+}
+
+//#region Dashboard & Analytics
+query getDashboardMetrics {
+  fn: import { getDashboardMetrics } from "@src/server/operations/dashboardOperations",
+  entities: [User, Scan, Finding],
+  auth: true
+}
+
+query getRecentScans {
+  fn: import { getRecentScans } from "@src/server/operations/dashboardOperations",
+  entities: [User, Scan, ScanResult],
+  auth: true
+}
+
+query getSeverityBreakdown {
+  fn: import { getSeverityBreakdown } from "@src/server/operations/dashboardOperations",
+  entities: [User, Finding],
+  auth: true
+}
+
+query getTrendSeries {
+  fn: import { getTrendSeries } from "@src/server/operations/dashboardOperations",
+  entities: [User, Scan, Finding, ScanDelta],
+  auth: true
+}
+
+query getQuotaStatus {
+  fn: import { getQuotaStatus } from "@src/server/operations/dashboardOperations",
+  entities: [User, Scan],
+  auth: true
+}
+
+query listScanSavedViews {
+  fn: import { listScanSavedViews } from "@src/server/operations/dashboardOperations",
+  entities: [User],
+  auth: true
+}
+
+action createScanSavedView {
+  fn: import { createScanSavedView } from "@src/server/operations/dashboardOperations",
+  entities: [User],
+  auth: true
+}
+
+action updateScanSavedView {
+  fn: import { updateScanSavedView } from "@src/server/operations/dashboardOperations",
+  entities: [User],
+  auth: true
+}
+
+action deleteScanSavedView {
+  fn: import { deleteScanSavedView } from "@src/server/operations/dashboardOperations",
+  entities: [User],
+  auth: true
+}
+
+action bulkCancelScans {
+  fn: import { bulkCancelScans } from "@src/server/operations/dashboardOperations",
+  entities: [User, Scan, ScanDelta],
+  auth: true
+}
+
+action bulkRerunScans {
+  fn: import { bulkRerunScans } from "@src/server/operations/dashboardOperations",
+  entities: [User, Scan, ScanDelta],
+  auth: true
+}
+
+action exportScans {
+  fn: import { exportScans } from "@src/server/operations/dashboardOperations",
+  entities: [User, Scan],
+  auth: true
+}
+//#endregion Dashboard & Analytics
+//#endregion
+
+//#region Reports & Analysis
+query getReport {
+  fn: import { getReport } from "@src/server/operations/reportOperations",
+  entities: [User, Scan, Finding, VulnAcceptance],
+  auth: true
+}
+
+query getReportSummary {
+  fn: import { getReportSummary } from "@src/server/operations/reportOperations",
+  entities: [User, Scan, Finding],
+  auth: true
+}
+
+action generateReportPDF {
+  fn: import { generateReportPDF } from "@src/server/operations/reportOperations",
+  entities: [User, Scan],
+  auth: true
+}
+
+query getCIDecision {
+  fn: import { getCIDecision } from "@src/server/operations/reportOperations",
+  entities: [User, Scan, Finding],
+  auth: true
+}
+
+query listFindingAnnotations {
+  fn: import { listFindingAnnotations } from "@src/server/operations/reportOperations",
+  entities: [User, Scan, Finding, VulnAcceptance],
+  auth: true
+}
+
+action upsertFindingAnnotation {
+  fn: import { upsertFindingAnnotation } from "@src/server/operations/reportOperations",
+  entities: [User, Scan, Finding, VulnAcceptance],
+  auth: true
+}
+//#endregion
+
+//#region Webhooks & Notifications
+action createWebhook {
+  fn: import { createWebhook } from "@src/server/operations/webhookOperations",
+  entities: [User, Webhook],
+  auth: true
+}
+
+query listWebhooks {
+  fn: import { listWebhooks } from "@src/server/operations/webhookOperations",
+  entities: [User, Webhook],
+  auth: true
+}
+
+query getWebhook {
+  fn: import { getWebhook } from "@src/server/operations/webhookOperations",
+  entities: [User, Webhook, WebhookDelivery],
+  auth: true
+}
+
+action updateWebhook {
+  fn: import { updateWebhook } from "@src/server/operations/webhookOperations",
+  entities: [User, Webhook, WebhookDelivery],
+  auth: true
+}
+
+action deleteWebhook {
+  fn: import { deleteWebhook } from "@src/server/operations/webhookOperations",
+  entities: [User, Webhook, WebhookDelivery],
+  auth: true
+}
+
+query listWebhookDeliveries {
+  fn: import { listWebhookDeliveries } from "@src/server/operations/webhookOperations",
+  entities: [User, Webhook, WebhookDelivery],
+  auth: true
+}
+
+action testWebhookDelivery {
+  fn: import { testWebhookDelivery } from "@src/server/operations/webhookOperations",
+  entities: [User, Webhook, WebhookDelivery, Scan, ScanDelta],
+  auth: true
+}
+
+action retryWebhookDelivery {
+  fn: import { retryWebhookDelivery } from "@src/server/operations/webhookOperations",
+  entities: [User, Webhook, WebhookDelivery],
+  auth: true
+}
+//#endregion
+
+//#region Billing & Payment
+route PricingPageRoute { path: "/pricing", to: PricingPage }
+page PricingPage {
+  component: import PricingPage from "@src/payment/PricingPage"
+}
+
+route CheckoutResultRoute { path: "/checkout", to: CheckoutResultPage }
+page CheckoutResultPage {
+  authRequired: true,
+  component: import CheckoutResultPage from "@src/payment/CheckoutResultPage"
+}
+
+query getCustomerPortalUrl {
+  fn: import { getCustomerPortalUrl } from  "@src/payment/operations",
+  entities: [User],
+  auth: true
+}
+
+action generateCheckoutSession {
+  fn: import { generateCheckoutSession } from "@src/payment/operations",
+  entities: [User],
+  auth: true
+}
+
+api paymentsWebhook {
+  fn: import { paymentsWebhook } from "@src/payment/webhook",
+  entities: [User],
+  middlewareConfigFn: import { paymentsMiddlewareConfigFn } from "@src/payment/webhook",
+  httpRoute: (POST, "/payments-webhook")
+}
+
+//#region API Keys
+// POST /api/v1/api-keys - Generate a new API key
+api generateAPIKeyApi {
+  fn: import { generateAPIKeyApiHandler } from "@src/server/operations/apikeys/handlers",
+  entities: [User, ApiKey],
+  httpRoute: (POST, "/api/v1/api-keys")
+}
+
+// GET /api/v1/api-keys - List all API keys
+api listAPIKeysApi {
+  fn: import { listAPIKeysApiHandler } from "@src/server/operations/apikeys/handlers",
+  entities: [User, ApiKey],
+  httpRoute: (GET, "/api/v1/api-keys")
+}
+
+// GET /api/v1/api-keys/:keyId - Get API key details
+api getAPIKeyDetailsApi {
+  fn: import { getAPIKeyDetailsApiHandler } from "@src/server/operations/apikeys/handlers",
+  entities: [User, ApiKey],
+  httpRoute: (GET, "/api/v1/api-keys/:keyId")
+}
+
+// DELETE /api/v1/api-keys/:keyId - Revoke an API key
+api revokeAPIKeyApi {
+  fn: import { revokeAPIKeyApiHandler } from "@src/server/operations/apikeys/handlers",
+  entities: [User, ApiKey],
+  httpRoute: (DELETE, "/api/v1/api-keys/:keyId")
+}
+//#endregion API Keys
+
+//#region Settings
+query getWorkspaceContext {
+  fn: import { getWorkspaceContext } from "@src/server/operations/workspaceOperations",
+  entities: [User, Workspace, WorkspaceMembership, Organization, Team],
+  auth: true
+}
+
+query listWorkspaces {
+  fn: import { listWorkspaces } from "@src/server/operations/workspaceOperations",
+  entities: [User, Workspace, WorkspaceMembership, Organization, Team],
+  auth: true
+}
+
+action switchWorkspace {
+  fn: import { switchWorkspace } from "@src/server/operations/workspaceOperations",
+  entities: [User, Workspace, WorkspaceMembership, Organization, Team],
+  auth: true
+}
+
+query getProfileSettings {
+  fn: import { getProfileSettings } from "@src/server/operations/settingsOperations",
+  entities: [User, Organization],
+  auth: true
+}
+
+query getOnboardingState {
+  fn: import { getOnboardingState } from "@src/server/operations/settingsOperations",
+  entities: [User, Scan, GithubInstallation, Workspace, WorkspaceMembership, Organization],
+  auth: true
+}
+
+action completeOnboarding {
+  fn: import { completeOnboarding } from "@src/server/operations/settingsOperations",
+  entities: [User],
+  auth: true
+}
+
+query listGithubInstallations {
+  fn: import { listGithubInstallations } from "@src/server/operations/githubOperations",
+  entities: [User, GithubInstallation, Workspace, Organization],
+  auth: true
+}
+
+query getGithubAppSetup {
+  fn: import { getGithubAppSetup } from "@src/server/operations/githubOperations",
+  entities: [User],
+  auth: true
+}
+
+action linkGithubInstallation {
+  fn: import { linkGithubInstallation } from "@src/server/operations/githubOperations",
+  entities: [User, GithubInstallation, Workspace, WorkspaceMembership, Organization],
+  auth: true
+}
+
+action updateGithubInstallationSettings {
+  fn: import { updateGithubInstallationSettings } from "@src/server/operations/githubOperations",
+  entities: [User, GithubInstallation, Workspace, WorkspaceMembership, Organization],
+  auth: true
+}
+
+action updateProfileSettings {
+  fn: import { updateProfileSettings } from "@src/server/operations/settingsOperations",
+  entities: [User, Organization],
+  auth: true
+}
+
+query getNotificationSettings {
+  fn: import { getNotificationSettings } from "@src/server/operations/settingsOperations",
+  entities: [User],
+  auth: true
+}
+
+action updateNotificationSettings {
+  fn: import { updateNotificationSettings } from "@src/server/operations/settingsOperations",
+  entities: [User],
+  auth: true
+}
+
+query getScannerAccessSettings {
+  fn: import { getScannerAccessSettings } from "@src/server/operations/settingsOperations",
+  entities: [User],
+  auth: true
+}
+
+action updateScannerAccessSettings {
+  fn: import { updateScannerAccessSettings } from "@src/server/operations/settingsOperations",
+  entities: [User],
+  auth: true
+}
+//#endregion Settings
+
+//#region Workspace/Onboarding/GitHub API
+api listWorkspacesApi {
+  fn: import { listWorkspacesApiHandler } from "@src/server/operations/workspaces",
+  entities: [User, Workspace, WorkspaceMembership, Organization, Team],
+  httpRoute: (GET, "/api/v1/workspaces")
+}
+
+api getWorkspaceContextApi {
+  fn: import { getWorkspaceContextApiHandler } from "@src/server/operations/workspaces",
+  entities: [User, Workspace, WorkspaceMembership, Organization, Team],
+  httpRoute: (GET, "/api/v1/workspaces/current")
+}
+
+api switchWorkspaceApi {
+  fn: import { switchWorkspaceApiHandler } from "@src/server/operations/workspaces",
+  entities: [User, Workspace, WorkspaceMembership, Organization, Team],
+  httpRoute: (POST, "/api/v1/workspaces/switch")
+}
+
+api getOnboardingStateApi {
+  fn: import { getOnboardingStateApiHandler } from "@src/server/operations/onboarding",
+  entities: [User, Scan, GithubInstallation, Workspace, WorkspaceMembership, Organization],
+  httpRoute: (GET, "/api/v1/onboarding/state")
+}
+
+api completeOnboardingApi {
+  fn: import { completeOnboardingApiHandler } from "@src/server/operations/onboarding",
+  entities: [User],
+  httpRoute: (POST, "/api/v1/onboarding/complete")
+}
+
+api listGithubInstallationsApi {
+  fn: import { listGithubInstallationsApiHandler } from "@src/server/operations/github",
+  entities: [User, GithubInstallation, Workspace, WorkspaceMembership, Organization],
+  httpRoute: (GET, "/api/v1/github/installations")
+}
+
+api linkGithubInstallationApi {
+  fn: import { linkGithubInstallationApiHandler } from "@src/server/operations/github",
+  entities: [User, GithubInstallation, Workspace, WorkspaceMembership, Organization],
+  httpRoute: (POST, "/api/v1/github/installations/link")
+}
+
+api updateGithubInstallationSettingsApi {
+  fn: import { updateGithubInstallationSettingsApiHandler } from "@src/server/operations/github",
+  entities: [User, GithubInstallation, Workspace, WorkspaceMembership, Organization],
+  httpRoute: (POST, "/api/v1/github/installations/:installationId/settings")
+}
+//#endregion Workspace/Onboarding/GitHub API
+
+api swaggerSpec {
+  fn: import { getSwaggerJson } from "@src/server/swaggerHandlers",
+  entities: [User],
+  httpRoute: (GET, "/docs/swagger.json")
+}
+
+api swaggerDocs {
+  fn: import { getSwaggerUI } from "@src/server/swaggerHandlers",
+  entities: [User],
+  httpRoute: (GET, "/docs")
+}
+//#endregion
+
+route NotFoundRoute { path: "*", to: NotFoundPage }
+page NotFoundPage {
+  component: import { NotFoundPage } from "@src/client/components/NotFoundPage"
+}
+//#endregion

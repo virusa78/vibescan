@@ -1,0 +1,124 @@
+name: "Copilot Setup Steps"
+
+# Automatically run the setup steps when they are changed to allow for easy validation, and
+# allow manual testing through the repository's "Actions" tab
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  # The job MUST be called `copilot-setup-steps` or it will not be picked up by Copilot.
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Set the permissions to the lowest permissions possible needed for your steps.
+    # Copilot will be given its own token for its operations.
+    permissions:
+      # Required to clone the repository and install dependencies
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for rollback support
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.1"
+          cache: "npm"
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Wasp CLI
+        run: |
+          curl -s https://get.wasp-lang.dev/linux | sh
+          echo "$HOME/.wasp/bin" >> $GITHUB_PATH
+
+      - name: Verify Wasp installation
+        run: wasp --version
+
+      - name: Install wasp-app dependencies
+        run: |
+          cd wasp-app
+          npm ci
+
+      - name: Set up PostgreSQL for testing
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql postgresql-contrib
+          sudo systemctl start postgresql
+
+      - name: Initialize test database
+        run: |
+          sudo -u postgres psql -c "CREATE USER vibescan_test WITH PASSWORD 'test' CREATEDB;"
+          sudo -u postgres createdb -O vibescan_test vibescan_test
+
+      - name: Install Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Playwright browsers
+        run: |
+          cd wasp-app
+          npx playwright install --with-deps chromium
+
+      - name: Verify toolchain
+        run: |
+          echo "=== Node.js ==="
+          node --version
+          npm --version
+          echo "=== Wasp ==="
+          wasp --version
+          echo "=== TypeScript ==="
+          npx tsc --version
+          echo "=== ESLint ==="
+          npx eslint --version
+          echo "=== Jest ==="
+          npx jest --version
+          echo "=== Playwright ==="
+          npx playwright --version
+
+      - name: Run linter (quick check)
+        run: npm run lint --max-warnings=0
+        continue-on-error: true
+
+      - name: Run TypeScript check
+        run: npx tsc --noEmit
+        continue-on-error: true
+
+      - name: Build Wasp project
+        run: |
+          cd wasp-app
+          wasp build
+        continue-on-error: true
+
+      - name: Generate test database state
+        run: |
+          cd wasp-app
+          # Initialize Prisma for test environment
+          export DATABASE_URL="postgresql://vibescan_test:test@localhost:5432/vibescan_test"
+          npx prisma db push --skip-generate
+        continue-on-error: true
+
+      - name: Display setup summary
+        run: |
+          echo "✅ Copilot setup complete!"
+          echo ""
+          echo "Available commands:"
+          echo "  ./run.sh                    - Start full stack (Docker + Wasp)"
+          echo "  npm test                    - Run all tests"
+          echo "  npm run lint                - Run ESLint"
+          echo "  npm run test:e2e            - Run Playwright E2E tests"
+          echo "  cd wasp-app && wasp start   - Start Wasp dev server"
+          echo ""
+          echo "Environment ready for development!"

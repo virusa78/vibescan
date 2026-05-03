@@ -1,0 +1,101 @@
+{
+  "name": "vibescan",
+  "version": "0.1.0",
+  "description": "VibeScan - Dual-scanner vulnerability scanning SaaS platform",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "cd wasp-app && wasp build",
+    "dev": "cd wasp-app && wasp start",
+    "start": "cd wasp-app && wasp start",
+    "migrate": "cd wasp-app && wasp db migrate-dev",
+    "seed:mock-data": "node --import tsx scripts/fill-mock-data.ts",
+    "wasp:up": "./scripts/wasp-dev.sh",
+    "wasp:down": "./scripts/wasp-dev.sh --stop",
+    "wasp:dev": "./run-wasp.sh",
+    "openapi:contract": "node --import tsx scripts/openapi-contract-check.ts",
+    "test:targeted:pr3b4": "npx jest --runInBand --forceExit test/unit/dashboard.test.ts test/unit/dashboardTrends.test.ts test/unit/dashboardUrlState.test.ts test/unit/reports-annotations-mapping.test.ts test/unit/getAPIKeyDetails.test.ts test/unit/scannerAccessSettings.test.ts test/unit/webhookTarget.test.ts",
+    "test:targeted:workspace-github-stage": "npx jest --runInBand test/unit/githubWebhookSignature.test.ts test/unit/githubCheckRunService.test.ts test/unit/switchWorkspace.test.ts test/unit/githubWebhookFiltering.test.ts test/unit/getGithubAppSetup.test.ts test/unit/githubWebhookHandler.test.ts",
+    "test:use-scan-polling": "cd wasp-app && npm test -- --runInBand --env=jsdom tests/useScanPolling.test.ts",
+    "verify:m6:pr3b4": "npm run lint && npm run openapi:contract && npm run test:targeted:pr3b4 && npm run test:use-scan-polling && (cd wasp-app && wasp build)",
+    "verify:workspace-github-stage": "npm run lint && npm run openapi:contract && npm run test:targeted:workspace-github-stage",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:wasp": "cd wasp-app && wasp test client",
+    "test:e2e": "API_URL=${API_URL:-http://127.0.0.1:3555} FRONTEND_URL=${FRONTEND_URL:-http://127.0.0.1:3000} playwright test -c playwright.wasp.config.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test:coverage:gate": "COVERAGE_GATE_MODE=staged jest --coverage",
+    "test:coverage:strict": "COVERAGE_GATE_MODE=strict jest --coverage",
+    "smoke:cyclonedx:m3": "node --import tsx scripts/cyclonedx-m3-smoke.ts",
+    "smoke:cyclonedx:m4": "node --import tsx scripts/cyclonedx-m4-acceptance.ts",
+    "retention:cyclonedx:m3": "node --import tsx scripts/cyclonedx-artifact-retention.ts"
+  },
+  "dependencies": {
+    "@apidevtools/json-schema-ref-parser": "^15.3.5",
+    "@aws-sdk/s3-request-presigner": "^3.1024.0",
+    "ajv": "8.18.0",
+    "bcrypt": "^6.0.0",
+    "bullmq": "^5.73.0",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.6.1",
+    "joi": "^17.13.3",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^1.8.0",
+    "pg": "^8.20.0",
+    "redis": "^5.11.0",
+    "swagger-jsdoc": "^6.2.8",
+    "uuid": "^14.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1024.0",
+    "@aws-sdk/lib-storage": "^3.1024.0",
+    "@playwright/test": "^1.59.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/bcrypt": "^5.0.2",
+    "@types/crypto-js": "^4.2.2",
+    "@types/express": "^5.0.6",
+    "@types/fastify-cors": "^2.1.2",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^20.19.39",
+    "@types/pg": "^8.20.0",
+    "@types/uuid": "^9.0.8",
+    "@typescript-eslint/eslint-plugin": "^8.58.0",
+    "@typescript-eslint/parser": "^8.58.0",
+    "cypress": "^15.13.0",
+    "eslint": "^8.57.1",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^30.3.0",
+    "nodemon": "^3.1.14",
+    "prom-client": "^15.1.3",
+    "stripe": "^22.0.0",
+    "ts-jest": "^29.4.9",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  },
+  "overrides": {
+    "fast-xml-parser": "5.7.2"
+  },
+  "engines": {
+    "node": ">=24.14.1"
+  },
+  "main": "jest.config.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vibescan/vibescan.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/vibescan/vibescan/issues"
+  },
+  "homepage": "https://github.com/vibescan/vibescan#readme"
+}

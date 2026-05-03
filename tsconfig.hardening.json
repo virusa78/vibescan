@@ -1,0 +1,35 @@
+{
+  "extends": "./tsconfig.test.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "test/types/**/*.d.ts",
+    "test/unit/providerSelection.test.ts",
+    "test/unit/scannerCredentialResolver.test.ts",
+    "test/unit/scannerReadinessService.test.ts",
+    "test/unit/snykRuntime.test.ts",
+    "test/unit/dashboardTrends.test.ts",
+    "wasp-app/src/server/lib/scanners/providerTypes.ts",
+    "wasp-app/src/server/lib/scanners/providerSelection.ts",
+    "wasp-app/src/server/lib/scanners/snykTypes.ts",
+    "wasp-app/src/server/lib/scanners/snykRuntime.ts",
+    "wasp-app/src/server/lib/scanners/snykProvider.ts",
+    "wasp-app/src/server/operations/dashboard/getTrendSeries.ts",
+    "wasp-app/src/server/operations/dashboard/getDashboardMetrics.ts",
+    "wasp-app/src/server/operations/dashboard/getRecentScans.ts",
+    "wasp-app/src/server/operations/dashboard/recentScanMapper.ts",
+    "wasp-app/src/server/operations/reports/getReport.ts",
+    "wasp-app/src/server/operations/reports/getReportSummary.ts",
+    "wasp-app/src/server/operations/reports/getCIDecision.ts",
+    "wasp-app/src/server/operations/scans/getScan.ts",
+    "wasp-app/src/server/operations/scans/getScanStats.ts",
+    "wasp-app/src/server/services/scannerCredentialResolver.ts",
+    "wasp-app/src/server/services/scannerReadinessService.ts",
+    "wasp-app/src/server/services/scannerExecutionService.ts",
+    "wasp-app/src/server/services/scanSubmissionService.ts",
+    "wasp-app/src/server/services/scanLifecycleService.ts",
+    "wasp-app/src/server/operations/settings/getScannerAccessSettings.ts",
+    "wasp-app/src/server/operations/settings/updateScannerAccessSettings.ts"
+  ]
+}

@@ -1,0 +1,234 @@
+VibeScan — техническая спецификация v1.0
+1. Доменная модель — объекты и атрибуты
+User
+id: uuid
+email: string
+password_hash: string
+plan: enum(free_trial | starter | pro | enterprise)
+stripe_customer_id: string
+stripe_subscription_id: string
+api_key: string          — для CI/CD интеграций, SHA-256 хэш
+api_key_created_at: datetime
+webhook_url: string | null   — куда слать результаты сканов
+created_at: datetime
+last_active_at: datetime
+region: enum(IN | PK | OTHER)  — для PPP-pricing
+Organization (для enterprise и командных планов)
+id: uuid
+name: string
+owner_user_id: uuid → User
+members: uuid[] → User
+plan: enum
+github_installation_id: string | null  — GitHub App
+gitlab_integration_token: string | null
+created_at: datetime
+Scan
+id: uuid
+user_id: uuid → User
+org_id: uuid | null → Organization
+input_type: enum(source_zip | github_url | sbom_upload | github_app | ci_plugin)
+input_ref: string       — s3_key если source, или "github:owner/repo@sha" если GitHub
+sbom_raw: jsonb | null  — оригинальный CycloneDX документ (только если sbom-режим)
+components: jsonb       — нормализованный список компонентов [{name, version, purl, type}]
+status: enum(pending | scanning | merging | done | error | cancelled)
+plan_at_submission: enum  — снапшот плана на момент сдачи (план мог измениться)
+error_message: string | null
+created_at: datetime
+completed_at: datetime | null
+ScanResult
+id: uuid
+scan_id: uuid → Scan
+source: enum(free | enterprise)
+raw_output: jsonb        — оригинальный JSON от Grype / Codescoring
+vulnerabilities: jsonb   — нормализованный массив Vulnerability[]
+scanner_version: string  — версия Grype или Codescoring API
+cve_db_timestamp: datetime  — когда обновлялась база CVE у сканера
+duration_ms: integer
+created_at: datetime
+Vulnerability (элемент внутри ScanResult.vulnerabilities)
+cve_id: string           — "CVE-2024-12345" или "GHSA-xxxx"
+severity: enum(CRITICAL | HIGH | MEDIUM | LOW | INFO)
+cvss_score: float        — 0.0–10.0
+package_name: string
+package_ecosystem: enum(npm | pypi | maven | cargo | gem | nuget | go | other)
+installed_version: string
+fixed_version: string | null
+purl: string             — pkg:npm/lodash@4.17.15
+epss_score: float | null — вероятность эксплуатации (Exploit Prediction)
+is_exploitable: boolean  — есть ли публичный эксплойт
+description: string      — макс 500 символов
+references: string[]     — URLs
+ScanDelta (результат сравнения — главный продуктовый объект)
+id: uuid
+scan_id: uuid → Scan
+total_free_count: integer
+total_enterprise_count: integer
+delta_count: integer        — найдено enterprise, не найдено free
+delta_by_severity: jsonb    — { CRITICAL: 3, HIGH: 5, MEDIUM: 2, ... }
+delta_vulnerabilities: jsonb — массив Vulnerability[] — виден только pro+
+is_locked: boolean           — true если план = starter
+created_at: datetime
+QuotaLedger
+id: uuid
+user_id: uuid → User
+month: string            — "2026-04"
+scans_used: integer
+scans_limit: integer     — берётся из плана на момент записи
+reset_at: datetime       — первое число следующего месяца
+WebhookDelivery (лог отправки результатов клиенту)
+id: uuid
+scan_id: uuid → Scan
+target_url: string
+payload_hash: string     — SHA-256 тела запроса (для верификации)
+attempt_number: integer
+http_status: integer | null
+response_body: string | null
+delivered_at: datetime | null
+next_retry_at: datetime | null
+status: enum(pending | delivered | failed | exhausted)
+GithubInstallation
+id: uuid
+org_id: uuid → Organization
+github_installation_id: string   — от GitHub App OAuth
+github_app_id: string
+repos_scope: string[]            — какие репо подключены
+trigger_on_push: boolean
+trigger_on_pr: boolean
+target_branches: string[]        — ["main", "develop"]
+fail_pr_on_severity: enum(CRITICAL | HIGH | MEDIUM | LOW | NONE)
+created_at: datetime
+SbomDocument (для mode A — ручная загрузка)
+id: uuid
+scan_id: uuid → Scan
+spec_version: string      — "1.4" / "1.5" / "1.6"
+serial_number: string     — bom-serial из документа
+component_count: integer
+tool_name: string         — чем сгенерирован (Syft, cdxgen, Trivy...)
+tool_version: string
+raw_document_s3_key: string  — храним оригинал для аудита
+validated_at: datetime
+validation_errors: string[]  — если схема не прошла валидацию
+ApiKey
+id: uuid
+user_id: uuid → User
+key_prefix: string    — первые 8 символов (для отображения "vs_a1b2c3d4...")
+key_hash: string      — bcrypt хэш полного ключа (полный ключ нигде не хранится)
+label: string         — "CI prod pipeline" / "GitHub Actions"
+scopes: enum[]        — [sbom_submit | scan_read | webhook_manage]
+last_used_at: datetime | null
+expires_at: datetime | null
+revoked_at: datetime | null
+created_at: datetime
+________________________________________
+2. Сервисы — что делает каждый
+AuthService
+Отвечает за регистрацию, вход, JWT-токены, управление API-ключами.
+register(email, password) — создаёт User, хэширует пароль, отправляет verification email, создаёт Stripe Customer.
+login(email, password) — проверяет пароль, возвращает пару access_token (15 мин) + refresh_token (30 дней), записывает last_active_at.
+refreshToken(refresh_token) — ротирует refresh_token, выдаёт новый access_token. Старый refresh немедленно инвалидируется.
+generateApiKey(user_id, label, scopes) — генерирует криптографически случайный ключ с префиксом vs_, хэширует, сохраняет ApiKey. Полный ключ возвращается пользователю единственный раз и нигде не сохраняется.
+revokeApiKey(api_key_id) — ставит revoked_at, ключ перестаёт работать немедленно.
+verifyApiKey(raw_key) — принимает сырой ключ из заголовка, ищет по префиксу в БД, сравнивает bcrypt-хэш, проверяет scopes и revoked_at.
+________________________________________
+QuotaService
+Управляет лимитами использования, изолирован от billing.
+checkQuota(user_id) — читает QuotaLedger за текущий месяц, сравнивает scans_used с scans_limit плана. Возвращает { allowed: boolean, remaining: integer, reset_at: datetime }.
+incrementUsage(user_id) — атомарно инкрементирует scans_used. Использует Redis INCR для скорости с async-записью в PostgreSQL как источник истины.
+getLimitsForPlan(plan) — возвращает конфигурацию лимитов. Лимиты хранятся в конфиге, не в БД, чтобы изменять без миграций.
+resetMonthlyQuota(user_id) — вызывается cron-джобом в 00:00 первого числа. Создаёт новую запись QuotaLedger на новый месяц.
+________________________________________
+ScanOrchestrator
+Центральный координатор — принимает запрос, определяет тип входных данных, запускает pipeline.
+submitScan(user_id, input) — главная точка входа. Вызывает QuotaService.checkQuota, определяет input_type, создаёт запись Scan со статусом pending, кладёт два job-а в очереди (free и enterprise параллельно), инкрементирует квоту. Возвращает scan_id немедленно — результаты асинхронны.
+getScanStatus(scan_id, user_id) — возвращает текущий статус Scan. Проверяет ownership — нельзя смотреть чужие сканы.
+cancelScan(scan_id, user_id) — если статус ещё pending или scanning — пытается отозвать job из очереди, ставит статус cancelled, возвращает квоту через QuotaService.
+handleWorkerResult(scan_id, source, result) — вызывается воркером по завершении. Сохраняет ScanResult, проверяет завершились ли оба воркера, если да — вызывает DiffEngine.merge и MergeResultService.finalize.
+handleWorkerError(scan_id, source, error) — логирует ошибку. Если упал только enterprise-воркер — финализирует с частичным результатом (только free). Если оба упали — ставит статус error.
+________________________________________
+InputAdapterService
+Абстрагирует источник входных данных. Результат — всегда нормализованный список компонентов.
+fromSourceZip(s3_key) — скачивает архив из S3 во временный изолированный контейнер. Запускает генератор SBOM (Syft) внутри контейнера. Возвращает Component[]. Исходники существуют только внутри контейнера, который уничтожается после.
+fromGithubUrl(url, installation_id) — использует GitHub App токен для клонирования только нужного коммита (--depth=1). Генерирует SBOM через Syft. Уничтожает локальную копию немедленно после генерации.
+fromCycloneDX(document) — принимает уже готовый CycloneDX документ. Валидирует схему через json-schema. Нормализует компоненты. Не требует ни исходников, ни клонирования — самый быстрый путь.
+validateCycloneDX(document) — проверяет документ против официальной JSON Schema CycloneDX 1.4/1.5/1.6. Возвращает { valid: boolean, errors: string[], spec_version: string }.
+normalizeComponents(raw_sbom) — извлекает из SBOM массив компонентов в единую схему Component[]. Дедуплицирует по purl. Фильтрует компоненты без версии (их нельзя сканировать).
+________________________________________
+FreeScannerWorker
+Docker-воркер, изолированный от сети клиента. Использует Grype.
+processScanJob(job) — получает job из очереди. Вызывает scanByComponents. По завершении вызывает ScanOrchestrator.handleWorkerResult.
+scanByComponents(components) — строит SBOM документ из Component[] и передаёт его в Grype через stdin. Grype сканирует по purl без доступа к исходникам.
+normalizeGrypeOutput(raw_json) — преобразует Grype JSON в массив Vulnerability[]. Маппит поля severity, cvss, fix_version. Устанавливает source = "free".
+updateCveDatabase() — вызывается по расписанию (каждые 6 часов). Запускает grype db update. Фиксирует timestamp обновления в Redis для отображения в UI ("База CVE обновлена: 2 часа назад").
+________________________________________
+EnterpriseScannerWorker
+Docker-воркер с доступом только к Codescoring API.
+processScanJob(job) — получает job из очереди с пониженным приоритетом если план не enterprise. Вызывает scanByComponents. Соблюдает concurrency-лимит (максимум 3 параллельных BD-запроса через Redis distributed lock).
+scanByComponents(components) — создаёт временный проект в Codescoring, загружает SBOM, запускает асинхронный скан.
+pollScanCompletion(bd_project_id) — опрашивает BD API каждые 10 секунд, максимум 10 минут. Если timeout — возвращает ошибку с кодом bd_timeout, что позволяет ScanOrchestrator финализировать с частичным результатом.
+fetchVulnerabilities(bd_version_url) — постранично загружает список уязвимостей (BD лимитирует по 200). Обходит все страницы.
+normalizeBlackDuckOutput(raw_items) — преобразует BD-формат в Vulnerability[]. Устанавливает source = "enterprise". BD не всегда даёт fix_version — поле остаётся null.
+cleanupBDProject(bd_project_id) — удаляет временный проект из Codescoring после получения результатов. Критично для соблюдения лицензионных условий и экономии места.
+acquireScanSlot() / releaseScanSlot() — берёт/отдаёт distributed lock в Redis. Гарантирует не более N параллельных запросов к BD.
+________________________________________
+DiffEngine
+Чистая функция — никаких внешних зависимостей, легко тестируется.
+merge(free_vulns, enterprise_vulns) — объединяет два массива. Дедуплицирует по cve_id: если CVE найдена обоими, оставляет enterprise-версию как более полную. Возвращает полный массив с тегом source на каждом элементе.
+computeDelta(free_vulns, enterprise_vulns) — возвращает только те уязвимости, которые есть в enterprise и отсутствуют в free (сравнение по cve_id). Это и есть "стена замков" — ключевой конверсионный элемент.
+computeSeverityBreakdown(vulns) — аггрегирует массив Vulnerability[] в { CRITICAL: N, HIGH: N, MEDIUM: N, LOW: N }. Используется для paywall-preview на starter-плане.
+rankVulnerabilities(vulns) — сортирует: сначала по severity (CRITICAL→LOW), внутри severity по cvss_score DESC, затем по is_exploitable DESC. Логика: самые опасные и эксплуатируемые — вверху.
+________________________________________
+ReportService
+Строит представление результатов с учётом плана пользователя.
+buildReportView(scan_id, user) — главный метод. Загружает Scan, ScanDelta. Если план starter — вызывает buildLockedView. Если pro/enterprise — вызывает buildFullView.
+buildLockedView(scan_delta) — возвращает: полный список free_vulns, delta_count, severity_breakdown, locked=true. Критично: никаких деталей delta-уязвимостей не утекает — только счётчики.
+buildFullView(scan_delta) — возвращает полный список enterprise_vulns + полный delta со всеми деталями.
+generatePDF(scan_id, user) — генерирует PDF-отчёт. Доступно только pro/enterprise. Отчёт включает: executive summary, полную таблицу уязвимостей, delta-секцию, рекомендации по приоритизации (отсортированные по EPSS + CVSS).
+buildCIExitDecision(scan_id, threshold_severity) — вычисляет нужно ли "зафейлить" CI-пайплайн. Смотрит на max_severity в результатах. Возвращает { pass: boolean, reason: string, blocking_vulns: Vulnerability[] }.
+________________________________________
+WebhookService
+Доставляет результаты на endpoint клиента.
+scheduleDelivery(scan_id) — после финализации скана создаёт запись WebhookDelivery и кладёт задачу в очередь. Только если у пользователя настроен webhook_url.
+deliver(delivery_id) — отправляет POST на client webhook_url. Подписывает тело запроса HMAC-SHA256 ключом пользователя (заголовок X-VibeScan-Signature). Клиент может верифицировать подлинность.
+handleDeliveryFailure(delivery_id, error) — реализует экспоненциальный backoff: retry через 1 мин, 5 мин, 30 мин, 2 часа, 24 часа. После 5 попыток — статус exhausted, уведомление пользователю.
+buildPayload(scan_id) — формирует тело webhook. Содержит: scan_id, status, summary (только счётчики), ссылку на полный отчёт в UI. Никогда не включает delta-детали в тело webhook на starter-плане — paywall соблюдается и здесь.
+________________________________________
+BillingService
+Тонкая обёртка над Stripe, изолирует бизнес-логику от платёжного провайдера.
+createCheckoutSession(user_id, plan) — создаёт Stripe Checkout Session с нужным price_id. Для регионов IN/PK применяет PPP-discount через Stripe Coupon.
+handleSubscriptionCreated(stripe_event) — webhook от Stripe. Обновляет User.plan, создаёт новую запись QuotaLedger.
+handleSubscriptionCancelled(stripe_event) — даунгрейдит план до starter в конце billing периода (не сразу). Пользователь сохраняет доступ до конца оплаченного периода.
+handlePaymentFailed(stripe_event) — после 3 неудачных списаний — даунгрейд на starter, уведомление пользователю, grace period 7 дней.
+applyRegionalPricing(user_id) — определяет регион по IP при регистрации. Для IN/PK создаёт Stripe Coupon на 50% скидку и применяет к подписке.
+________________________________________
+GithubIntegrationService
+Управляет GitHub App.
+handleInstallationEvent(github_event) — вебхук от GitHub при установке/удалении App. Создаёт/удаляет GithubInstallation запись.
+handlePushEvent(github_event) — вебхук при push в отслеживаемую ветку. Проверяет совпадение с target_branches. Генерирует installation access token (живёт 1 час). Создаёт Scan с input_type=github_app, инициирует pipeline.
+handlePullRequestEvent(github_event) — вебхук при открытии/обновлении PR. Запускает скан. После завершения вызывает postCheckResult.
+postCheckResult(scan_id, github_check_run_id) — публикует GitHub Check Run с результатами: статус pass/fail, summary с таблицей уязвимостей, ссылка на полный отчёт.
+generateInstallationToken(installation_id) — получает временный GitHub token через JWT App credentials. Токен используется только для клонирования конкретного коммита.
+________________________________________
+3. Инфраструктурные компоненты
+Очереди (BullMQ / Redis Streams)
+free_scan_queue — высокий throughput, низкий приоритет per job. Concurrency: 20 воркеров.
+enterprise_scan_queue — ограниченный concurrency (3) из-за лимитов Codescoring лицензии. Приоритизация: enterprise-план > pro > starter.
+webhook_delivery_queue — с retry и backoff. Отдельно от scan-очередей чтобы сбои доставки не блокировали сканирование.
+report_generation_queue — для тяжёлых PDF-отчётов. Генерируются асинхронно, ссылка отправляется по email.
+Хранилища
+PostgreSQL — источник истины для всех доменных объектов. Все sensitive поля (stripe_id, api_key_hash) — зашифрованы at rest через pgcrypto.
+Redis — quota counters (INCR), distributed locks для BD-воркеров, pub/sub для WebSocket-нотификаций, session store для refresh tokens.
+S3 — исходные ZIP-архивы (TTL 24 часа, автоудаление), оригинальные SBOM-документы (TTL 90 дней для аудита), сгенерированные PDF-отчёты (TTL 30 дней).
+Изоляция воркеров
+Каждый scan-job выполняется в одноразовом Docker-контейнере. Параметры: --network=none (нет сети), --read-only (нет записи в FS кроме tmpfs), --memory=512m, --cpus=0.5, --user=nobody. После завершения — контейнер удаляется немедленно. Это гарантирует что код одного клиента физически не может взаимодействовать с кодом другого.
+________________________________________
+4. Ключевые invariants (контракты системы)
+Исходный код клиента никогда не покидает изолированный scan-контейнер. В хранилищах живут только SBOM-компоненты и CVE-результаты.
+Delta-уязвимости никогда не возвращаются в API-ответе для starter-плана — даже частично. Только счётчики.
+API-ключ хранится только в виде bcrypt-хэша. Восстановить оригинал невозможно. Если потерял — нужно создать новый.
+Квота декрементируется только при успешной постановке в очередь, не при финализации. Ошибки сканера не "съедают" квоту.
+Codescoring concurrency lock — единственная точка где enterprise-воркеры синхронизированы. Если lock не получен за 5 минут — job уходит в retry, не в ошибку.
+Webhook payload на starter-плане никогда не содержит delta-деталей — paywall соблюдается и в async-доставке.
+Часть 1 — Data Schema (ERD)
+Несколько важных архитектурных решений, зафиксированных в этих двух артефактах.
+По схеме данных. SCAN_RESULTS хранит два ряда на один скан — по одному от каждого воркера с полем source. Это позволяет переделать diff в любой момент без перезапуска сканирования. SCAN_DELTAS — отдельная таблица, а не колонка в SCANS, потому что delta пересчитывается асинхронно и может быть invalidated при обновлении CVE-базы. Поле plan_at_submission в SCANS — снапшот плана на момент сдачи, защищает от ситуации когда пользователь даунгрейдится пока идёт скан.
+По API. Три разных эндпоинта для загрузки (/source, /sbom, /github) — не один с флагом, потому что у каждого своя валидация, лимиты и поток обработки. Эндпоинт /ci-decision отделён от /report намеренно: CI-плагин должен получать только pass/fail/exit_code без парсинга полного отчёта. Все scan-ответы 202 Accepted — скан всегда асинхронный, никогда не блокирует HTTP-запрос.

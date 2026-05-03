@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vibescan.local/schemas/cyclonedx-m4-staging-acceptance-evidence.schema.json",
+  "title": "CycloneDX M4 Staging Acceptance Evidence",
+  "type": "object",
+  "required": [
+    "generatedAt",
+    "suite",
+    "status",
+    "reasons",
+    "warnings",
+    "summary",
+    "snapshots",
+    "promotionReady",
+    "phaseState"
+  ],
+  "properties": {
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "suite": { "type": "string", "const": "cyclonedx-m4-staging-acceptance" },
+    "status": {
+      "type": "string",
+      "enum": ["allow_promote", "block_promote", "rollback_required"]
+    },
+    "reasons": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "snapshotCount",
+        "scannerIds",
+        "stageBreakdown",
+        "blockerErrorCount",
+        "driftBlockerCount",
+        "warningCount",
+        "maxDriftRate",
+        "driftThreshold",
+        "observedFrom",
+        "observedTo"
+      ],
+      "properties": {
+        "snapshotCount": { "type": "integer", "minimum": 0 },
+        "scannerIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "stageBreakdown": {
+          "type": "object",
+          "required": ["shadow_smoke", "canary_cutover_cohort", "expand_cohort", "ready_for_prod"],
+          "properties": {
+            "shadow_smoke": { "type": "integer", "minimum": 0 },
+            "canary_cutover_cohort": { "type": "integer", "minimum": 0 },
+            "expand_cohort": { "type": "integer", "minimum": 0 },
+            "ready_for_prod": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "blockerErrorCount": { "type": "integer", "minimum": 0 },
+        "driftBlockerCount": { "type": "integer", "minimum": 0 },
+        "warningCount": { "type": "integer", "minimum": 0 },
+        "maxDriftRate": { "type": "number", "minimum": 0 },
+        "driftThreshold": { "type": "number", "const": 0.1 },
+        "observedFrom": { "type": ["string", "null"], "format": "date-time" },
+        "observedTo": { "type": ["string", "null"], "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "snapshots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "createdAt",
+          "scannerId",
+          "scanResultId",
+          "rolloutStage",
+          "progressStatus",
+          "decisionStatus",
+          "gateStatus",
+          "gate",
+          "ingestionMeta"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "scannerId": { "type": "string" },
+          "scanResultId": { "type": "string" },
+          "rolloutStage": {
+            "type": "string",
+            "enum": ["shadow_smoke", "canary_cutover_cohort", "expand_cohort", "ready_for_prod"]
+          },
+          "progressStatus": {
+            "type": "string",
+            "enum": ["in_progress", "blocked", "ready_for_prod", "rollback_active"]
+          },
+          "decisionStatus": {
+            "type": "string",
+            "enum": ["allow_promote", "block_promote", "rollback_required"]
+          },
+          "gateStatus": {
+            "type": "string",
+            "enum": ["allow_cutover", "block_cutover", "not_applicable"]
+          },
+          "gate": { "type": "object" },
+          "ingestionMeta": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "promotionReady": { "type": "boolean" },
+    "phaseState": {
+      "type": "object",
+      "required": ["scannerId", "currentStage", "progressStatus", "latestDecisionStatus", "latestDecision"],
+      "properties": {
+        "scannerId": { "type": ["string", "null"] },
+        "currentStage": {
+          "type": "string",
+          "enum": ["shadow_smoke", "canary_cutover_cohort", "expand_cohort", "ready_for_prod"]
+        },
+        "progressStatus": {
+          "type": "string",
+          "enum": ["in_progress", "blocked", "ready_for_prod", "rollback_active"]
+        },
+        "latestDecisionStatus": {
+          "type": "string",
+          "enum": ["allow_promote", "block_promote", "rollback_required"]
+        },
+        "latestDecision": { "type": ["object", "null"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

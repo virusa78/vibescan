@@ -1,0 +1,202 @@
+{
+  "snapshots": [
+    {
+      "id": "snapshot-free-001",
+      "createdAt": "2026-04-23T12:00:00.000Z",
+      "scannerId": "free",
+      "scanResultId": "scan-result-free-001",
+      "rolloutStage": "ready_for_prod",
+      "progressStatus": "ready_for_prod",
+      "decisionStatus": "allow_promote",
+      "gateStatus": "allow_cutover",
+      "gate": {
+        "status": "allow_cutover",
+        "mode": "cutover",
+        "driftRate": 0.04,
+        "driftThreshold": 0.1,
+        "blockerErrors": [],
+        "reasons": [
+          "allow_promote_window_clear",
+          "warning:artifact_upload_failed:transient_timeout"
+        ],
+        "canaryDecision": {
+          "scannerId": "free",
+          "stage": "ready_for_prod",
+          "status": "allow_promote",
+          "nextStage": null,
+          "reasons": [
+            "allow_promote_window_clear",
+            "warning:artifact_upload_failed:transient_timeout"
+          ]
+        }
+      },
+      "ingestionMeta": {
+        "mode": "cutover",
+        "componentIngestion": {
+          "scanId": "scan-result-free-001",
+          "scannerId": "free",
+          "mode": "cutover",
+          "stage": "components",
+          "status": "ingested",
+          "processingMs": 5,
+          "drift": {
+            "legacyComponents": 10,
+            "unifiedComponents": 10,
+            "missingInUnified": 0,
+            "extraInUnified": 0
+          },
+          "unifiedStats": {
+            "components": 10,
+            "vulnerabilities": 2,
+            "severity": {
+              "high": 2
+            }
+          }
+        },
+        "resultIngestion": {
+          "scanId": "scan-result-free-001",
+          "scannerId": "free",
+          "mode": "cutover",
+          "stage": "scan_result",
+          "status": "ingested",
+          "processingMs": 6,
+          "unifiedStats": {
+            "componentCount": 10,
+            "vulnerabilityCount": 2,
+            "severityCounts": {
+              "high": 2
+            }
+          }
+        },
+        "resultStatus": "ingested",
+        "unifiedStats": {
+          "componentCount": 10,
+          "vulnerabilityCount": 2,
+          "severityCounts": {
+            "high": 2
+          }
+        },
+        "artifacts": [],
+        "unknownFieldCatalog": [],
+        "gate": {
+          "status": "allow_cutover",
+          "mode": "cutover",
+          "driftRate": 0.04,
+          "driftThreshold": 0.1,
+          "blockerErrors": [],
+          "reasons": [
+            "allow_promote_window_clear",
+            "warning:artifact_upload_failed:transient_timeout"
+          ],
+          "canaryDecision": {
+            "scannerId": "free",
+            "stage": "ready_for_prod",
+            "status": "allow_promote",
+            "nextStage": null,
+            "reasons": [
+              "allow_promote_window_clear",
+              "warning:artifact_upload_failed:transient_timeout"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "snapshot-enterprise-001",
+      "createdAt": "2026-04-23T12:15:00.000Z",
+      "scannerId": "enterprise",
+      "scanResultId": "scan-result-enterprise-001",
+      "rolloutStage": "ready_for_prod",
+      "progressStatus": "ready_for_prod",
+      "decisionStatus": "allow_promote",
+      "gateStatus": "allow_cutover",
+      "gate": {
+        "status": "allow_cutover",
+        "mode": "cutover",
+        "driftRate": 0.03,
+        "driftThreshold": 0.1,
+        "blockerErrors": [],
+        "reasons": [
+          "allow_promote_window_clear"
+        ],
+        "canaryDecision": {
+          "scannerId": "enterprise",
+          "stage": "ready_for_prod",
+          "status": "allow_promote",
+          "nextStage": null,
+          "reasons": [
+            "allow_promote_window_clear"
+          ]
+        }
+      },
+      "ingestionMeta": {
+        "mode": "cutover",
+        "componentIngestion": {
+          "scanId": "scan-result-enterprise-001",
+          "scannerId": "enterprise",
+          "mode": "cutover",
+          "stage": "components",
+          "status": "ingested",
+          "processingMs": 4,
+          "drift": {
+            "legacyComponents": 12,
+            "unifiedComponents": 12,
+            "missingInUnified": 0,
+            "extraInUnified": 0
+          },
+          "unifiedStats": {
+            "components": 12,
+            "vulnerabilities": 1,
+            "severity": {
+              "medium": 1
+            }
+          }
+        },
+        "resultIngestion": {
+          "scanId": "scan-result-enterprise-001",
+          "scannerId": "enterprise",
+          "mode": "cutover",
+          "stage": "scan_result",
+          "status": "ingested",
+          "processingMs": 5,
+          "unifiedStats": {
+            "componentCount": 12,
+            "vulnerabilityCount": 1,
+            "severityCounts": {
+              "medium": 1
+            }
+          }
+        },
+        "resultStatus": "ingested",
+        "unifiedStats": {
+          "componentCount": 12,
+          "vulnerabilityCount": 1,
+          "severityCounts": {
+            "medium": 1
+          }
+        },
+        "artifacts": [],
+        "unknownFieldCatalog": [],
+        "gate": {
+          "status": "allow_cutover",
+          "mode": "cutover",
+          "driftRate": 0.03,
+          "driftThreshold": 0.1,
+          "blockerErrors": [],
+          "reasons": [
+            "allow_promote_window_clear"
+          ],
+          "canaryDecision": {
+            "scannerId": "enterprise",
+            "stage": "ready_for_prod",
+            "status": "allow_promote",
+            "nextStage": null,
+            "reasons": [
+              "allow_promote_window_clear"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

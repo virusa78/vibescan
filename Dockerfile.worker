@@ -1,0 +1,33 @@
+# VibeScan worker image
+FROM node:24-alpine
+
+RUN apk add --no-cache \
+    bash \
+    ca-certificates \
+    curl \
+    g++ \
+    git \
+    make \
+    python3 \
+    unzip
+
+RUN addgroup -g 1000 -S nodejs && \
+    adduser -S nodejs -u 1000 -G nodejs
+
+USER nodejs
+WORKDIR /home/nodejs/app
+
+COPY --chown=nodejs:nodejs package*.json ./
+RUN npm ci
+
+WORKDIR /home/nodejs/app/wasp-app
+COPY --chown=nodejs:nodejs wasp-app/package*.json ./
+RUN npm ci
+
+WORKDIR /home/nodejs/app
+COPY --chown=nodejs:nodejs . .
+
+ENV WORKER_ENTRYPOINT=wasp-app/src/server/workers/runQueueWorker.ts \
+    WORKER_ROLE=free
+
+CMD ["sh", "-lc", "node --import tsx ${WORKER_ENTRYPOINT}"]

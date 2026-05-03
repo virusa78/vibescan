@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vibescan-free-worker
+  namespace: vibescan
+  labels:
+    app: vibescan
+    component: free-worker
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: vibescan
+      component: free-worker
+  template:
+    metadata:
+      labels:
+        app: vibescan
+        component: free-worker
+    spec:
+      containers:
+        - name: worker
+          image: vibescan/worker:latest
+          imagePullPolicy: Always
+          command:
+            - node
+            - --import
+            - tsx
+            - wasp-app/src/server/workers/runQueueWorker.ts
+          envFrom:
+            - configMapRef:
+                name: vibescan-config
+            - secretRef:
+                name: vibescan-secrets
+          env:
+            - name: WORKER_ROLE
+              value: "free"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket

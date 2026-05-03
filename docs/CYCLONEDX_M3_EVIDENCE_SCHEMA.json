@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vibescan.local/schemas/cyclonedx-m3-smoke-evidence.schema.json",
+  "title": "CycloneDX M3 Smoke Evidence",
+  "type": "object",
+  "required": ["generatedAt", "driftBlockerThreshold", "suite", "checks", "summary"],
+  "properties": {
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "driftBlockerThreshold": { "type": "number", "const": 0.1 },
+    "suite": { "type": "string", "const": "cyclonedx-m3-smoke" },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "passed", "details"],
+        "properties": {
+          "id": { "type": "string" },
+          "passed": { "type": "boolean" },
+          "details": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["passed", "failed", "promotionReady", "blockerErrors", "rollbackVerified"],
+      "properties": {
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "promotionReady": { "type": "boolean" },
+        "blockerErrors": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "rollbackVerified": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
