@@ -72,6 +72,16 @@ jobs:
           cd wasp-app
           npx playwright install --with-deps chromium
 
+      - name: Install MCP Server for PostgreSQL
+        run: |
+          npm install -g @modelcontextprotocol/server-postgres
+        continue-on-error: true
+
+      - name: Install MCP Server for Playwright
+        run: |
+          npm install -g @modelcontextprotocol/server-playwright
+        continue-on-error: true
+
       - name: Verify toolchain
         run: |
           echo "=== Node.js ==="
