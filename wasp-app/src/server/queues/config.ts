@@ -13,6 +13,7 @@ import {
   type ScanJob,
   type WebhookDeliveryJob,
 } from './jobContract.js';
+import { SCAN_JOB_RETRY_CONFIG } from '../utils/retryPolicy.js';
 
 const redisConfig = getRedisConnectionConfig();
 
@@ -20,10 +21,10 @@ const redisConfig = getRedisConnectionConfig();
 export const freeScanQueue = new Queue<ScanJob>(QUEUE_NAMES.FREE_SCAN, {
   connection: redisConfig,
   defaultJobOptions: {
-    attempts: 3,
+    attempts: SCAN_JOB_RETRY_CONFIG.maxAttempts,
     backoff: {
-      type: 'exponential',
-      delay: 2000,
+      type: SCAN_JOB_RETRY_CONFIG.backoffType,
+      delay: SCAN_JOB_RETRY_CONFIG.delayMs,
     },
     removeOnComplete: true,
     removeOnFail: false,
@@ -33,10 +34,10 @@ export const freeScanQueue = new Queue<ScanJob>(QUEUE_NAMES.FREE_SCAN, {
 export const enterpriseScanQueue = new Queue<ScanJob>(QUEUE_NAMES.ENTERPRISE_SCAN, {
   connection: redisConfig,
   defaultJobOptions: {
-    attempts: 3,
+    attempts: SCAN_JOB_RETRY_CONFIG.maxAttempts,
     backoff: {
-      type: 'exponential',
-      delay: 2000,
+      type: SCAN_JOB_RETRY_CONFIG.backoffType,
+      delay: SCAN_JOB_RETRY_CONFIG.delayMs,
     },
     removeOnComplete: true,
     removeOnFail: false,
@@ -126,7 +127,29 @@ export async function initializeWorkers() {
       logFailedJob('Webhook Delivery', job, error);
     });
 
-    console.log('✅ Workers initialized: free_scan (20 concurrent), enterprise_scan (3 concurrent), webhook_delivery (10 concurrent)');
+    // Set up dead-letter queue for failed scan jobs
+    freeWorker.on('failed', async (job) => {
+      if (job && job.attemptsMade >= SCAN_JOB_RETRY_CONFIG.maxAttempts) {
+        console.error(
+          `[Dead Letter Queue] Scan ${job.data?.scanId} moved to dead-letter after ${job.attemptsMade} attempts. Manual recovery may be required.`,
+        );
+      }
+    });
+
+    enterpriseWorker.on('failed', async (job) => {
+      if (job && job.attemptsMade >= SCAN_JOB_RETRY_CONFIG.maxAttempts) {
+        console.error(
+          `[Dead Letter Queue] Scan ${job.data?.scanId} moved to dead-letter after ${job.attemptsMade} attempts. Manual recovery may be required.`,
+        );
+      }
+    });
+
+    console.log(
+      `✅ Workers initialized: free_scan (20 concurrent), enterprise_scan (3 concurrent), webhook_delivery (10 concurrent)`,
+    );
+    console.log(
+      `✅ Retry policy: ${SCAN_JOB_RETRY_CONFIG.maxAttempts} attempts, ${SCAN_JOB_RETRY_CONFIG.delayMs}ms exponential backoff`,
+    );
     workersInitialized = true;
   } catch (error) {
     console.error('❌ Failed to initialize workers:', error);

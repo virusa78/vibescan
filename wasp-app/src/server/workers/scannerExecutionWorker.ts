@@ -5,6 +5,7 @@ import type { QueueScannerTarget } from '../lib/scanners/providerSelection.js';
 import type { ScanJob } from '../queues/jobContract.js';
 import { executeScannerForScan } from '../services/scannerExecutionService.js';
 import type { ScannerExecutionPrismaClient } from '../services/scannerExecutionTypes.js';
+import { handleJobFailure, SCAN_JOB_RETRY_CONFIG } from '../utils/retryPolicy.js';
 
 const prisma = new PrismaClient();
 
@@ -27,13 +28,29 @@ export async function scannerExecutionWorker(
   const providerDefinition = getScannerProvider(provider);
   const loggerLabel = `${getLaneLabel(queueTarget)} / ${providerDefinition.displayName}`;
 
-  return executeScannerForScan({
-    prisma: prisma as unknown as ScannerExecutionPrismaClient,
-    scanId,
-    userId,
-    source: resultSource,
-    providerKind: provider,
-    credentialSource,
-    loggerLabel,
-  });
+  try {
+    return await executeScannerForScan({
+      prisma: prisma as unknown as ScannerExecutionPrismaClient,
+      scanId,
+      userId,
+      source: resultSource,
+      providerKind: provider,
+      credentialSource,
+      loggerLabel,
+    });
+  } catch (error) {
+    // Track retry attempt in database
+    const attemptNumber = (job.attemptsMade ?? 0) + 1;
+    await handleJobFailure(
+      loggerLabel,
+      scanId,
+      job.id,
+      attemptNumber,
+      SCAN_JOB_RETRY_CONFIG.maxAttempts,
+      error instanceof Error ? error : new Error(String(error)),
+    );
+    
+    // Re-throw to trigger BullMQ retry mechanism
+    throw error;
+  }
 }

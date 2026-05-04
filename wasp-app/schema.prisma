@@ -335,6 +335,11 @@ model Scan {
   planAtSubmission String       @default("free_trial") @map("plan_at_submission") // free_trial, starter, pro, enterprise
   plannedSources   ScanSource[] @default([]) @map("planned_sources")
   errorMessage     String?      @map("error_message")
+  
+  // Retry tracking
+  retryCount       Int          @default(0) @map("retry_count")
+  lastRetryError   String?      @map("last_retry_error")
+  lastRetryAt      DateTime?    @map("last_retry_at")
 
   // Relations
   user                    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
