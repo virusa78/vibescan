@@ -5,6 +5,7 @@ import {
   buildNestedScanWorkspaceWhere,
   requireWorkspaceScopedUser,
 } from '../../services/workspaceAccess';
+import { serializeDecimalFields } from '../../utils/serialization';
 
 const getSeverityBreakdownInputSchema = z.object({
   time_range: z.enum(['7d', '30d', 'all']).default('30d'),
@@ -79,7 +80,7 @@ export async function getSeverityBreakdown(
 
   const total = findings.length;
 
-  return {
+  return serializeDecimalFields({
     critical: breakdown.critical,
     high: breakdown.high,
     medium: breakdown.medium,
@@ -87,5 +88,5 @@ export async function getSeverityBreakdown(
     info: breakdown.info,
     total,
     time_range: args.time_range,
-  };
+  });
 }

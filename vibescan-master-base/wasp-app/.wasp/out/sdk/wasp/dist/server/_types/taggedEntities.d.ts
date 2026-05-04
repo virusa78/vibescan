@@ -1,0 +1,38 @@
+import { type Entity, type EntityName, type User, type Organization, type OrganizationMembership, type Team, type TeamMembership, type Workspace, type WorkspaceMembership, type ApiKey, type ApiKeyUsageEvent, type ProjectNotificationSetting, type Scan, type ScanResult, type Finding, type FindingHistory, type ScanDelta, type RegionPolicy, type UserPolicyOverride, type RemediationPromptUsage, type AiFixPrompt, type SecurityScore, type VulnAcceptance, type GithubInstallation, type Webhook, type WebhookDelivery, type EventOutbox, type EventSubscription, type EventDelivery, type BillingEventLedger, type QuotaLedger, type CycloneDxRolloutSnapshot, type CycloneDxRolloutState } from 'wasp/entities';
+export type _User = WithName<User, "User">;
+export type _Organization = WithName<Organization, "Organization">;
+export type _OrganizationMembership = WithName<OrganizationMembership, "OrganizationMembership">;
+export type _Team = WithName<Team, "Team">;
+export type _TeamMembership = WithName<TeamMembership, "TeamMembership">;
+export type _Workspace = WithName<Workspace, "Workspace">;
+export type _WorkspaceMembership = WithName<WorkspaceMembership, "WorkspaceMembership">;
+export type _ApiKey = WithName<ApiKey, "ApiKey">;
+export type _ApiKeyUsageEvent = WithName<ApiKeyUsageEvent, "ApiKeyUsageEvent">;
+export type _ProjectNotificationSetting = WithName<ProjectNotificationSetting, "ProjectNotificationSetting">;
+export type _Scan = WithName<Scan, "Scan">;
+export type _ScanResult = WithName<ScanResult, "ScanResult">;
+export type _Finding = WithName<Finding, "Finding">;
+export type _FindingHistory = WithName<FindingHistory, "FindingHistory">;
+export type _ScanDelta = WithName<ScanDelta, "ScanDelta">;
+export type _RegionPolicy = WithName<RegionPolicy, "RegionPolicy">;
+export type _UserPolicyOverride = WithName<UserPolicyOverride, "UserPolicyOverride">;
+export type _RemediationPromptUsage = WithName<RemediationPromptUsage, "RemediationPromptUsage">;
+export type _AiFixPrompt = WithName<AiFixPrompt, "AiFixPrompt">;
+export type _SecurityScore = WithName<SecurityScore, "SecurityScore">;
+export type _VulnAcceptance = WithName<VulnAcceptance, "VulnAcceptance">;
+export type _GithubInstallation = WithName<GithubInstallation, "GithubInstallation">;
+export type _Webhook = WithName<Webhook, "Webhook">;
+export type _WebhookDelivery = WithName<WebhookDelivery, "WebhookDelivery">;
+export type _EventOutbox = WithName<EventOutbox, "EventOutbox">;
+export type _EventSubscription = WithName<EventSubscription, "EventSubscription">;
+export type _EventDelivery = WithName<EventDelivery, "EventDelivery">;
+export type _BillingEventLedger = WithName<BillingEventLedger, "BillingEventLedger">;
+export type _QuotaLedger = WithName<QuotaLedger, "QuotaLedger">;
+export type _CycloneDxRolloutSnapshot = WithName<CycloneDxRolloutSnapshot, "CycloneDxRolloutSnapshot">;
+export type _CycloneDxRolloutState = WithName<CycloneDxRolloutState, "CycloneDxRolloutState">;
+export type _Entity = _User | _Organization | _OrganizationMembership | _Team | _TeamMembership | _Workspace | _WorkspaceMembership | _ApiKey | _ApiKeyUsageEvent | _ProjectNotificationSetting | _Scan | _ScanResult | _Finding | _FindingHistory | _ScanDelta | _RegionPolicy | _UserPolicyOverride | _RemediationPromptUsage | _AiFixPrompt | _SecurityScore | _VulnAcceptance | _GithubInstallation | _Webhook | _WebhookDelivery | _EventOutbox | _EventSubscription | _EventDelivery | _BillingEventLedger | _QuotaLedger | _CycloneDxRolloutSnapshot | _CycloneDxRolloutState | never;
+type WithName<E extends Entity, Name extends EntityName> = E & {
+    _entityName: Name;
+};
+export {};
+//# sourceMappingURL=taggedEntities.d.ts.map

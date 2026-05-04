@@ -5,6 +5,7 @@ import { mapAcceptanceToAnnotationState } from "./annotations";
 import { resolveCycloneDxPipelineMode } from "../../services/cyclonedxIngestionService.js";
 import { buildSeverityBreakdown, type ReportFindingRecord, type ReportUserContext, type SeverityBreakdown } from "./shared";
 import { requireWorkspaceScopedUser } from '../../services/workspaceAccess';
+import { serializeDecimalFields } from "../../utils/serialization";
 
 const getReportInputSchema = z.object({
   scanId: z.string().nonempty(),
@@ -219,5 +220,5 @@ export const getReport = async (
     })),
   };
 
-  return response;
+  return serializeDecimalFields(response);
 };

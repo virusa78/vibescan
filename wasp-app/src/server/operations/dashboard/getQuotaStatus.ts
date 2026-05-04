@@ -3,6 +3,7 @@ import {
   buildWorkspaceOrLegacyOwnerWhere,
   requireWorkspaceScopedUser,
 } from '../../services/workspaceAccess';
+import { serializeDecimalFields } from '../../utils/serialization';
 
 export interface QuotaStatusResponse {
   used: number;
@@ -74,11 +75,11 @@ export async function getQuotaStatus(
     }
   }
 
-  return {
+  return serializeDecimalFields({
     used: userRecord.monthlyQuotaUsed,
     limit: userRecord.monthlyQuotaLimit,
     percentage,
     monthly_reset_date: userRecord.quotaResetDate.toISOString(),
     usage_trend: usageTrend,
-  };
+  });
 }

@@ -6,6 +6,7 @@ import {
   buildWorkspaceOrLegacyOwnerWhere,
   requireWorkspaceScopedUser,
 } from '../../services/workspaceAccess';
+import { serializeDecimalFields } from '../../utils/serialization';
 
 const getDashboardMetricsInputSchema = z.object({
   time_range: z.enum(['7d', '30d', 'all']).default('30d'),
@@ -137,7 +138,7 @@ export async function getDashboardMetrics(
     throw new HttpError(404, 'User not found');
   }
 
-  return {
+  return serializeDecimalFields({
     total_scans: totalScans,
     scans_this_month: scansThisMonth,
     total_vulnerabilities: totalVulnerabilities,
@@ -147,5 +148,5 @@ export async function getDashboardMetrics(
     plan_tier: userRecord.plan,
     vulnerabilities_by_source: vulnerabilitiesBySource,
     time_range: args.time_range,
-  };
+  });
 }

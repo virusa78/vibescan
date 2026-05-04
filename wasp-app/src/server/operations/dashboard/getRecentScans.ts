@@ -7,6 +7,7 @@ import {
   buildWorkspaceOrLegacyOwnerWhere,
   requireWorkspaceScopedUser,
 } from '../../services/workspaceAccess';
+import { serializeDecimalFields } from '../../utils/serialization';
 
 const scanStatusSchema = z.enum(['pending', 'scanning', 'done', 'error', 'cancelled']);
 const sortFieldSchema = z.enum(['submitted', 'target', 'type', 'status', 'findings']);
@@ -157,7 +158,7 @@ export async function getRecentScans(
     }),
   ]);
 
-  return {
+  return serializeDecimalFields({
     scans: mapRecentScans(scans),
     status_counts: {
       pending: pendingCount,
@@ -168,5 +169,5 @@ export async function getRecentScans(
     },
     total_count: totalCount,
     filtered_count: filteredCount,
-  };
+  });
 }

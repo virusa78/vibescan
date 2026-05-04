@@ -1,0 +1,1 @@
+{"version":3,"file":"authCompat.d.ts","sourceRoot":"","sources":["../../../src/server/authCompat.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,OAAO,EAAE,QAAQ,EAAE,MAAM,SAAS,CAAC;AAgDjD,wBAAsB,oBAAoB,CAAC,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,QAAQ,EAAE,QAAQ,EAAE,OAAO,iBAEjG;AAED,wBAAsB,mBAAmB,CAAC,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,QAAQ,EAAE,QAAQ,EAAE,OAAO,iBAEhG"}

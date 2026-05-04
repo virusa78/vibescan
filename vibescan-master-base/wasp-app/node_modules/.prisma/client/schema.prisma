@@ -1,0 +1,785 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                          String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                   DateTime                     @default(now()) @map("created_at")
+  updatedAt                   DateTime                     @updatedAt @map("updated_at")
+  email                       String                       @unique
+  username                    String?                      @unique
+  passwordHash                String?                      @map("password_hash")
+  displayName                 String?                      @map("display_name")
+  isAdmin                     Boolean                      @default(false)
+  snykApiKeyEncrypted         Bytes?                       @map("snyk_api_key_encrypted")
+  plan                        PlanTier                     @default(free_trial)
+  stripeCustomerId            String?                      @unique @map("stripe_customer_id")
+  stripeSubscriptionId        String?                      @unique @map("stripe_subscription_id")
+  subscriptionStatus          String?                      @map("subscription_status")
+  region                      String                       @default("OTHER")
+  timezone                    String?
+  language                    String?                      @default("en")
+  uiPreferences               Json                         @default("{}") @map("ui_preferences")
+  activeWorkspaceId           String?                      @map("active_workspace_id") @db.Uuid
+  monthlyQuotaLimit           Int                          @default(10) @map("monthly_quota_limit")
+  monthlyQuotaUsed            Int                          @default(0) @map("monthly_quota_used")
+  quotaResetDate              DateTime                     @default(now()) @map("quota_reset_date")
+  apiKeys                     ApiKey[]
+  scans                       Scan[]
+  webhooks                    Webhook[]
+  vulnAcceptances             VulnAcceptance[]
+  aiFixPrompts                AiFixPrompt[]
+  policyOverride              UserPolicyOverride?
+  remediationPromptUsages     RemediationPromptUsage[]
+  findings                    Finding[]
+  ownedOrganizations          Organization[]               @relation("OrganizationOwner")
+  organizationMemberships     OrganizationMembership[]
+  teamMemberships             TeamMembership[]
+  workspaceMemberships        WorkspaceMembership[]
+  createdWorkspaces           Workspace[]                  @relation("WorkspaceCreatedBy")
+  activeWorkspace             Workspace?                   @relation("ActiveWorkspace", fields: [activeWorkspaceId], references: [id], onDelete: SetNull)
+  quotaLedger                 QuotaLedger[]
+  projectNotificationSettings ProjectNotificationSetting[]
+  auth                        Auth?
+
+  @@index([activeWorkspaceId])
+  @@map("users")
+}
+
+model Organization {
+  id          String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt   DateTime                 @default(now()) @map("created_at")
+  updatedAt   DateTime                 @updatedAt @map("updated_at")
+  name        String
+  slug        String                   @unique
+  ownerUserId String                   @map("owner_user_id") @db.Uuid
+  isPersonal  Boolean                  @default(false) @map("is_personal")
+  owner       User                     @relation("OrganizationOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  memberships OrganizationMembership[]
+  teams       Team[]
+  workspaces  Workspace[]
+
+  @@index([ownerUserId])
+  @@map("organizations")
+}
+
+model OrganizationMembership {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt      DateTime         @default(now()) @map("created_at")
+  organizationId String           @map("organization_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  role           OrganizationRole @default(member)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId], map: "organization_memberships_unique")
+  @@index([userId], map: "organization_memberships_user_id_idx")
+  @@map("organization_memberships")
+}
+
+model Team {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  organizationId String           @map("organization_id") @db.Uuid
+  name           String
+  slug           String
+  isDefault      Boolean          @default(false) @map("is_default")
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships    TeamMembership[]
+  workspaces     Workspace[]
+
+  @@unique([organizationId, slug], map: "teams_organization_slug_unique")
+  @@index([organizationId], map: "teams_organization_id_idx")
+  @@map("teams")
+}
+
+model TeamMembership {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  teamId    String   @map("team_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      TeamRole @default(member)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId], map: "team_memberships_unique")
+  @@index([userId], map: "team_memberships_user_id_idx")
+  @@map("team_memberships")
+}
+
+model Workspace {
+  id                          String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                   DateTime                     @default(now()) @map("created_at")
+  updatedAt                   DateTime                     @updatedAt @map("updated_at")
+  organizationId              String                       @map("organization_id") @db.Uuid
+  teamId                      String?                      @map("team_id") @db.Uuid
+  name                        String
+  slug                        String
+  isPersonal                  Boolean                      @default(false) @map("is_personal")
+  createdByUserId             String                       @map("created_by_user_id") @db.Uuid
+  organization                Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team                        Team?                        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  createdByUser               User                         @relation("WorkspaceCreatedBy", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  members                     WorkspaceMembership[]
+  activeUsers                 User[]                       @relation("ActiveWorkspace")
+  scans                       Scan[]
+  apiKeys                     ApiKey[]
+  webhooks                    Webhook[]
+  projectNotificationSettings ProjectNotificationSetting[]
+  githubInstallations         GithubInstallation[]
+  quotaLedger                 QuotaLedger[]
+
+  @@unique([organizationId, slug], map: "workspaces_organization_slug_unique")
+  @@index([organizationId], map: "workspaces_organization_id_idx")
+  @@index([teamId], map: "workspaces_team_id_idx")
+  @@index([createdByUserId], map: "workspaces_created_by_user_id_idx")
+  @@map("workspaces")
+}
+
+model WorkspaceMembership {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt   DateTime      @default(now()) @map("created_at")
+  workspaceId String        @map("workspace_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  role        WorkspaceRole @default(member)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId], map: "workspace_memberships_unique")
+  @@index([userId], map: "workspace_memberships_user_id_idx")
+  @@map("workspace_memberships")
+}
+
+model ApiKey {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt   DateTime           @default(now()) @map("created_at")
+  expiresAt   DateTime?          @map("expires_at")
+  userId      String             @map("user_id") @db.Uuid
+  workspaceId String?            @map("workspace_id") @db.Uuid
+  name        String
+  keyPrefix   String?            @map("key_prefix")
+  keyHash     String             @map("key_hash")
+  lastUsedAt  DateTime?          @map("last_used_at")
+  enabled     Boolean            @default(true)
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  usageEvents ApiKeyUsageEvent[]
+
+  @@unique([userId, keyHash])
+  @@index([workspaceId])
+  @@index([keyPrefix])
+  @@map("api_keys")
+}
+
+model ApiKeyUsageEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  apiKeyId  String   @map("api_key_id") @db.Uuid
+  apiKey    ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@index([apiKeyId, createdAt])
+  @@map("api_key_usage_events")
+}
+
+model ProjectNotificationSetting {
+  id                   String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
+  userId               String     @map("user_id") @db.Uuid
+  workspaceId          String?    @map("workspace_id") @db.Uuid
+  projectKey           String     @map("project_key")
+  emailOnScanComplete  Boolean    @default(true) @map("email_on_scan_complete")
+  emailOnVulnerability Boolean    @default(true) @map("email_on_vulnerability")
+  weeklyDigest         Boolean    @default(false) @map("weekly_digest")
+  smsEnabled           Boolean    @default(false) @map("sms_enabled")
+  user                 User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace            Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, projectKey], map: "idx_project_notification_unique")
+  @@index([workspaceId], map: "project_notification_settings_workspace_id_idx")
+  @@index([userId], map: "project_notification_settings_user_id_idx")
+  @@map("project_notification_settings")
+}
+
+model Scan {
+  id                      String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  completedAt             DateTime?                @map("completed_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+  userId                  String                   @map("user_id") @db.Uuid
+  orgId                   String?                  @map("org_id") @db.Uuid
+  workspaceId             String?                  @map("workspace_id") @db.Uuid
+  inputType               String                   @map("input_type")
+  inputRef                String                   @map("input_ref")
+  githubContext           Json?                    @map("github_context")
+  sbomRaw                 Json?                    @map("sbom_raw")
+  components              Json                     @default("[]")
+  status                  ScanStatus               @default(pending)
+  planAtSubmission        String                   @default("free_trial") @map("plan_at_submission")
+  plannedSources          ScanSource[]             @default([]) @map("planned_sources")
+  errorMessage            String?                  @map("error_message")
+  user                    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace               Workspace?               @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  scanResults             ScanResult[]
+  findings                Finding[]
+  scanDeltas              ScanDelta[]
+  aiFixPrompts            AiFixPrompt[]
+  remediationPromptUsages RemediationPromptUsage[]
+  securityScores          SecurityScore[]
+  vulnAcceptances         VulnAcceptance[]
+  webhookDeliveries       WebhookDelivery[]
+
+  @@index([workspaceId])
+  @@map("scans")
+}
+
+model ScanResult {
+  id                       String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                DateTime                  @default(now()) @map("created_at")
+  scanId                   String                    @map("scan_id") @db.Uuid
+  source                   ScanSource
+  rawOutput                Json                      @map("raw_output")
+  vulnerabilities          Json
+  scannerVersion           String                    @map("scanner_version")
+  cveDbTimestamp           DateTime                  @map("cve_db_timestamp")
+  durationMs               Int                       @map("duration_ms")
+  scan                     Scan                      @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  CycloneDxRolloutSnapshot CycloneDxRolloutSnapshot?
+
+  @@unique([scanId, source], map: "idx_scan_results_unique")
+  @@map("scan_results")
+}
+
+model Finding {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
+  scanId                 String                   @map("scan_id") @db.Uuid
+  userId                 String                   @map("user_id") @db.Uuid
+  fingerprint            String
+  cveId                  String                   @map("cve_id")
+  packageName            String                   @map("package_name")
+  installedVersion       String                   @map("installed_version")
+  filePath               String?                  @map("file_path")
+  severity               String
+  cvssScore              Decimal?                 @map("cvss_score") @db.Decimal(3, 1)
+  fixedVersion           String?                  @map("fixed_version")
+  status                 String                   @default("active")
+  mitigatedAt            DateTime?                @map("mitigated_at")
+  mitigatedInScanId      String?                  @map("mitigated_in_scan_id") @db.Uuid
+  source                 ScanSource
+  description            String?
+  detectedData           Json?                    @map("detected_data")
+  scan                   Scan                     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  user                   User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  history                FindingHistory[]
+  RemediationPromptUsage RemediationPromptUsage[]
+
+  @@unique([scanId, fingerprint], map: "idx_finding_unique_per_scan")
+  @@index([fingerprint])
+  @@index([userId, status])
+  @@index([scanId])
+  @@index([cveId])
+  @@map("findings")
+}
+
+model FindingHistory {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  findingId String   @map("finding_id") @db.Uuid
+  event     String
+  prevValue String?  @map("prev_value")
+  newValue  String?  @map("new_value")
+  metadata  Json?
+  finding   Finding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([findingId])
+  @@index([event])
+  @@map("finding_history")
+}
+
+model ScanDelta {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at")
+  scanId               String   @unique @map("scan_id") @db.Uuid
+  totalFreeCount       Int      @default(0) @map("total_free_count")
+  totalEnterpriseCount Int      @default(0) @map("total_enterprise_count")
+  deltaCount           Int      @default(0) @map("delta_count")
+  deltaBySeverity      Json     @map("delta_by_severity")
+  deltaVulnerabilities Json?    @map("delta_vulnerabilities")
+  isLocked             Boolean  @default(false) @map("is_locked")
+  reimportSummary      Json?    @map("reimport_summary")
+  scan                 Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("scan_deltas")
+}
+
+model RegionPolicy {
+  id                            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                     DateTime @default(now()) @map("created_at")
+  updatedAt                     DateTime @updatedAt @map("updated_at")
+  regionCode                    String   @unique @map("region_code")
+  monthlyScanLimit              Int      @map("monthly_scan_limit")
+  monthlyRemediationPromptLimit Int      @map("monthly_remediation_prompt_limit")
+  maxPromptsPerFinding          Int      @default(3) @map("max_prompts_per_finding")
+  isActive                      Boolean  @default(true) @map("is_active")
+  updatedByUserId               String?  @map("updated_by_user_id") @db.Uuid
+
+  @@map("region_policies")
+}
+
+model UserPolicyOverride {
+  id                            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt                     DateTime @default(now()) @map("created_at")
+  updatedAt                     DateTime @updatedAt @map("updated_at")
+  userId                        String   @unique @map("user_id") @db.Uuid
+  monthlyScanLimit              Int?     @map("monthly_scan_limit")
+  monthlyRemediationPromptLimit Int?     @map("monthly_remediation_prompt_limit")
+  maxPromptsPerFinding          Int?     @map("max_prompts_per_finding")
+  reason                        String?
+  updatedByUserId               String?  @map("updated_by_user_id") @db.Uuid
+  user                          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_policy_overrides")
+}
+
+model RemediationPromptUsage {
+  id             String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+  userId         String                  @map("user_id") @db.Uuid
+  scanId         String                  @map("scan_id") @db.Uuid
+  findingId      String                  @map("finding_id") @db.Uuid
+  regionAtCall   String                  @map("region_at_call")
+  policySnapshot Json                    @map("policy_snapshot")
+  requestKey     String                  @default(dbgenerated("gen_random_uuid()")) @map("request_key")
+  promptType     String                  @map("prompt_type")
+  provider       String
+  status         RemediationPromptStatus @default(accepted)
+  tokensIn       Int                     @default(0) @map("tokens_in")
+  tokensOut      Int                     @default(0) @map("tokens_out")
+  costEstimate   Decimal?                @map("cost_estimate") @db.Decimal(10, 4)
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scan           Scan                    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  finding        Finding                 @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, requestKey])
+  @@index([scanId])
+  @@index([findingId])
+  @@map("remediation_prompt_usages")
+}
+
+model AiFixPrompt {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  scanId          String   @map("scan_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  vulnerabilityId String   @map("vulnerability_id")
+  requestKey      String   @default(dbgenerated("gen_random_uuid()")) @map("request_key")
+  promptText      String   @map("prompt_text")
+  promptType      String   @default("patch") @map("prompt_type")
+  provider        String   @default("local")
+  modelName       String?  @map("model_name")
+  responsePayload Json?    @map("response_payload")
+  status          String   @default("generated")
+  scan            Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, requestKey])
+  @@map("ai_fix_prompts")
+}
+
+model SecurityScore {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  scanId    String   @unique @map("scan_id") @db.Uuid
+  score     Decimal  @db.Decimal(5, 2)
+  grade     String
+  breakdown Json
+  scan      Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("security_scores")
+}
+
+model VulnAcceptance {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  scanId          String               @map("scan_id") @db.Uuid
+  userId          String               @map("user_id") @db.Uuid
+  vulnerabilityId String               @map("vulnerability_id")
+  reason          String?
+  status          VulnAcceptanceStatus @default(accepted)
+  expiresAt       DateTime?            @map("expires_at")
+  scan            Scan                 @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([scanId, userId, vulnerabilityId])
+  @@map("vuln_acceptances")
+}
+
+model GithubInstallation {
+  id                   String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt            DateTime   @default(now()) @map("created_at")
+  orgId                String?    @map("org_id") @db.Uuid
+  workspaceId          String?    @map("workspace_id") @db.Uuid
+  githubInstallationId BigInt     @map("github_installation_id")
+  githubAppId          String     @map("github_app_id")
+  accountLogin         String?    @map("account_login")
+  accountType          String?    @map("account_type")
+  repositorySelection  String     @default("all") @map("repository_selection")
+  reposScope           String[]   @default([]) @map("repos_scope")
+  triggerOnPush        Boolean    @default(true) @map("trigger_on_push")
+  triggerOnPr          Boolean    @default(true) @map("trigger_on_pr")
+  targetBranches       String[]   @default(["main", "develop"]) @map("target_branches")
+  failPrOnSeverity     String     @default("CRITICAL") @map("fail_pr_on_severity")
+  workspace            Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@unique([githubInstallationId])
+  @@index([workspaceId])
+  @@map("github_installations")
+}
+
+model Webhook {
+  id                     String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt              DateTime          @default(now()) @map("created_at")
+  updatedAt              DateTime          @updatedAt @map("updated_at")
+  userId                 String            @map("user_id") @db.Uuid
+  workspaceId            String?           @map("workspace_id") @db.Uuid
+  url                    String
+  events                 String[]          @default(["scan_complete"])
+  signingSecretEncrypted Bytes             @map("signing_secret_encrypted")
+  enabled                Boolean           @default(true)
+  user                   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace              Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  deliveries             WebhookDelivery[]
+
+  @@index([workspaceId])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt       DateTime              @default(now()) @map("created_at")
+  webhookId       String                @map("webhook_id") @db.Uuid
+  scanId          String                @map("scan_id") @db.Uuid
+  eventType       String                @default("scan_complete") @map("event_type")
+  payload         Json?
+  targetUrl       String                @map("target_url")
+  payloadHash     String                @map("payload_hash")
+  attemptNumber   Int                   @default(1) @map("attempt_number")
+  httpStatus      Int?                  @map("http_status")
+  responseBody    String?               @map("response_body")
+  durationMs      Int?                  @map("duration_ms")
+  deliveredAt     DateTime?             @map("delivered_at")
+  nextRetryAt     DateTime?             @map("next_retry_at")
+  manualRetryOfId String?               @map("manual_retry_of_id") @db.Uuid
+  status          WebhookDeliveryStatus @default(pending)
+  webhook         Webhook               @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  scan            Scan                  @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@map("webhook_deliveries")
+}
+
+model EventOutbox {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+  publishedAt   DateTime?        @map("published_at")
+  occurredAt    DateTime         @map("occurred_at")
+  eventType     String           @map("event_type")
+  category      EventCategory
+  version       String           @default("2026-05-03")
+  source        String
+  workspaceId   String?          @map("workspace_id") @db.Uuid
+  userId        String?          @map("user_id") @db.Uuid
+  entityType    String?          @map("entity_type")
+  entityId      String?          @map("entity_id")
+  traceId       String?          @map("trace_id")
+  correlationId String?          @map("correlation_id")
+  payload       Json
+  metadata      Json             @default("{}")
+  payloadHash   String           @map("payload_hash")
+  state         EventOutboxState @default(pending)
+  retryCount    Int              @default(0) @map("retry_count")
+  lastError     String?          @map("last_error")
+  deliveries    EventDelivery[]
+
+  @@index([state, createdAt], map: "event_outbox_state_created_at_idx")
+  @@index([eventType, state, createdAt], map: "event_outbox_event_type_state_created_at_idx")
+  @@index([workspaceId, createdAt], map: "event_outbox_workspace_id_created_at_idx")
+  @@index([category, createdAt], map: "event_outbox_category_created_at_idx")
+  @@map("event_outbox")
+}
+
+model EventSubscription {
+  id                     String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt              DateTime             @default(now()) @map("created_at")
+  updatedAt              DateTime             @updatedAt @map("updated_at")
+  name                   String
+  destinationType        EventDestinationType @map("destination_type")
+  workspaceId            String?              @map("workspace_id") @db.Uuid
+  userId                 String?              @map("user_id") @db.Uuid
+  destinationConfig      Json                 @map("destination_config")
+  eventTypes             String[]             @default([]) @map("event_types")
+  categories             EventCategory[]      @default([])
+  filters                Json                 @default("{}")
+  enabled                Boolean              @default(true)
+  signingSecretEncrypted Bytes?               @map("signing_secret_encrypted")
+  lastDeliveryAt         DateTime?            @map("last_delivery_at")
+  deliveries             EventDelivery[]
+
+  @@index([destinationType, enabled], map: "event_subscription_destination_type_enabled_idx")
+  @@index([workspaceId, enabled], map: "event_subscription_workspace_id_enabled_idx")
+  @@index([userId, enabled], map: "event_subscription_user_id_enabled_idx")
+  @@map("event_subscriptions")
+}
+
+model EventDelivery {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  eventOutboxId   String               @map("event_outbox_id") @db.Uuid
+  subscriptionId  String               @map("subscription_id") @db.Uuid
+  destinationType EventDestinationType @map("destination_type")
+  status          EventDeliveryStatus  @default(pending)
+  attemptNumber   Int                  @default(1) @map("attempt_number")
+  deliveryKey     String               @unique @map("delivery_key")
+  targetRef       String?              @map("target_ref")
+  httpStatus      Int?                 @map("http_status")
+  responseBody    String?              @map("response_body")
+  durationMs      Int?                 @map("duration_ms")
+  deliveredAt     DateTime?            @map("delivered_at")
+  nextRetryAt     DateTime?            @map("next_retry_at")
+  manualRetryOfId String?              @map("manual_retry_of_id") @db.Uuid
+  errorCode       String?              @map("error_code")
+  errorMessage    String?              @map("error_message")
+  eventOutbox     EventOutbox          @relation(fields: [eventOutboxId], references: [id], onDelete: Cascade)
+  subscription    EventSubscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt], map: "event_delivery_status_created_at_idx")
+  @@index([eventOutboxId], map: "event_delivery_event_outbox_id_idx")
+  @@index([subscriptionId], map: "event_delivery_subscription_id_idx")
+  @@map("event_deliveries")
+}
+
+model BillingEventLedger {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at")
+  userId               String?  @map("user_id") @db.Uuid
+  workspaceId          String?  @map("workspace_id") @db.Uuid
+  stripeCustomerId     String?  @map("stripe_customer_id")
+  stripeSubscriptionId String?  @map("stripe_subscription_id")
+  stripeInvoiceId      String?  @map("stripe_invoice_id")
+  processorEventId     String?  @map("processor_event_id")
+  processorType        String   @default("stripe") @map("processor_type")
+  eventType            String   @map("event_type")
+  statusBefore         String?  @map("status_before")
+  statusAfter          String?  @map("status_after")
+  planBefore           String?  @map("plan_before")
+  planAfter            String?  @map("plan_after")
+  amount               Int?
+  currency             String?
+  payload              Json?
+
+  @@unique([processorType, processorEventId, eventType], map: "billing_event_ledger_processor_event_unique")
+  @@index([userId, createdAt], map: "billing_event_ledger_user_id_created_at_idx")
+  @@index([workspaceId, createdAt], map: "billing_event_ledger_workspace_id_created_at_idx")
+  @@index([stripeCustomerId], map: "billing_event_ledger_stripe_customer_id_idx")
+  @@index([processorEventId], map: "billing_event_ledger_processor_event_id_idx")
+  @@map("billing_event_ledger")
+}
+
+model QuotaLedger {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt     DateTime   @default(now()) @map("created_at")
+  userId        String     @map("user_id") @db.Uuid
+  workspaceId   String?    @map("workspace_id") @db.Uuid
+  action        String
+  amount        Int
+  reason        String?
+  balanceBefore Int        @map("balance_before")
+  balanceAfter  Int        @map("balance_after")
+  relatedScanId String?    @map("related_scan_id") @db.Uuid
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([createdAt])
+  @@map("quota_ledger")
+}
+
+model CycloneDxRolloutSnapshot {
+  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt             DateTime               @default(now()) @map("created_at")
+  scannerId             String                 @map("scanner_id")
+  scanResultId          String                 @unique @map("scan_result_id") @db.Uuid
+  rolloutStage          CycloneDxRolloutStage  @map("rollout_stage")
+  progressStatus        CycloneDxRolloutStatus @map("progress_status")
+  decisionStatus        String                 @map("decision_status")
+  gateStatus            String                 @map("gate_status")
+  gateSnapshot          Json                   @map("gate_snapshot")
+  ingestionMeta         Json                   @map("ingestion_meta")
+  summary               Json                   @map("summary")
+  scanResult            ScanResult             @relation(fields: [scanResultId], references: [id], onDelete: Cascade)
+  CycloneDxRolloutState CycloneDxRolloutState?
+
+  @@index([scannerId, createdAt])
+  @@index([rolloutStage, progressStatus])
+  @@map("cyclonedx_rollout_snapshots")
+}
+
+model CycloneDxRolloutState {
+  id               String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+  scannerId        String                    @unique @map("scanner_id")
+  currentStage     CycloneDxRolloutStage     @default(shadow_smoke) @map("current_stage")
+  progressStatus   CycloneDxRolloutStatus    @default(in_progress) @map("progress_status")
+  latestSnapshotId String?                   @unique @map("latest_snapshot_id") @db.Uuid
+  latestDecision   Json?                     @map("latest_decision")
+  latestSnapshot   CycloneDxRolloutSnapshot? @relation(fields: [latestSnapshotId], references: [id], onDelete: SetNull)
+
+  @@map("cyclonedx_rollout_states")
+}
+
+model Auth {
+  id         String         @id @default(uuid())
+  userId     String?        @unique @db.Uuid
+  user       User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  identities AuthIdentity[]
+  sessions   Session[]
+}
+
+model AuthIdentity {
+  providerName   String
+  providerUserId String
+  providerData   String @default("{}")
+  authId         String
+  auth           Auth   @relation(fields: [authId], references: [id], onDelete: Cascade)
+
+  @@id([providerName, providerUserId])
+}
+
+model Session {
+  id        String   @id @unique
+  expiresAt DateTime
+  userId    String
+  auth      Auth     @relation(references: [id], fields: [userId], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum ScanStatus {
+  pending
+  scanning
+  done
+  error
+  cancelled
+}
+
+enum ScanSource {
+  grype
+  codescoring_johnny
+  snyk
+}
+
+enum WebhookDeliveryStatus {
+  pending
+  delivered
+  failed
+  exhausted
+}
+
+enum EventCategory {
+  scanner_comparison
+  customer
+  billing
+  quota
+  scan
+  report
+  remediation
+  vulnerability
+  integration
+  system
+}
+
+enum EventDestinationType {
+  zoho_crm
+  generic_webhook
+  observability_sink
+}
+
+enum EventDeliveryStatus {
+  pending
+  delivered
+  failed
+  exhausted
+}
+
+enum EventOutboxState {
+  pending
+  routing
+  routed
+  completed
+  failed
+}
+
+enum RemediationPromptStatus {
+  accepted
+  rejected_quota
+  failed_provider
+  completed
+}
+
+enum VulnAcceptanceStatus {
+  accepted
+  revoked
+  expired
+}
+
+enum CycloneDxRolloutStage {
+  shadow_smoke
+  canary_cutover_cohort
+  expand_cohort
+  ready_for_prod
+}
+
+enum CycloneDxRolloutStatus {
+  in_progress
+  blocked
+  ready_for_prod
+  rollback_active
+}
+
+enum PlanTier {
+  free_trial
+  starter
+  pro
+  enterprise
+}
+
+enum OrganizationRole {
+  owner
+  admin
+  member
+}
+
+enum TeamRole {
+  maintainer
+  member
+}
+
+enum WorkspaceRole {
+  admin
+  member
+  viewer
+}

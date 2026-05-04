@@ -7,6 +7,7 @@ import {
   buildWorkspaceOrLegacyOwnerWhere,
   requireWorkspaceScopedUser,
 } from '../../services/workspaceAccess';
+import { serializeDecimalFields } from '../../utils/serialization';
 
 const getScanStatsInputSchema = z.object({
   time_range: z.string().default('30d'),
@@ -136,12 +137,12 @@ export async function getScanStats(
     per_week: parseFloat(((scans.length / daysInRange) * 7).toFixed(2)),
   };
 
-  return {
+  return serializeDecimalFields({
     total_scans: scans.length,
     by_status: byStatus,
     by_severity: bySeverity,
     scan_rate: scanRate,
     by_source: bySource,
     time_range: args.time_range,
-  };
+  });
 }

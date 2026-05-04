@@ -3,6 +3,7 @@ import * as z from "zod";
 import { ensureArgsSchemaOrThrowHttpError } from "../../validation";
 import { countFindingsBySeverity, type ReportUserContext } from "./shared";
 import { requireWorkspaceScopedUser } from "../../services/workspaceAccess";
+import { serializeDecimalFields } from "../../utils/serialization";
 
 const schema = z.object({ scanId: z.string().nonempty() });
 
@@ -60,11 +61,11 @@ export const getCIDecision = async (
   const findings = scan.findings || [];
   const criticalIssues = countFindingsBySeverity(findings, "critical");
 
-  return {
+  return serializeDecimalFields({
     scanId,
     decision: criticalIssues === 0 ? "pass" : "fail",
     reason: criticalIssues === 0 ? "No critical vulnerabilities" : `${criticalIssues} critical vulnerabilities`,
     criticalIssues,
     criticalIssuesBySource: buildCriticalIssuesBySource(scan.scanResults || []),
-  };
+  });
 };

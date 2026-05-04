@@ -1,0 +1,1 @@
+{"version":3,"file":"listWorkspaces.d.ts","sourceRoot":"","sources":["../../../../../src/server/operations/workspaces/listWorkspaces.ts"],"names":[],"mappings":"AAGA,OAAO,EAA+B,KAAK,wBAAwB,EAAE,MAAM,UAAU,CAAC;AAGtF,MAAM,MAAM,sBAAsB,GAAG;IACnC,UAAU,EAAE,wBAAwB,EAAE,CAAC;CACxC,CAAC;AAEF,wBAAsB,cAAc,CAClC,QAAQ,EAAE,OAAO,EACjB,OAAO,EAAE,GAAG,GACX,OAAO,CAAC,GAAG,CAAC,CAUd"}

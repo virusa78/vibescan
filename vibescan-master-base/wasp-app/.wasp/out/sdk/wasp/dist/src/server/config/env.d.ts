@@ -1,0 +1,45 @@
+import * as z from 'zod';
+export declare const serverCoreEnvValidationSchema: z.ZodObject<{
+    JWT_SECRET: z.ZodString;
+    ENCRYPTION_KEY: z.ZodString;
+    NODE_ENV: z.ZodOptional<z.ZodDefault<z.ZodEnum<{
+        production: "production";
+        development: "development";
+        test: "test";
+    }>>>;
+    REDIS_URL: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    REDIS_HOST: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    REDIS_PORT: z.ZodOptional<z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodDefault<z.ZodCoercedNumber<unknown>>>>;
+    WASP_SERVER_URL: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    API_URL: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    VITE_API_PROXY_TARGET: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    REACT_APP_API_URL: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    NEXT_PUBLIC_API_URL: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    WASP_WEB_CLIENT_URL: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    FRONTEND_URL: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    VIBESCAN_EMBED_WORKERS: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    WORKER_ROLE: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    VIBESCAN_ENABLE_SNYK_SCANNER: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    VIBESCAN_SNYK_CREDENTIAL_MODE: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    SNYK_TOKEN: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    SNYK_ORG_ID: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    SNYK_RUNTIME: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    SNYK_COMMAND: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    SNYK_TIMEOUT_MS: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodCoercedNumber<unknown>>>;
+    SNYK_SSH_HOST: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    SNYK_SSH_USER: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    SNYK_SSH_PORT: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodCoercedNumber<unknown>>>;
+    SNYK_SSH_IDENTITY_FILE: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+    SNYK_SSH_REMOTE_TMP_DIR: z.ZodPipe<z.ZodTransform<unknown, unknown>, z.ZodOptional<z.ZodString>>;
+}, z.core.$strip>;
+export declare function getJwtSecret(env?: NodeJS.ProcessEnv): string;
+export declare function getEncryptionKeyHex(env?: NodeJS.ProcessEnv): string;
+export declare function getEncryptionKeyBuffer(env?: NodeJS.ProcessEnv): Buffer;
+export declare function getNodeEnv(env?: NodeJS.ProcessEnv): 'development' | 'test' | 'production';
+export declare function isTestEnvironment(env?: NodeJS.ProcessEnv): boolean;
+export declare function isProductionEnvironment(env?: NodeJS.ProcessEnv): boolean;
+export declare function shouldEmbedWorkersFromEnv(env?: NodeJS.ProcessEnv): boolean;
+export declare function getWorkerRole(env?: NodeJS.ProcessEnv): 'free' | 'enterprise';
+export declare function getRedisHost(env?: NodeJS.ProcessEnv): string;
+export declare function getRedisPort(env?: NodeJS.ProcessEnv): number;
+//# sourceMappingURL=env.d.ts.map

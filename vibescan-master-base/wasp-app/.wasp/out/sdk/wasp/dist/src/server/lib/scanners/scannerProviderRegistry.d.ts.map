@@ -1,0 +1,1 @@
+{"version":3,"file":"scannerProviderRegistry.d.ts","sourceRoot":"","sources":["../../../../../src/server/lib/scanners/scannerProviderRegistry.ts"],"names":[],"mappings":"AAGA,OAAO,KAAK,EAAE,eAAe,EAAE,mBAAmB,EAAE,MAAM,oBAAoB,CAAC;AAQ/E,wBAAgB,kBAAkB,CAAC,IAAI,EAAE,mBAAmB,GAAG,eAAe,CAO7E;AAED,wBAAgB,oBAAoB,IAAI,eAAe,EAAE,CAIxD"}

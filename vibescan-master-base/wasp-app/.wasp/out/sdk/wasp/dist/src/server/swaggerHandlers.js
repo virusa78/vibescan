@@ -1,0 +1,80 @@
+import { generateOpenApiSpec } from './swagger/openapiSpec';
+let swaggerSpecPromise = null;
+async function getSwaggerSpec() {
+    if (!swaggerSpecPromise) {
+        swaggerSpecPromise = generateOpenApiSpec();
+    }
+    return swaggerSpecPromise;
+}
+/**
+ * GET /docs/swagger.json - Returns OpenAPI specification as JSON
+ */
+export const getSwaggerJson = async (_request, response, _context) => {
+    try {
+        response.setHeader('Content-Type', 'application/json');
+        response.send(await getSwaggerSpec());
+    }
+    catch (error) {
+        response.statusCode = 500;
+        response.send({
+            error: 'swagger_generation_failed',
+            message: error instanceof Error ? error.message : 'Unknown swagger generation error',
+        });
+    }
+};
+/**
+ * GET /docs - Returns Swagger UI HTML page
+ */
+export const getSwaggerUI = async (_request, response, _context) => {
+    // Serve Swagger UI HTML with CDN resources
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VibeScan API Documentation</title>
+  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@3/swagger-ui.css">
+  <style>
+    html {
+      box-sizing: border-box;
+      overflow: -moz-scrollbars-vertical;
+      overflow-y: scroll;
+    }
+    *,
+    *:before,
+    *:after {
+      box-sizing: inherit;
+    }
+    body {
+      margin: 0;
+      background: #fafafa;
+    }
+    .topbar {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@3/swagger-ui.js"></script>
+  <script>
+    SwaggerUIBundle({
+      url: '/docs/swagger.json',
+      dom_id: '#swagger-ui',
+      presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIBundle.SwaggerUIStandalonePreset
+      ],
+      layout: 'BaseLayout',
+      deepLinking: true,
+      showExtensions: true,
+    });
+  </script>
+</body>
+</html>
+  `;
+    response.setHeader('Content-Type', 'text/html; charset=utf-8');
+    response.send(html);
+};
+//# sourceMappingURL=swaggerHandlers.js.map

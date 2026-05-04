@@ -3,6 +3,7 @@ import * as z from "zod";
 import { ensureArgsSchemaOrThrowHttpError } from "../../validation";
 import { buildSeverityBreakdown, type ReportUserContext } from "./shared";
 import { requireWorkspaceScopedUser } from "../../services/workspaceAccess";
+import { serializeDecimalFields } from "../../utils/serialization";
 
 const schema = z.object({ scanId: z.string().nonempty() });
 
@@ -54,7 +55,7 @@ export const getReportSummary = async (
 
   const findings = scan.findings || [];
   const severityBreakdown = buildSeverityBreakdown(findings);
-  return {
+  return serializeDecimalFields({
     scanId,
     totalFindings: findings.length,
     totalsBySource: buildTotalsBySource(scan.scanResults || []),
@@ -65,5 +66,5 @@ export const getReportSummary = async (
       low: severityBreakdown.low,
       info: severityBreakdown.info,
     },
-  };
+  });
 };

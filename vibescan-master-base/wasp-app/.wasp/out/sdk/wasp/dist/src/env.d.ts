@@ -1,0 +1,45 @@
+export declare const serverEnvValidationSchema: import("zod").ZodObject<{
+    ADMIN_EMAILS: import("zod").ZodPipe<import("zod").ZodDefault<import("zod").ZodString>, import("zod").ZodTransform<string[], string>>;
+    JWT_SECRET: import("zod").ZodString;
+    NODE_ENV: import("zod").ZodOptional<import("zod").ZodDefault<import("zod").ZodEnum<{
+        production: "production";
+        development: "development";
+        test: "test";
+    }>>>;
+    REDIS_URL: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    REDIS_HOST: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    REDIS_PORT: import("zod").ZodOptional<import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodDefault<import("zod").ZodCoercedNumber<unknown>>>>;
+    WASP_SERVER_URL: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    API_URL: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    VITE_API_PROXY_TARGET: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    REACT_APP_API_URL: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    NEXT_PUBLIC_API_URL: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    WASP_WEB_CLIENT_URL: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    FRONTEND_URL: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    VIBESCAN_EMBED_WORKERS: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    WORKER_ROLE: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    VIBESCAN_ENABLE_SNYK_SCANNER: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    VIBESCAN_SNYK_CREDENTIAL_MODE: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    SNYK_TOKEN: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    SNYK_ORG_ID: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    SNYK_RUNTIME: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    SNYK_COMMAND: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    SNYK_TIMEOUT_MS: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodCoercedNumber<unknown>>>;
+    SNYK_SSH_HOST: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    SNYK_SSH_USER: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    SNYK_SSH_PORT: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodCoercedNumber<unknown>>>;
+    SNYK_SSH_IDENTITY_FILE: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    SNYK_SSH_REMOTE_TMP_DIR: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    PAYMENTS_HOBBY_SUBSCRIPTION_PLAN_ID: import("zod").ZodString;
+    PAYMENTS_PRO_SUBSCRIPTION_PLAN_ID: import("zod").ZodString;
+    PAYMENTS_CREDITS_10_PLAN_ID: import("zod").ZodString;
+    STRIPE_API_KEY: import("zod").ZodString;
+    STRIPE_WEBHOOK_SECRET: import("zod").ZodString;
+    ENCRYPTION_KEY: import("zod").ZodString;
+    GITHUB_APP_ID: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    GITHUB_APP_SLUG: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    GITHUB_APP_PRIVATE_KEY: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    GITHUB_APP_WEBHOOK_SECRET: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+    GITHUB_APP_API_BASE_URL: import("zod").ZodPipe<import("zod").ZodTransform<unknown, unknown>, import("zod").ZodOptional<import("zod").ZodString>>;
+}, import("zod/v4/core").$strip>;
+//# sourceMappingURL=env.d.ts.map
