@@ -21,6 +21,12 @@ const FREE_PLAN_EXECUTIONS: PlannedScannerExecution[] = [
     resultSource: 'grype',
     credentialSource: { mode: 'environment' },
   },
+  {
+    provider: 'syft',
+    queueTarget: 'free',
+    resultSource: 'syft',
+    credentialSource: { mode: 'environment' },
+  },
 ];
 
 const ENTERPRISE_PLAN_EXECUTIONS: PlannedScannerExecution[] = [
@@ -29,6 +35,12 @@ const ENTERPRISE_PLAN_EXECUTIONS: PlannedScannerExecution[] = [
     provider: 'codescoring-johnny',
     queueTarget: 'enterprise',
     resultSource: 'codescoring_johnny',
+    credentialSource: { mode: 'environment' },
+  },
+  {
+    provider: 'owasp',
+    queueTarget: 'enterprise',
+    resultSource: 'owasp',
     credentialSource: { mode: 'environment' },
   },
 ];
