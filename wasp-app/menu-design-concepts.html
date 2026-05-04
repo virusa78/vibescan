@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Menu Concepts</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --panel: rgba(17, 24, 39, 0.72);
+        --panelSolid: #0f172a;
+        --border: rgba(148, 163, 184, 0.18);
+        --text: rgba(226, 232, 240, 0.95);
+        --muted: rgba(148, 163, 184, 0.85);
+        --accent: rgba(99, 102, 241, 0.18);
+        --accent2: rgba(99, 102, 241, 0.9);
+        --card: rgba(15, 23, 42, 0.55);
+        --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+        --radius: 16px;
+      }
+      body.light {
+        --bg: #f6f7fb;
+        --panel: rgba(255, 255, 255, 0.72);
+        --panelSolid: #ffffff;
+        --border: rgba(15, 23, 42, 0.12);
+        --text: rgba(15, 23, 42, 0.92);
+        --muted: rgba(71, 85, 105, 0.85);
+        --accent: rgba(99, 102, 241, 0.14);
+        --accent2: rgba(79, 70, 229, 0.92);
+        --card: rgba(255, 255, 255, 0.78);
+        --shadow: 0 18px 50px rgba(2, 6, 23, 0.12);
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        background: radial-gradient(1200px 520px at 20% -10%, rgba(99, 102, 241, 0.25), transparent 60%),
+          radial-gradient(900px 480px at 90% 0%, rgba(236, 72, 153, 0.16), transparent 55%),
+          radial-gradient(1000px 600px at 60% 105%, rgba(34, 197, 94, 0.12), transparent 55%),
+          var(--bg);
+        color: var(--text);
+        font: 14px/1.35 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+      .page {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 28px 18px 60px;
+      }
+      .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+      .title {
+        display: grid;
+        gap: 4px;
+      }
+      .title h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      .title p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        cursor: pointer;
+        user-select: none;
+        transition: background 150ms ease, border-color 150ms ease;
+      }
+      body.light .chip { background: rgba(15, 23, 42, 0.02); }
+      .chip:hover { border-color: rgba(148, 163, 184, 0.3); background: rgba(255, 255, 255, 0.05); }
+      body.light .chip:hover { background: rgba(15, 23, 42, 0.04); }
+      .chip span { color: var(--muted); font-weight: 600; font-size: 12px; }
+      .tabs {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 16px 0 18px;
+      }
+      .tab {
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 10px 12px;
+        cursor: pointer;
+        transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.02em;
+      }
+      body.light .tab { background: rgba(15, 23, 42, 0.02); }
+      .tab:hover { border-color: rgba(148, 163, 184, 0.32); }
+      .tab[aria-selected="true"] {
+        color: var(--text);
+        background: var(--accent);
+        border-color: rgba(99, 102, 241, 0.45);
+      }
+      .wrap {
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+      .mock {
+        height: 620px;
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.00));
+      }
+      .mock.narrow { grid-template-columns: 76px 1fr; }
+      .mock.hybrid { grid-template-columns: 240px 1fr; }
+      .sidebar {
+        border-right: 1px solid var(--border);
+        background: var(--panel);
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .sb-top {
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--border);
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .logo {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: radial-gradient(circle at 30% 20%, rgba(99,102,241,0.95), rgba(168,85,247,0.7));
+        box-shadow: 0 8px 22px rgba(99,102,241,0.22);
+      }
+      .brand b {
+        font-size: 13px;
+        letter-spacing: -0.02em;
+        white-space: nowrap;
+      }
+      .sb-toggle {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.02);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .sb-toggle svg { opacity: 0.9; }
+      .nav {
+        padding: 12px 10px;
+        display: grid;
+        gap: 6px;
+        overflow: auto;
+      }
+      .nav a {
+        display: grid;
+        grid-template-columns: 28px 1fr;
+        gap: 10px;
+        align-items: center;
+        border-radius: 12px;
+        padding: 10px 12px;
+        color: var(--text);
+        text-decoration: none;
+        border: 1px solid transparent;
+        transition: background 140ms ease, border-color 140ms ease;
+      }
+      .nav a .lbl {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      .nav a .hint {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .nav a:hover { background: rgba(255,255,255,0.04); }
+      body.light .nav a:hover { background: rgba(15,23,42,0.03); }
+      .nav a.active {
+        background: var(--accent);
+        border-color: rgba(99,102,241,0.35);
+      }
+      .nav svg { width: 18px; height: 18px; opacity: 0.9; }
+      .profile {
+        margin-top: auto;
+        border-top: 1px solid var(--border);
+        padding: 12px;
+        display: grid;
+        gap: 10px;
+      }
+      .me {
+        display: grid;
+        grid-template-columns: 40px 1fr;
+        gap: 10px;
+        align-items: center;
+        min-width: 0;
+      }
+      .avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 999px;
+        background: radial-gradient(circle at 30% 20%, rgba(59,130,246,0.85), rgba(16,185,129,0.55));
+        border: 1px solid rgba(255,255,255,0.15);
+      }
+      body.light .avatar { border: 1px solid rgba(15, 23, 42, 0.14); }
+      .me .name { font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .me .sub { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .logout {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.02);
+        cursor: pointer;
+        color: var(--text);
+        font-weight: 750;
+        transition: background 140ms ease, border-color 140ms ease;
+      }
+      .logout:hover { background: rgba(255,255,255,0.05); border-color: rgba(148,163,184,0.3); }
+      body.light .logout:hover { background: rgba(15,23,42,0.04); }
+      .logout svg { width: 16px; height: 16px; opacity: 0.9; }
+      .content {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: transparent;
+      }
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        height: 64px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 12px;
+      }
+      .crumb {
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      .right {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .icon-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.02);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .icon-btn svg { width: 18px; height: 18px; opacity: 0.9; }
+      .workspace {
+        max-width: 360px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.02);
+        cursor: pointer;
+      }
+      .workspace svg { width: 16px; height: 16px; opacity: 0.9; }
+      .workspace .wname {
+        max-width: 240px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 750;
+        letter-spacing: -0.01em;
+      }
+      .workspace .wmeta { color: var(--muted); font-size: 12px; font-weight: 650; }
+      .workspace .chev { margin-left: 4px; opacity: 0.85; }
+      .main {
+        padding: 18px 18px 24px;
+        min-width: 0;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 12px;
+      }
+      .card {
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--card);
+        padding: 14px;
+        min-width: 0;
+      }
+      .kpi { grid-column: span 3; }
+      .kpi .num { font-size: 22px; font-weight: 900; letter-spacing: -0.03em; margin-top: 8px; }
+      .kpi .lbl { color: var(--muted); font-weight: 750; font-size: 12px; }
+      .kpi .tag { margin-top: 10px; display: inline-flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+      .wide { grid-column: span 8; }
+      .side { grid-column: span 4; }
+      .bar {
+        height: 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.02);
+        overflow: hidden;
+      }
+      .bar > i {
+        display: block;
+        height: 100%;
+        width: 62%;
+        background: linear-gradient(90deg, rgba(99,102,241,0.95), rgba(34,197,94,0.75));
+      }
+      .list {
+        margin-top: 10px;
+        display: grid;
+        gap: 8px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 10px;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.02);
+        min-width: 0;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, 0.9);
+        box-shadow: 0 0 0 5px rgba(99, 102, 241, 0.16);
+      }
+      .row .txt {
+        min-width: 0;
+        flex: 1;
+      }
+      .row .txt b { display: block; font-weight: 850; letter-spacing: -0.01em; }
+      .row .txt span { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+      .row .pill {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 750;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 6px 8px;
+        white-space: nowrap;
+      }
+      .mock.narrow .brand b,
+      .mock.narrow .nav a .lbl,
+      .mock.narrow .nav a .hint,
+      .mock.narrow .me .name,
+      .mock.narrow .me .sub,
+      .mock.narrow .logout span { display: none; }
+      .mock.narrow .nav a { grid-template-columns: 1fr; justify-items: center; padding: 10px 0; }
+      .mock.narrow .sb-top { justify-content: center; padding: 0; }
+      .mock.narrow .sb-toggle { display: none; }
+      .mock.narrow .brand { justify-content: center; }
+      .mock.narrow .profile { padding: 10px; }
+      .mock.narrow .me { grid-template-columns: 1fr; justify-items: center; }
+      .mock.narrow .logout { padding: 10px; }
+      .note {
+        padding: 12px 14px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 12px;
+        background: rgba(255,255,255,0.02);
+      }
+      .panel { display: none; }
+      .panel[aria-hidden="false"] { display: block; }
+      @media (max-width: 920px) {
+        .mock, .mock.hybrid { grid-template-columns: 76px 1fr; }
+        .mock .brand b, .mock .nav a .lbl, .mock .nav a .hint, .mock .me .name, .mock .me .sub, .mock .logout span { display: none; }
+        .mock .nav a { grid-template-columns: 1fr; justify-items: center; padding: 10px 0; }
+        .mock .sb-top { justify-content: center; padding: 0; }
+        .mock .sb-toggle { display: none; }
+        .mock .brand { justify-content: center; }
+        .mock .profile { padding: 10px; }
+        .mock .me { grid-template-columns: 1fr; justify-items: center; }
+        .mock .logout { padding: 10px; }
+        .kpi { grid-column: span 6; }
+        .wide, .side { grid-column: span 12; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="top">
+        <div class="title">
+          <h1>Три варианта меню</h1>
+          <p>Один HTML-файл: переключайтесь вкладками и сравнивайте ощущения.</p>
+        </div>
+        <div class="controls">
+          <button class="chip" id="toggleTheme" type="button" aria-label="Toggle theme">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 3a1 1 0 0 0 0 18 9 9 0 1 1 0-18z"></path>
+            </svg>
+            <span>Light/Dark</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Concept tabs">
+        <button class="tab" role="tab" aria-selected="true" aria-controls="p1" id="t1" type="button">A · Широкий сайдбар</button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="p2" id="t2" type="button">B · Узкий икон-рейл</button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="p3" id="t3" type="button">C · Гибрид (компакт+подсказки)</button>
+      </div>
+
+      <div class="wrap">
+        <section class="panel" role="tabpanel" id="p1" aria-labelledby="t1" aria-hidden="false">
+          <div class="mock">
+            <aside class="sidebar">
+              <div class="sb-top">
+                <div class="brand">
+                  <div class="logo"></div>
+                  <b>VibeScan</b>
+                </div>
+                <div class="sb-toggle" title="Свернуть">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6"></path>
+                  </svg>
+                </div>
+              </div>
+              <div class="nav" aria-label="Menu">
+                <a class="active" href="#">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 13h8V3H3v10zM13 21h8V11h-8v10zM13 3h8v6h-8V3zM3 21h8v-6H3v6z"></path>
+                  </svg>
+                  <span class="lbl">Dashboard</span>
+                  <span class="hint">D</span>
+                </a>
+                <a href="#">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10 10l6 6"></path>
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <path d="M21 21l-4.3-4.3"></path>
+                  </svg>
+                  <span class="lbl">New Scan</span>
+                  <span class="hint">N</span>
+                </a>
+                <a href="#">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    <rect x="5" y="11" width="14" height="10" rx="2"></rect>
+                  </svg>
+                  <span class="lbl">API Keys</span>
+                </a>
+                <a href="#">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v3"></path>
+                    <path d="M18.4 5.6l-2.1 2.1"></path>
+                    <path d="M21 12h-3"></path>
+                    <path d="M18.4 18.4l-2.1-2.1"></path>
+                    <path d="M12 21v-3"></path>
+                    <path d="M5.6 18.4l2.1-2.1"></path>
+                    <path d="M3 12h3"></path>
+                    <path d="M5.6 5.6l2.1 2.1"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  <span class="lbl">Settings</span>
+                </a>
+              </div>
+              <div class="profile">
+                <div class="me">
+                  <div class="avatar"></div>
+                  <div style="min-width:0">
+                    <div class="name">alex</div>
+                    <div class="sub">Viewer · vibescan.io</div>
+                  </div>
+                </div>
+                <button class="logout" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <path d="M16 17l5-5-5-5"></path>
+                    <path d="M21 12H9"></path>
+                  </svg>
+                  <span>Logout</span>
+                </button>
+              </div>
+            </aside>
+
+            <div class="content">
+              <div class="topbar">
+                <div class="crumb">Dashboard</div>
+                <div class="right">
+                  <div class="icon-btn" title="Theme">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 3a1 1 0 0 0 0 18 9 9 0 1 1 0-18z"></path>
+                    </svg>
+                  </div>
+                  <div class="workspace" title="Workspace switcher">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 21V7l9-4 9 4v14"></path>
+                      <path d="M9 21V9h6v12"></path>
+                    </svg>
+                    <div style="min-width:0">
+                      <div class="wname">Workspace: Acme Security</div>
+                      <div class="wmeta">Org · admin</div>
+                    </div>
+                    <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M6 9l6 6 6-6"></path>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <div class="main">
+                <div class="grid">
+                  <div class="card kpi">
+                    <div class="lbl">Scans</div>
+                    <div class="num">128</div>
+                    <div class="tag">
+                      <span style="display:inline-flex; align-items:center; gap:6px"><span class="dot" style="background: rgba(34,197,94,0.9); box-shadow: 0 0 0 5px rgba(34,197,94,0.16)"></span>+12%</span>
+                    </div>
+                  </div>
+                  <div class="card kpi">
+                    <div class="lbl">Findings</div>
+                    <div class="num">2,041</div>
+                    <div class="tag">
+                      <span style="display:inline-flex; align-items:center; gap:6px"><span class="dot" style="background: rgba(239,68,68,0.9); box-shadow: 0 0 0 5px rgba(239,68,68,0.14)"></span>+3%</span>
+                    </div>
+                  </div>
+                  <div class="card kpi">
+                    <div class="lbl">Critical</div>
+                    <div class="num">7</div>
+                    <div class="tag">
+                      <span style="display:inline-flex; align-items:center; gap:6px"><span class="dot" style="background: rgba(245,158,11,0.95); box-shadow: 0 0 0 5px rgba(245,158,11,0.16)"></span>48h</span>
+                    </div>
+                  </div>
+                  <div class="card kpi">
+                    <div class="lbl">Quota</div>
+                    <div class="num">62%</div>
+                    <div class="bar" style="margin-top:10px"><i></i></div>
+                  </div>
+
+                  <div class="card wide">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px">
+                      <div style="font-weight:900; letter-spacing:-0.02em">Recent scans</div>
+                      <div class="pill" style="cursor:pointer">Cmd/Ctrl+K</div>
+                    </div>
+                    <div class="list">
+                      <div class="row">
+                        <span class="dot"></span>
+                        <div class="txt">
+                          <b>github.com/acme/api</b>
+                          <span>done · 8 findings · 2 minutes ago</span>
+                        </div>
+                        <div class="pill">Open</div>
+                      </div>
+                      <div class="row">
+                        <span class="dot" style="background: rgba(34,197,94,0.9); box-shadow: 0 0 0 5px rgba(34,197,94,0.14)"></span>
+                        <div class="txt">
+                          <b>sbom: package-lock.json</b>
+                          <span>scanning · started 1 minute ago</span>
+                        </div>
+                        <div class="pill">Running</div>
+                      </div>
+                      <div class="row">
+                        <span class="dot" style="background: rgba(239,68,68,0.9); box-shadow: 0 0 0 5px rgba(239,68,68,0.12)"></span>
+                        <div class="txt">
+                          <b>zip upload</b>
+                          <span>error · scanner timeout</span>
+                        </div>
+                        <div class="pill">Retry</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card side">
+                    <div style="font-weight:900; letter-spacing:-0.02em">Shortcuts</div>
+                    <div class="list">
+                      <div class="row"><span class="dot"></span><div class="txt"><b>Cmd/Ctrl+K</b><span>Command palette</span></div></div>
+                      <div class="row"><span class="dot" style="background: rgba(34,197,94,0.9); box-shadow: 0 0 0 5px rgba(34,197,94,0.14)"></span><div class="txt"><b>?</b><span>Keyboard help</span></div></div>
+                      <div class="row"><span class="dot" style="background: rgba(245,158,11,0.95); box-shadow: 0 0 0 5px rgba(245,158,11,0.16)"></span><div class="txt"><b>J / K</b><span>Row navigation</span></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="note">A: Широкий сайдбар. Быстро читается, много места для лейблов и вторичных ссылок, профиль+logout внизу слева.</div>
+        </section>
+
+        <section class="panel" role="tabpanel" id="p2" aria-labelledby="t2" aria-hidden="true">
+          <div class="mock narrow">
+            <aside class="sidebar">
+              <div class="sb-top">
+                <div class="brand" title="VibeScan">
+                  <div class="logo"></div>
+                  <b>VibeScan</b>
+                </div>
+                <div class="sb-toggle">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"></path>
+                  </svg>
+                </div>
+              </div>
+              <div class="nav" aria-label="Menu">
+                <a class="active" href="#" title="Dashboard">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 13h8V3H3v10zM13 21h8V11h-8v10zM13 3h8v6h-8V3zM3 21h8v-6H3v6z"></path>
+                  </svg>
+                  <span class="lbl">Dashboard</span>
+                </a>
+                <a href="#" title="New Scan">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10 10l6 6"></path>
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <path d="M21 21l-4.3-4.3"></path>
+                  </svg>
+                  <span class="lbl">New Scan</span>
+                </a>
+                <a href="#" title="API Keys">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    <rect x="5" y="11" width="14" height="10" rx="2"></rect>
+                  </svg>
+                  <span class="lbl">API Keys</span>
+                </a>
+                <a href="#" title="Settings">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v3"></path>
+                    <path d="M18.4 5.6l-2.1 2.1"></path>
+                    <path d="M21 12h-3"></path>
+                    <path d="M18.4 18.4l-2.1-2.1"></path>
+                    <path d="M12 21v-3"></path>
+                    <path d="M5.6 18.4l2.1-2.1"></path>
+                    <path d="M3 12h3"></path>
+                    <path d="M5.6 5.6l2.1 2.1"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  <span class="lbl">Settings</span>
+                </a>
+              </div>
+              <div class="profile">
+                <div class="me" title="alex">
+                  <div class="avatar"></div>
+                  <div style="min-width:0">
+                    <div class="name">alex</div>
+                    <div class="sub">Viewer · vibescan.io</div>
+                  </div>
+                </div>
+                <button class="logout" type="button" title="Logout">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <path d="M16 17l5-5-5-5"></path>
+                    <path d="M21 12H9"></path>
+                  </svg>
+                  <span>Logout</span>
+                </button>
+              </div>
+            </aside>
+            <div class="content">
+              <div class="topbar">
+                <div class="crumb">Dashboard</div>
+                <div class="right">
+                  <div class="icon-btn" title="Theme">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 3a1 1 0 0 0 0 18 9 9 0 1 1 0-18z"></path>
+                    </svg>
+                  </div>
+                  <div class="workspace" title="Workspace switcher">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 21V7l9-4 9 4v14"></path>
+                      <path d="M9 21V9h6v12"></path>
+                    </svg>
+                    <div style="min-width:0">
+                      <div class="wname">Acme Security</div>
+                      <div class="wmeta">Org · admin</div>
+                    </div>
+                    <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M6 9l6 6 6-6"></path>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <div class="main">
+                <div class="grid">
+                  <div class="card kpi">
+                    <div class="lbl">Scans</div>
+                    <div class="num">128</div>
+                    <div class="tag"><span style="display:inline-flex; align-items:center; gap:6px"><span class="dot" style="background: rgba(34,197,94,0.9); box-shadow: 0 0 0 5px rgba(34,197,94,0.16)"></span>+12%</span></div>
+                  </div>
+                  <div class="card kpi">
+                    <div class="lbl">Findings</div>
+                    <div class="num">2,041</div>
+                    <div class="tag"><span style="display:inline-flex; align-items:center; gap:6px"><span class="dot" style="background: rgba(239,68,68,0.9); box-shadow: 0 0 0 5px rgba(239,68,68,0.14)"></span>+3%</span></div>
+                  </div>
+                  <div class="card kpi">
+                    <div class="lbl">Critical</div>
+                    <div class="num">7</div>
+                    <div class="tag"><span style="display:inline-flex; align-items:center; gap:6px"><span class="dot" style="background: rgba(245,158,11,0.95); box-shadow: 0 0 0 5px rgba(245,158,11,0.16)"></span>48h</span></div>
+                  </div>
+                  <div class="card kpi">
+                    <div class="lbl">Quota</div>
+                    <div class="num">62%</div>
+                    <div class="bar" style="margin-top:10px"><i></i></div>
+                  </div>
+                  <div class="card wide">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px">
+                      <div style="font-weight:900; letter-spacing:-0.02em">Recent scans</div>
+                      <div class="pill">Hover tooltips</div>
+                    </div>
+                    <div class="list">
+                      <div class="row"><span class="dot"></span><div class="txt"><b>github.com/acme/api</b><span>done · 8 findings</span></div><div class="pill">Open</div></div>
+                      <div class="row"><span class="dot" style="background: rgba(34,197,94,0.9); box-shadow: 0 0 0 5px rgba(34,197,94,0.14)"></span><div class="txt"><b>sbom upload</b><span>scanning</span></div><div class="pill">Running</div></div>
+                      <div class="row"><span class="dot" style="background: rgba(239,68,68,0.9); box-shadow: 0 0 0 5px rgba(239,68,68,0.12)"></span><div class="txt"><b>zip upload</b><span>error</span></div><div class="pill">Retry</div></div>
+                    </div>
+                  </div>
+                  <div class="card side">
+                    <div style="font-weight:900; letter-spacing:-0.02em">Why this works</div>
+                    <div class="list">
+                      <div class="row"><span class="dot"></span><div class="txt"><b>Максимум места контенту</b><span>идеально для таблиц/графиков</span></div></div>
+                      <div class="row"><span class="dot" style="background: rgba(34,197,94,0.9); box-shadow: 0 0 0 5px rgba(34,197,94,0.14)"></span><div class="txt"><b>Лейблы по tooltip</b><span>минимум “шума”</span></div></div>
+                      <div class="row"><span class="dot" style="background: rgba(245,158,11,0.95); box-shadow: 0 0 0 5px rgba(245,158,11,0.16)"></span><div class="txt"><b>Профиль снизу</b><span>быстрый выход</span></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="note">B: Узкий икон-рейл. Выигрывает пространство, лучше для “data-heavy” экранов, подписи можно показывать по hover/tooltip.</div>
+        </section>
+
+        <section class="panel" role="tabpanel" id="p3" aria-labelledby="t3" aria-hidden="true">
+          <div class="mock hybrid">
+            <aside class="sidebar">
+              <div class="sb-top">
+                <div class="brand">
+                  <div class="logo"></div>
+                  <b>VibeScan</b>
+                </div>
+                <div class="sb-toggle" title="Свернуть в икон-режим">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6"></path>
+                  </svg>
+                </div>
+              </div>
+              <div class="nav" aria-label="Menu">
+                <a class="active" href="#">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 13h8V3H3v10zM13 21h8V11h-8v10zM13 3h8v6h-8V3zM3 21h8v-6H3v6z"></path>
+                  </svg>
+                  <span class="lbl">Dashboard</span>
+                  <span class="hint">⌘K</span>
+                </a>
+                <a href="#">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10 10l6 6"></path>
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <path d="M21 21l-4.3-4.3"></path>
+                  </svg>
+                  <span class="lbl">New Scan</span>
+                </a>
+                <a href="#">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    <rect x="5" y="11" width="14" height="10" rx="2"></rect>
+                  </svg>
+                  <span class="lbl">API Keys</span>
+                </a>
+                <a href="#">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 7h-9"></path>
+                    <path d="M14 17H5"></path>
+                    <circle cx="17" cy="17" r="3"></circle>
+                    <circle cx="7" cy="7" r="3"></circle>
+                  </svg>
+                  <span class="lbl">Webhooks</span>
+                </a>
+                <a href="#">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v3"></path>
+                    <path d="M18.4 5.6l-2.1 2.1"></path>
+                    <path d="M21 12h-3"></path>
+                    <path d="M18.4 18.4l-2.1-2.1"></path>
+                    <path d="M12 21v-3"></path>
+                    <path d="M5.6 18.4l2.1-2.1"></path>
+                    <path d="M3 12h3"></path>
+                    <path d="M5.6 5.6l2.1 2.1"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  <span class="lbl">Settings</span>
+                </a>
+              </div>
+              <div class="profile">
+                <div class="me">
+                  <div class="avatar"></div>
+                  <div style="min-width:0">
+                    <div class="name">alex</div>
+                    <div class="sub">Acme Security</div>
+                  </div>
+                </div>
+                <button class="logout" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <path d="M16 17l5-5-5-5"></path>
+                    <path d="M21 12H9"></path>
+                  </svg>
+                  <span>Logout</span>
+                </button>
+              </div>
+            </aside>
+            <div class="content">
+              <div class="topbar">
+                <div class="crumb">Dashboard</div>
+                <div class="right">
+                  <div class="icon-btn" title="Theme">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 3a1 1 0 0 0 0 18 9 9 0 1 1 0-18z"></path>
+                    </svg>
+                  </div>
+                  <div class="workspace" title="Workspace switcher">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 21V7l9-4 9 4v14"></path>
+                      <path d="M9 21V9h6v12"></path>
+                    </svg>
+                    <div style="min-width:0">
+                      <div class="wname">Acme Security</div>
+                      <div class="wmeta">Team · viewer</div>
+                    </div>
+                    <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M6 9l6 6 6-6"></path>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <div class="main">
+                <div class="grid">
+                  <div class="card kpi">
+                    <div class="lbl">Scans</div>
+                    <div class="num">128</div>
+                    <div class="tag"><span style="display:inline-flex; align-items:center; gap:6px"><span class="dot" style="background: rgba(34,197,94,0.9); box-shadow: 0 0 0 5px rgba(34,197,94,0.16)"></span>+12%</span></div>
+                  </div>
+                  <div class="card kpi">
+                    <div class="lbl">Findings</div>
+                    <div class="num">2,041</div>
+                    <div class="tag"><span style="display:inline-flex; align-items:center; gap:6px"><span class="dot" style="background: rgba(239,68,68,0.9); box-shadow: 0 0 0 5px rgba(239,68,68,0.14)"></span>+3%</span></div>
+                  </div>
+                  <div class="card kpi">
+                    <div class="lbl">Critical</div>
+                    <div class="num">7</div>
+                    <div class="tag"><span style="display:inline-flex; align-items:center; gap:6px"><span class="dot" style="background: rgba(245,158,11,0.95); box-shadow: 0 0 0 5px rgba(245,158,11,0.16)"></span>48h</span></div>
+                  </div>
+                  <div class="card kpi">
+                    <div class="lbl">Quota</div>
+                    <div class="num">62%</div>
+                    <div class="bar" style="margin-top:10px"><i style="width:74%"></i></div>
+                  </div>
+                  <div class="card wide">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px">
+                      <div style="font-weight:900; letter-spacing:-0.02em">Смысл гибрида</div>
+                      <div class="pill">Wide ↔ Narrow</div>
+                    </div>
+                    <div class="list">
+                      <div class="row"><span class="dot"></span><div class="txt"><b>Широкий режим</b><span>текстовые пункты + быстрые хоткеи/подсказки</span></div><div class="pill">Default</div></div>
+                      <div class="row"><span class="dot" style="background: rgba(34,197,94,0.9); box-shadow: 0 0 0 5px rgba(34,197,94,0.14)"></span><div class="txt"><b>Узкий режим</b><span>в один клик, когда нужно больше места таблицам</span></div><div class="pill">Toggle</div></div>
+                      <div class="row"><span class="dot" style="background: rgba(245,158,11,0.95); box-shadow: 0 0 0 5px rgba(245,158,11,0.16)"></span><div class="txt"><b>Профиль снизу</b><span>всегда в одном месте; logout рядом</span></div><div class="pill">Stable</div></div>
+                    </div>
+                  </div>
+                  <div class="card side">
+                    <div style="font-weight:900; letter-spacing:-0.02em">Рекомендация</div>
+                    <div class="list">
+                      <div class="row"><span class="dot"></span><div class="txt"><b>Иконки + лейблы</b><span>по умолчанию широкий</span></div></div>
+                      <div class="row"><span class="dot" style="background: rgba(34,197,94,0.9); box-shadow: 0 0 0 5px rgba(34,197,94,0.14)"></span><div class="txt"><b>Collapse</b><span>сохранить выбор в localStorage</span></div></div>
+                      <div class="row"><span class="dot" style="background: rgba(239,68,68,0.9); box-shadow: 0 0 0 5px rgba(239,68,68,0.12)"></span><div class="txt"><b>Workspace справа</b><span>как у вас и задумано</span></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="note">C: Гибрид. Широкий режим по умолчанию, но в один клик превращается в узкий. Хорошо подходит, если иногда нужно “больше воздуха” под контент.</div>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+      const panels = Array.from(document.querySelectorAll('[role="tabpanel"]'));
+      const toggleTheme = document.getElementById('toggleTheme');
+
+      function setActive(tabId) {
+        tabs.forEach((t) => {
+          const selected = t.id === tabId;
+          t.setAttribute('aria-selected', selected ? 'true' : 'false');
+        });
+        panels.forEach((p) => {
+          const active = p.getAttribute('aria-labelledby') === tabId;
+          p.setAttribute('aria-hidden', active ? 'false' : 'true');
+        });
+      }
+
+      tabs.forEach((t) => {
+        t.addEventListener('click', () => setActive(t.id));
+      });
+
+      toggleTheme.addEventListener('click', () => {
+        document.body.classList.toggle('light');
+      });
+    </script>
+  </body>
+</html>
+
