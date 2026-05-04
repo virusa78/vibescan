@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { execFileSync } from "child_process";
-import { describe, expect, it, jest } from "./testGlobals";
+import { describe, expect, it } from "./testGlobals";
 import type { ParsedCycloneDxDocument } from "../src/ingestion/cyclonedx-contracts";
 
 jest.mock("wasp/server", () => {
@@ -24,7 +24,7 @@ jest.mock("wasp/server", () => {
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { fromCycloneDX, validateCycloneDX } = require("../src/ingestion/cyclonedx-contracts");
 const {
-  extractZipAndScanWithSyft,
+  extractZipAndScanWithSBOMGenerator,
   normalizeComponents,
   resolveTrustedScanInputPath,
   validateAndExtractSBOM,
@@ -187,7 +187,7 @@ describe("PR-02: CycloneDX ingestion runtime", () => {
         zipPath,
       ]);
 
-      await expect(extractZipAndScanWithSyft(zipPath, 1000)).rejects.toMatchObject({
+      await expect(extractZipAndScanWithSBOMGenerator(zipPath, 1000)).rejects.toMatchObject({
         statusCode: 422,
       });
     } finally {

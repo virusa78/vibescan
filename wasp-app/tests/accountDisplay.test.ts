@@ -25,6 +25,12 @@ describe('getAccountDisplayValues', () => {
       subscriptionStatus: 'active',
       monthlyQuotaUsed: 8,
       monthlyQuotaLimit: 100,
+      organizationName: null,
+      organizationSlug: null,
+      activeWorkspaceName: null,
+      activeWorkspaceSlug: null,
+      activeWorkspaceRole: null,
+      workspaceCount: 0,
     });
   });
 });

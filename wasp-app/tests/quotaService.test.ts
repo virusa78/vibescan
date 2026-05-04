@@ -4,9 +4,7 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from './testGlobals';
-
-jest.mock('wasp/server', async () => import('../../test/mocks/wasp-server'));
+import { describe, it, expect, beforeEach, afterEach } from './testGlobals';
 
 import { prisma, HttpError } from 'wasp/server';
 import { quotaService } from '../src/server/services/quotaService';

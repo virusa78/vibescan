@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, jest, test } from './testGlobals';
+import { afterEach, beforeEach, describe, expect, test } from './testGlobals';
 
 type ScanData = {
   id: string;
@@ -24,8 +24,8 @@ const queryScenario: {
   queryError: null,
 };
 
-jest.mock('wasp/client/operations', async () => {
-  const React = await import('react');
+jest.mock('wasp/client/operations', () => {
+  const React = require('react');
   const getScanById = jest.fn();
   const useQuery = jest.fn();
 
