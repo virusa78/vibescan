@@ -2,12 +2,12 @@ import { routes } from "wasp/client/router";
 import { BlogUrl, DocsUrl } from "../../../shared/common";
 import type { NavigationItem } from "./NavBar";
 import { appNavigationLabels } from "./navigationConfig";
-import { KeyRound, LayoutDashboard, ScanSearch } from "lucide-react";
+import { LayoutDashboard, ScanSearch, Settings } from "lucide-react";
 
 const appNavigationSource: NavigationItem[] = [
   { name: appNavigationLabels[0], to: routes.DashboardRoute.to, icon: LayoutDashboard },
   { name: appNavigationLabels[1], to: routes.NewScanRoute.to, icon: ScanSearch },
-  { name: appNavigationLabels[2], to: routes.ApiKeysRoute.to, icon: KeyRound },
+  { name: appNavigationLabels[2], to: routes.SettingsRoute.to, icon: Settings },
 ];
 
 const staticNavigationItems: NavigationItem[] = [

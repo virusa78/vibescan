@@ -8,7 +8,7 @@ describe('navigation split', () => {
     expect(appNavigationLabels).toEqual([
       'Dashboard',
       'New Scan',
-      'API Keys',
+      'Settings',
     ]);
 
     expect(userMenuLabels).toEqual(['User Settings']);

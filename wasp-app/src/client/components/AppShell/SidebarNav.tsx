@@ -55,6 +55,12 @@ export function SidebarNav({
     return name.slice(0, 1).toUpperCase();
   }, [user?.username]);
 
+  const Tooltip = ({ label }: { label: string }) => (
+    <span className="pointer-events-none absolute top-1/2 left-full z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-border/60 bg-background/95 px-2 py-1 text-xs font-medium text-foreground opacity-0 shadow-lg backdrop-blur-sm transition-all duration-150 group-hover:translate-x-0 group-hover:opacity-100 translate-x-1">
+      {label}
+    </span>
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className={cn("border-border flex h-16 items-center border-b px-3", collapsed ? "justify-center" : "justify-between")}>
@@ -73,23 +79,25 @@ export function SidebarNav({
           type="button"
           onClick={onToggleCollapsed}
           className={cn(
-            "text-muted-foreground hover:text-foreground hover:bg-accent inline-flex items-center justify-center rounded-md p-2 transition-colors",
+            "text-muted-foreground hover:text-foreground hover:bg-accent inline-flex items-center justify-center rounded-md p-2 transition-colors relative group",
             collapsed && "hidden",
           )}
           aria-label="Collapse sidebar"
         >
           <ChevronLeft className="size-4" />
+          {collapsed ? null : <Tooltip label="Collapse" />}
         </button>
         <button
           type="button"
           onClick={onToggleCollapsed}
           className={cn(
-            "text-muted-foreground hover:text-foreground hover:bg-accent hidden items-center justify-center rounded-md p-2 transition-colors",
+            "text-muted-foreground hover:text-foreground hover:bg-accent hidden items-center justify-center rounded-md p-2 transition-colors relative group",
             collapsed && "inline-flex",
           )}
           aria-label="Expand sidebar"
         >
           <ChevronRight className="size-4" />
+          {collapsed ? <Tooltip label="Expand" /> : null}
         </button>
       </div>
 
@@ -97,7 +105,7 @@ export function SidebarNav({
         <ul className="space-y-1">
           {items.map((item) => {
             const itemStyles = cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors relative group",
               item.isActive
                 ? "bg-accent text-accent-foreground"
                 : "text-foreground hover:bg-accent/60 hover:text-foreground",
@@ -109,10 +117,10 @@ export function SidebarNav({
                 <WaspRouterLink
                   to={item.to}
                   className={itemStyles}
-                  title={collapsed ? item.name : undefined}
                 >
                   {item.icon ? <item.icon className="size-5 shrink-0" aria-hidden="true" /> : null}
                   {!collapsed && <span className="truncate">{item.name}</span>}
+                  {collapsed ? <Tooltip label={item.name} /> : null}
                 </WaspRouterLink>
               </li>
             );
@@ -125,13 +133,13 @@ export function SidebarNav({
           <WaspRouterLink
             to={routes.LoginRoute.to}
             className={cn(
-              "text-foreground hover:bg-accent hover:text-foreground flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "text-foreground hover:bg-accent hover:text-foreground flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors relative group",
               collapsed && "justify-center px-2",
             )}
-            title={collapsed ? "Log in" : undefined}
           >
             <LogIn className="size-5 shrink-0" aria-hidden="true" />
             {!collapsed && <span>Log in</span>}
+            {collapsed ? <Tooltip label="Log in" /> : null}
           </WaspRouterLink>
         ) : (
           <div className={cn("flex items-center gap-3", collapsed && "flex-col items-stretch gap-2")}>
@@ -144,12 +152,6 @@ export function SidebarNav({
                   <div className="text-foreground truncate text-sm font-medium">
                     {user.username}
                   </div>
-                  <WaspRouterLink
-                    to={routes.SettingsRoute.to}
-                    className="text-muted-foreground hover:text-foreground text-xs transition-colors"
-                  >
-                    Settings
-                  </WaspRouterLink>
                 </div>
               )}
             </div>
@@ -158,14 +160,14 @@ export function SidebarNav({
               type="button"
               onClick={() => logout()}
               className={cn(
-                "text-muted-foreground hover:text-foreground hover:bg-accent inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-accent inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors relative group",
                 collapsed && "w-full px-2",
               )}
               aria-label="Log out"
-              title={collapsed ? "Log out" : undefined}
             >
               <LogOut className="size-4" aria-hidden="true" />
               {!collapsed && <span>Logout</span>}
+              {collapsed ? <Tooltip label="Logout" /> : null}
             </button>
           </div>
         )}
