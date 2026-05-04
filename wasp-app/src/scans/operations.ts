@@ -8,6 +8,7 @@ import {
   buildWorkspaceOrLegacyOwnerWhere,
   requireWorkspaceScopedUser,
 } from "../server/services/workspaceAccess";
+import { serializeDecimalFields } from "../server/utils/serialization";
 
 const submitScanInputSchema = z.object({
   inputRef: z.string().trim().min(1).max(512).describe("Repository/file reference"),
@@ -46,11 +47,13 @@ export const submitScan: SubmitScan<SubmitScanInput, Scan> = async (
 export const getScans: GetScans<void, Scan[]> = async (_args, context) => {
   const user = await requireWorkspaceScopedUser(context.user);
 
-  return context.entities.Scan.findMany({
+  const scans = await context.entities.Scan.findMany({
     where: buildWorkspaceOrLegacyOwnerWhere(user),
     orderBy: { createdAt: "desc" },
     take: 25,
   });
+
+  return scans.map(serializeDecimalFields);
 };
 
 export const getScanById: GetScanById<GetScanByIdInput, ScanWithDetails> = async (
@@ -76,5 +79,5 @@ export const getScanById: GetScanById<GetScanByIdInput, ScanWithDetails> = async
     throw new HttpError(404, "Scan not found.");
   }
 
-  return scan;
+  return serializeDecimalFields(scan);
 };
