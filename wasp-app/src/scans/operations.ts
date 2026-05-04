@@ -14,8 +14,12 @@ const submitScanInputSchema = z.object({
   inputType: z.enum(["github", "sbom", "source_zip"]).default("github"),
 });
 
+const getScanByIdSchema = z.object({
+  scanId: z.string().uuid("Invalid scan ID format"),
+});
+
 type SubmitScanInput = z.infer<typeof submitScanInputSchema>;
-type GetScanByIdInput = { scanId: string };
+type GetScanByIdInput = z.infer<typeof getScanByIdSchema>;
 
 export type ScanWithDetails = Scan & {
   scanResults: ScanResult[];
@@ -50,19 +54,16 @@ export const getScans: GetScans<void, Scan[]> = async (_args, context) => {
 };
 
 export const getScanById: GetScanById<GetScanByIdInput, ScanWithDetails> = async (
-  args,
+  rawArgs,
   context,
 ) => {
   const user = await requireWorkspaceScopedUser(context.user);
 
-  const scanId = args.scanId?.trim();
-  if (!scanId) {
-    throw new HttpError(400, "Missing scan id.");
-  }
+  const args = ensureArgsSchemaOrThrowHttpError(getScanByIdSchema, rawArgs);
 
   const scan = await context.entities.Scan.findFirst({
     where: {
-      id: scanId,
+      id: args.scanId,
       ...buildWorkspaceOrLegacyOwnerWhere(user),
     },
     include: {
