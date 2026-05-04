@@ -1,12 +1,16 @@
 import { codescoringProvider } from './codescoringProvider.js';
 import { grypeProvider } from './grypeProvider.js';
 import { snykProvider } from './snykProvider.js';
+import { syftProvider } from './syftProvider.js';
+import { owaspProvider } from './owaspProvider.js';
 import type { ScannerProvider, ScannerProviderKind } from './providerTypes.js';
 
 const scannerProviders: Record<ScannerProviderKind, ScannerProvider | undefined> = {
   grype: grypeProvider,
   'codescoring-johnny': codescoringProvider,
   snyk: snykProvider,
+  syft: syftProvider,
+  owasp: owaspProvider,
 };
 
 export function getScannerProvider(kind: ScannerProviderKind): ScannerProvider {

@@ -1,7 +1,7 @@
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
 import type { NormalizedFinding } from '../../operations/scans/normalizeFindings.js';
 
-export type ScannerProviderKind = 'grype' | 'codescoring-johnny' | 'snyk';
+export type ScannerProviderKind = 'grype' | 'codescoring-johnny' | 'snyk' | 'syft' | 'owasp';
 
 export type ScannerCredentialSource =
   | { mode: 'environment' }

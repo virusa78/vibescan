@@ -1,5 +1,5 @@
 /**
- * Normalize scanner outputs (Grype, Codescoring) to shared Finding schema
+ * Normalize scanner outputs (Grype, Codescoring, Snyk, Syft, OWASP) to shared Finding schema
  */
 
 export interface NormalizedFinding {
@@ -10,7 +10,7 @@ export interface NormalizedFinding {
   fixedVersion?: string;
   description: string;
   cvssScore: number;
-  source: "grype" | "codescoring_johnny" | "snyk";
+  source: "grype" | "codescoring_johnny" | "snyk" | "syft" | "owasp";
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -157,4 +157,79 @@ export function computeFindingFingerprint(
   const input = `${cveId}|${packageName}|${version}|${filePath || ""}`;
   // In production, use: crypto.createHash('sha256').update(input).digest('hex')
   return input;
+}
+
+/**
+ * Normalize Syft CycloneDX output to Finding array
+ * Syft generates CycloneDX SBOM format with optional vulnerabilities
+ */
+export function normalizeSyftFindings(rawOutput: unknown): NormalizedFinding[] {
+  if (!isRecord(rawOutput) || !Array.isArray(rawOutput.vulnerabilities)) {
+    return [];
+  }
+
+  const findings: NormalizedFinding[] = [];
+
+  for (const vuln of rawOutput.vulnerabilities) {
+    if (!isRecord(vuln)) continue;
+
+    const severity = isRecord(vuln.ratings) && Array.isArray(vuln.ratings)
+      ? parseSeverity((vuln.ratings[0] as UnknownRecord)?.severity as string | undefined)
+      : 'info';
+
+    const cvssScore = isRecord(vuln.ratings) && Array.isArray(vuln.ratings)
+      ? parseScore((vuln.ratings[0] as UnknownRecord)?.score as string | number | undefined)
+      : 0;
+
+    const fixes = Array.isArray(vuln.fixes) ? vuln.fixes : [];
+    const fixedVersion = (fixes[0] as UnknownRecord)?.version as string | undefined;
+
+    findings.push({
+      cveId: (vuln.id as string) || 'UNKNOWN',
+      severity,
+      package: (vuln.ref as string) || 'unknown',
+      version: 'unknown', // Syft doesn't always include version in vuln record
+      fixedVersion,
+      description: (vuln.description as string) || '',
+      cvssScore,
+      source: 'syft' as const,
+    });
+  }
+
+  return findings;
+}
+
+/**
+ * Normalize OWASP Dependency-Check output to Finding array
+ * OWASP generates its own JSON format with vulnerability metadata
+ */
+export function normalizeOwaspFindings(rawOutput: unknown): NormalizedFinding[] {
+  if (!isRecord(rawOutput)) {
+    return [];
+  }
+
+  const findings: NormalizedFinding[] = [];
+
+  // OWASP format has vulnerabilities at root level
+  if (Array.isArray((rawOutput as any).vulnerabilities)) {
+    for (const vuln of (rawOutput as any).vulnerabilities) {
+      if (!isRecord(vuln)) continue;
+
+      const severity = parseSeverity((vuln.severity as string | undefined));
+      const cvssScore = parseScore((vuln.cvssScore as string | number | undefined));
+
+      findings.push({
+        cveId: (vuln.cve as string) || (vuln.name as string) || 'UNKNOWN',
+        severity,
+        package: (vuln.artifactId as string) || 'unknown',
+        version: (vuln.artifactVersion as string) || 'unknown',
+        fixedVersion: undefined, // OWASP doesn't typically provide fixed version
+        description: (vuln.description as string) || '',
+        cvssScore,
+        source: 'owasp' as const,
+      });
+    }
+  }
+
+  return findings;
 }
