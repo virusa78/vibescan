@@ -19,6 +19,7 @@ import { isEditableTarget } from './utils/keyboard';
 import './theme-init';
 import './Main.css';
 import NavBar from './components/NavBar/NavBar';
+import { AppShell } from './components/AppShell/AppShell';
 import { getAuthRedirectPath } from './utils/routeGuard';
 import { appNavigationItems, marketingNavigationItems } from './components/NavBar/constants';
 import CookieConsentBanner from './components/cookie-consent/Banner';
@@ -135,24 +136,19 @@ export default function App() {
     ? marketingNavigationItems
     : appNavigationItems;
 
-  const shouldDisplayAppNavBar = useMemo(() => {
-    const isAuthPage = [
+  const isAdminDashboard = useMemo(() => {
+    return location.pathname.startsWith('/admin');
+  }, [location]);
+
+  const isAuthPage = useMemo(() => {
+    return [
       routes.LoginRoute.build(),
       routes.SignupRoute.build(),
       routes.RequestPasswordResetRoute.build(),
       routes.PasswordResetRoute.build(),
       routes.EmailVerificationRoute.build(),
     ].includes(location.pathname);
-
-    return (
-      !isAuthPage &&
-      !location.pathname.startsWith('/admin')
-    );
-  }, [location]);
-
-  const isAdminDashboard = useMemo(() => {
-    return location.pathname.startsWith('/admin');
-  }, [location]);
+  }, [location.pathname]);
 
   useEffect(() => {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -387,12 +383,20 @@ export default function App() {
             <Outlet />
           ) : (
             <>
-              {shouldDisplayAppNavBar && (
-                <NavBar navigationItems={navigationItems} />
-              )}
-              <main>
+              {isAuthPage ? (
                 <Outlet />
-              </main>
+              ) : isMarketingPage ? (
+                <>
+                  <NavBar navigationItems={navigationItems} />
+                  <main>
+                    <Outlet />
+                  </main>
+                </>
+              ) : (
+                <AppShell navigationItems={appNavigationItems}>
+                  <Outlet />
+                </AppShell>
+              )}
             </>
           )}
         </div>
