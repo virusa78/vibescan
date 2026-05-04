@@ -88,7 +88,7 @@ export type WebhookOwnershipRecord = {
   createdAt: Date;
   events: string[];
   enabled: boolean;
-  signingSecretEncrypted: Buffer;
+  signingSecretEncrypted: string;
 };
 
 export type WebhookDeliverySummaryRecord = {

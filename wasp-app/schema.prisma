@@ -96,7 +96,7 @@ model User {
   // Profile fields
   displayName         String? @map("display_name")
   isAdmin             Boolean @default(false)
-  snykApiKeyEncrypted Bytes?  @map("snyk_api_key_encrypted")
+  snykApiKeyEncrypted String? @map("snyk_api_key_encrypted")
 
   // Billing fields
   plan                 PlanTier @default(free_trial)
@@ -637,7 +637,7 @@ model Webhook {
   workspaceId            String?  @map("workspace_id") @db.Uuid
   url                    String
   events                 String[] @default(["scan_complete"]) // JSON array of event types
-  signingSecretEncrypted Bytes    @map("signing_secret_encrypted")
+  signingSecretEncrypted String  @map("signing_secret_encrypted")
   enabled                Boolean  @default(true)
 
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)

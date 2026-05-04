@@ -36,7 +36,7 @@ export interface WebhookDeliveryJob {
   payload: string;
   payloadHash: string;
   targetUrl: string;
-  signingSecretEncrypted: Buffer;
+  signingSecretEncrypted: string;
   attemptNumber: number;
 }
 

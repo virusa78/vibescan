@@ -21,7 +21,7 @@ function buildSecretPreview(secret: string): string {
   return `${secret.slice(0, 4)}...${secret.slice(-4)}`;
 }
 
-function previewEncryptedSecret(encryptedKey: Buffer | null): string | null {
+function previewEncryptedSecret(encryptedKey: string | null): string | null {
   if (!encryptedKey) {
     return null;
   }
@@ -58,7 +58,7 @@ export async function updateScannerAccessSettings(
     throw new HttpError(404, 'User not found');
   }
 
-  let snykApiKeyEncrypted: Buffer | null | undefined;
+  let snykApiKeyEncrypted: string | null | undefined;
   if (args.snyk_api_key !== undefined) {
     const normalized = (args.snyk_api_key ?? '').trim();
     snykApiKeyEncrypted = normalized.length > 0 ? encryptSecret(normalized) : null;

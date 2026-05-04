@@ -505,7 +505,9 @@ action generateCheckoutSession {
 api paymentsWebhook {
   fn: import { paymentsWebhook } from "@src/payment/webhook",
   entities: [User],
-  middlewareConfigFn: import { paymentsMiddlewareConfigFn } from "@src/payment/webhook",
+  // NOTE: Disabled to fix JSON parsing globally. This middleware removes express.json and breaks auth/operations.
+  // TODO: Implement proper route-specific middleware for Stripe webhook raw body handling without breaking other routes.
+  // middlewareConfigFn: import { paymentsMiddlewareConfigFn } from "@src/payment/webhook",
   httpRoute: (POST, "/payments-webhook")
 }
 

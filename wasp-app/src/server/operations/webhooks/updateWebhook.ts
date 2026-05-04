@@ -46,7 +46,7 @@ type WebhookUpdateData = {
   url?: string;
   events?: string[];
   enabled?: boolean;
-  signingSecretEncrypted?: Buffer;
+  signingSecretEncrypted?: string;
 };
 
 

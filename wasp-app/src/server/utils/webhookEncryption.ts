@@ -3,9 +3,10 @@ import { getEncryptionKeyBuffer } from '../config/env.js';
 
 /**
  * Decrypt a webhook signing secret that was encrypted with AES-256-GCM
- * Expected format: IV (16 bytes) + Auth Tag (16 bytes) + Ciphertext
+ * Expected format: IV (16 bytes) + Auth Tag (16 bytes) + Ciphertext (base64-encoded)
  */
-export function decryptWebhookSecret(encryptedBuffer: Buffer): string {
+export function decryptWebhookSecret(encryptedBase64: string): string {
+  const encryptedBuffer = Buffer.from(encryptedBase64, 'base64');
   const keyBuffer = getEncryptionKeyBuffer();
 
   // Extract components from buffer
@@ -26,9 +27,9 @@ export function decryptWebhookSecret(encryptedBuffer: Buffer): string {
 
 /**
  * Encrypt a webhook signing secret using AES-256-GCM
- * Returns buffer with format: IV (16 bytes) + Auth Tag (16 bytes) + Ciphertext
+ * Returns base64-encoded string with format: IV (16 bytes) + Auth Tag (16 bytes) + Ciphertext
  */
-export function encryptWebhookSecret(signingSecret: string): Buffer {
+export function encryptWebhookSecret(signingSecret: string): string {
   const keyBuffer = getEncryptionKeyBuffer();
 
   // Generate random IV (16 bytes)
@@ -46,9 +47,11 @@ export function encryptWebhookSecret(signingSecret: string): Buffer {
   const authTag = cipher.getAuthTag();
 
   // Combine IV + auth tag + ciphertext into single buffer
-  return Buffer.concat([
+  const encryptedBuffer = Buffer.concat([
     iv,
     authTag,
     ciphertext,
   ]);
+  
+  return encryptedBuffer.toString('base64');
 }

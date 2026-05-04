@@ -21,7 +21,7 @@ export interface SignatureResult {
  */
 export function signWebhookPayload(
   payload: string,
-  signingSecretEncrypted: Buffer
+  signingSecretEncrypted: string
 ): SignatureResult {
   try {
     // Decrypt the signing secret
@@ -54,7 +54,7 @@ export function signWebhookPayload(
 export function verifyWebhookSignature(
   payload: string,
   signature: string,
-  signingSecretEncrypted: Buffer
+  signingSecretEncrypted: string
 ): boolean {
   try {
     const { signature: computedSignature } = signWebhookPayload(payload, signingSecretEncrypted);

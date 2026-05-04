@@ -22,7 +22,7 @@ function buildSecretPreview(secret: string): string {
   return `${secret.slice(0, 4)}...${secret.slice(-4)}`;
 }
 
-function getScannerAccessPreview(encryptedKey: Buffer | null): string | null {
+function getScannerAccessPreview(encryptedKey: string | null): string | null {
   if (!encryptedKey) {
     return null;
   }
