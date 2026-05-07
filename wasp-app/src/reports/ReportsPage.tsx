@@ -230,11 +230,11 @@ export default function ReportsPage() {
 
   const severityChipOptions = useMemo(() => {
     const entries = [
-      { value: 'critical', label: 'Critical', count: severitySummary.critical ?? 0 },
-      { value: 'high', label: 'High', count: severitySummary.high ?? 0 },
-      { value: 'medium', label: 'Medium', count: severitySummary.medium ?? 0 },
-      { value: 'low', label: 'Low', count: severitySummary.low ?? 0 },
-      { value: 'info', label: 'Info', count: severitySummary.info ?? 0 },
+      { value: 'critical', label: 'Critical', count: severitySummary.critical ?? 0, className: 'data-[state=on]:bg-red-500 data-[state=on]:text-white' },
+      { value: 'high', label: 'High', count: severitySummary.high ?? 0, className: 'data-[state=on]:bg-orange-500 data-[state=on]:text-white' },
+      { value: 'medium', label: 'Medium', count: severitySummary.medium ?? 0, className: 'data-[state=on]:bg-amber-500 data-[state=on]:text-white' },
+      { value: 'low', label: 'Low', count: severitySummary.low ?? 0, className: 'data-[state=on]:bg-blue-500 data-[state=on]:text-white' },
+      { value: 'info', label: 'Info', count: severitySummary.info ?? 0, className: 'data-[state=on]:bg-slate-500 data-[state=on]:text-white' },
     ];
 
     return [{ value: 'all', label: 'All', count: findings.length }, ...entries];
