@@ -41,7 +41,8 @@ export interface ReimportResult {
  * Does NOT include: severity, description, cvss_score (these can change with CVE DB updates)
  */
 export function computeFingerprint(finding: NormalizedFinding): string {
-  const key = `${finding.cveId}|${finding.packageName}|${finding.installedVersion}|${finding.filePath || ''}`;
+  const normalizedPath = finding.filePath ? finding.filePath.replace(/^\.\//, '') : '';
+  const key = `${finding.cveId}|${finding.packageName}|${finding.installedVersion}|${normalizedPath}`;
   return createHash('sha256').update(key).digest('hex');
 }
 

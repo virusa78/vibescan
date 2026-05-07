@@ -15,6 +15,7 @@ export type GetReportInput = z.infer<typeof getReportInputSchema>;
 
 interface GetReportResponse {
   scanId: string;
+  inputRef?: string;
   status: 'completed' | 'failed' | 'partial';
   lockedView: boolean;
   severity_breakdown: SeverityBreakdown;
@@ -34,6 +35,13 @@ interface GetReportResponse {
     source: string;
     filePath: string | null;
     status: string;
+    reportedBy: string[]; // List of scanners that found this CVE
+    cveReferences: {
+      nvd: string;
+      osv: string;
+      cveDetails: string;
+      mitre: string;
+    };
     annotation: {
       state: string;
       reason: string | null;
@@ -60,12 +68,13 @@ function getLegacyCompatibilityTotals(totalsBySource: Record<string, number>): {
   totalFree: number;
   totalEnterprise: number;
 } {
-  const totalFree = totalsBySource.grype ?? 0;
+  const freeSources = ['grype', 'trivy'];
+  const totalFree = freeSources.reduce((sum, src) => sum + (totalsBySource[src] ?? 0), 0);
   const totalAllSources = Object.values(totalsBySource).reduce((sum, count) => sum + count, 0);
 
   return {
     totalFree,
-    totalEnterprise: totalAllSources - totalFree,
+    totalEnterprise: Math.max(0, totalAllSources - totalFree),
   };
 }
 
@@ -197,6 +206,7 @@ export const getReport = async (
 
   const response: GetReportResponse = {
     scanId,
+    inputRef: scan.inputRef,
     status: scan.status === 'done' ? 'completed' : scan.status === 'error' ? 'failed' : 'partial',
     lockedView,
     severity_breakdown: effectiveSeverityBreakdown,
@@ -204,20 +214,38 @@ export const getReport = async (
     total_enterprise: compatibilityTotals.totalEnterprise,
     totals_by_source: totalsBySource,
     delta_count,
-    vulnerabilities: findings.map(f => ({
-      id: f.id,
-      cveId: f.cveId,
-      packageName: f.packageName,
-      installedVersion: f.installedVersion,
-      severity: f.severity,
-      cvssScore: f.cvssScore,
-      fixedVersion: f.fixedVersion,
-      description: f.description,
-      source: f.source,
-      filePath: f.filePath,
-      status: f.status,
-      annotation: annotationByFindingId.get(f.id) ?? null,
-    })),
+    vulnerabilities: findings.map(f => {
+      // Extract reportedBy from detectedData if available
+      let reportedBy: string[] = [f.source];
+      if (f.detectedData && typeof f.detectedData === 'object' && !Array.isArray(f.detectedData)) {
+        const detectedObj = f.detectedData as Record<string, unknown>;
+        if (Array.isArray(detectedObj.reportedBy)) {
+          reportedBy = detectedObj.reportedBy as string[];
+        }
+      }
+
+      return {
+        id: f.id,
+        cveId: f.cveId,
+        packageName: f.packageName,
+        installedVersion: f.installedVersion,
+        severity: f.severity,
+        cvssScore: f.cvssScore,
+        fixedVersion: f.fixedVersion,
+        description: f.description,
+        source: f.source,
+        filePath: f.filePath,
+        status: f.status,
+        reportedBy, // Which scanners found this CVE
+        cveReferences: {
+          nvd: `https://nvd.nist.gov/vuln/detail/${f.cveId}`,
+          osv: `https://osv.dev/vulnerability/${f.cveId}`,
+          cveDetails: `https://www.cvedetails.com/cve/${f.cveId}/`,
+          mitre: `https://cve.mitre.org/cgi-bin/cvename.cgi?name=${f.cveId}`,
+        },
+        annotation: annotationByFindingId.get(f.id) ?? null,
+      };
+    }),
   };
 
   return serializeDecimalFields(response);

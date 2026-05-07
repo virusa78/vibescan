@@ -51,6 +51,7 @@ type ReportFinding = {
   severity?: string;
   description?: string;
   fixedVersion?: string | null;
+  reportedBy?: string[];
   annotation?: {
     state?: 'accepted' | 'snoozed' | 'rejected' | 'expired';
     reason?: string | null;
@@ -60,6 +61,7 @@ type ReportFinding = {
 
 type ReportResponse = {
   scanId?: string;
+  inputRef?: string;
   findings?: ReportFinding[];
   vulnerabilities?: ReportFinding[];
 };
@@ -84,6 +86,9 @@ export default function ReportsPage() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const { isLoading, error, run, setError, setIsLoading } = useAsyncState(true);
 
+  const isUuid = (val: string | undefined): val is string => 
+    !!val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [ciDecision, setCiDecision] = useState<CiDecision | null>(null);
@@ -93,15 +98,15 @@ export default function ReportsPage() {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [fixableFilter, setFixableFilter] = useState<FixableFilter>('all');
   const [annotationFilter, setAnnotationFilter] = useState<AnnotationFilter>('all');
-  const [sortBy, setSortBy] = useState<'newest' | 'severity' | 'package' | 'cve'>('newest');
+  const [sortBy, setSortBy] = useState<'newest' | 'severity' | 'package' | 'cve'>('severity');
   const [annotationDrafts, setAnnotationDrafts] = useState<Record<string, { state: 'accepted' | 'snoozed' | 'rejected'; reason: string; expiresAt: string }>>({});
   const [annotationSaving, setAnnotationSaving] = useState<Record<string, boolean>>({});
   const [remediationLoading, setRemediationLoading] = useState<Record<string, boolean>>({});
   const [remediationTimestamp, setRemediationTimestamp] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
-    if (!scanId) {
-      setError('Missing scan id in route.');
+    if (!isUuid(scanId)) {
+      setError('Invalid or missing scan id in route.');
       setIsLoading(false);
       return;
     }
@@ -441,8 +446,10 @@ export default function ReportsPage() {
     <div className="p-8 lg:p-10">
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-foreground text-4xl font-bold tracking-tight mb-2">Report</h1>
-          <p className="text-muted-foreground">Scan: {scanId}</p>
+          <h1 className="text-foreground text-4xl font-bold tracking-tight mb-2">
+            {report?.inputRef ? `Report: ${report.inputRef}` : 'Report'}
+          </h1>
+          <p className="text-muted-foreground text-sm font-mono">ID: {scanId}</p>
         </div>
         <Button onClick={generatePdf} aria-label="Generate report PDF">
           <FileText className="w-4 h-4 mr-2" />
@@ -492,7 +499,7 @@ export default function ReportsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className={`text-2xl font-bold ${ciDecision?.decision === 'pass' ? 'text-green-500' : 'text-red-500'}`}>
+            <p className={`text-2xl font-bold ${ciDecision?.decision === 'pass' ? 'text-emerald-500' : 'text-red-500'}`}>
               {(ciDecision?.decision ?? 'unknown').toUpperCase()}
             </p>
           </CardContent>
@@ -603,33 +610,67 @@ export default function ReportsPage() {
                   expiresAt: finding.annotation?.expires_at?.slice(0, 10) ?? '',
                 };
 
+                const reportedBy = finding.reportedBy || [];
+                const severity = (finding.severity ?? 'unknown').toLowerCase();
+                const severityColors: Record<string, string> = {
+                  critical: 'border-l-red-600 bg-red-500/5',
+                  high: 'border-l-orange-500 bg-orange-500/5',
+                  medium: 'border-l-amber-500 bg-amber-500/5',
+                  low: 'border-l-blue-500 bg-blue-500/5',
+                  info: 'border-l-slate-400 bg-slate-500/5',
+                  unknown: 'border-l-slate-300',
+                };
+
+                const scannerColors: Record<string, string> = {
+                  grype: 'bg-purple-100 text-purple-700 border-purple-200',
+                  trivy: 'bg-blue-100 text-blue-700 border-blue-200',
+                  snyk: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                  codescoring_johnny: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+                  owasp: 'bg-amber-100 text-amber-700 border-amber-200',
+                };
+
                 return (
-                  <div key={fid} className="rounded-md border border-border/50 p-3">
+                  <div key={fid} className={`rounded-md border border-border/50 border-l-4 p-3 shadow-sm hover:shadow-md transition-shadow ${severityColors[severity] || severityColors.unknown}`}>
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-mono text-sm text-foreground">
-                        {cve ? (
-                          <span className="flex items-center gap-2">
-                            <ExternalLink
-                              href={buildGitHubAdvisoryUrl(cve)}
-                              aria-label={`Open GitHub advisory search for ${cve}`}
-                            >
-                              {cve}
-                            </ExternalLink>
-                            <ExternalLink
-                              href={buildNvdUrl(cve)}
-                              withIcon={false}
-                              className="text-xs text-muted-foreground"
-                              aria-label={`Open NVD details for ${cve}`}
-                            >
-                              NVD
-                            </ExternalLink>
-                          </span>
-                        ) : (
-                          'Unknown CVE'
+                      <div className="flex items-center gap-3">
+                        <p className="font-mono text-sm text-foreground font-bold">
+                          {cve ? (
+                            <span className="flex items-center gap-2">
+                              <ExternalLink
+                                href={buildGitHubAdvisoryUrl(cve)}
+                                aria-label={`Open GitHub advisory search for ${cve}`}
+                              >
+                                {cve}
+                              </ExternalLink>
+                              <ExternalLink
+                                href={buildNvdUrl(cve)}
+                                withIcon={false}
+                                className="text-xs text-muted-foreground font-normal hover:underline"
+                                aria-label={`Open NVD details for ${cve}`}
+                              >
+                                NVD
+                              </ExternalLink>
+                            </span>
+                          ) : (
+                            'Unknown CVE'
+                          )}
+                        </p>
+                        {reportedBy.length > 0 && (
+                          <div className="flex items-center gap-1.5 ml-2">
+                            {reportedBy.map((src) => (
+                              <span
+                                key={src}
+                                title={src}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase tracking-tighter ${scannerColors[src] || 'bg-slate-100 text-slate-600 border-slate-200'}`}
+                              >
+                                {src === 'codescoring_johnny' ? 'CS' : src.charAt(0).toUpperCase()}
+                              </span>
+                            ))}
+                          </div>
                         )}
-                      </p>
-                      <span className="text-xs px-2 py-1 rounded bg-accent/60 text-foreground">
-                        {(finding.severity ?? 'unknown').toUpperCase()}
+                      </div>
+                      <span className="text-xs px-2 py-1 rounded bg-accent/60 text-foreground font-semibold">
+                        {severity.toUpperCase()}
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">

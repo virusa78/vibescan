@@ -155,9 +155,13 @@ The script will:
 
 ### Manual Setup
 
-**Prerequisites:**
+### Prerequisites:
 - Node.js 24.14.1+ (use `nvm use 24.14.1`)
 - Docker & Docker Compose
+- **Scanners (Local Development):**
+  - **Trivy**: `curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin`
+  - **Grype**: `curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin`
+  - Alternatively, use Homebrew: `brew install aquasecurity/trivy/trivy grype`
 
 **Step 1: Start Docker services**
 ```bash

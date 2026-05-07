@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { getScannerProvider } from '../lib/scanners/scannerProviderRegistry.js';
 import type { ScannerExecutionContext } from '../lib/scanners/providerTypes.js';
@@ -73,20 +74,32 @@ async function ensureScanStarted(
   scanId: string,
   loggerLabel: string,
 ): Promise<boolean> {
-  const startedScan = await prisma.scan.updateMany({
-    where: {
-      id: scanId,
-      status: {
-        in: ['pending', 'scanning'],
-      },
-    },
-    data: { status: 'scanning' },
+  // Check if scan exists and is still in a valid state for processing
+  const scan = await prisma.scan.findUnique({
+    where: { id: scanId },
+    select: { id: true, status: true },
   });
 
-  if (startedScan.count === 0) {
-    console.log(`[${loggerLabel}] Scan ${scanId} is no longer active, skipping`);
+  if (!scan) {
+    console.log(`[${loggerLabel}] Scan ${scanId} not found, skipping`);
     return false;
   }
+
+  // Allow scans in 'pending', 'scanning', or 'error' status (error means one scanner failed but others may still run)
+  if (scan.status === 'done' || scan.status === 'cancelled') {
+    console.log(`[${loggerLabel}] Scan ${scanId} is no longer active (status: ${scan.status}), skipping`);
+    return false;
+  }
+
+  // Transition from pending to scanning (if needed)
+  if (scan.status === 'pending') {
+    await prisma.scan.update({
+      where: { id: scanId },
+      data: { status: 'scanning' },
+    });
+  }
+  // If status is already 'scanning' or 'error', allow this scanner to proceed
+  // (error means one scanner failed, but other scanners should still be able to run)
 
   return true;
 }
@@ -129,7 +142,14 @@ async function persistFindings(
   findings: ScannerFindingForPersistence[],
 ): Promise<void> {
   for (const finding of findings) {
-    const fingerprint = `${finding.cveId}|${finding.package}|${finding.version}`;
+    // Fingerprint: CVE + package + version + path (normalized)
+    // Using SHA256 hashing for consistent fixed-length unique keys
+    // This MUST match reimportLogic.ts to enable historical tracking
+    const normalizedPath = finding.filePath ? finding.filePath.replace(/^\.\//, '') : '';
+    const fingerprintKey = `${finding.cveId}|${finding.package}|${finding.version}|${normalizedPath}`;
+    const fingerprint = createHash('sha256').update(fingerprintKey).digest('hex');
+
+    // Get existing finding to track which scanners already reported it
     const existingFinding = await input.prisma.finding.findUnique({
       where: {
         scanId_fingerprint: {
@@ -142,6 +162,8 @@ async function persistFindings(
         detectedData: true,
       },
     });
+
+    // Extract list of scanners that already found this CVE
     const previousReportedBy = existingFinding?.detectedData
       && typeof existingFinding.detectedData === 'object'
       && !Array.isArray(existingFinding.detectedData)
@@ -150,12 +172,17 @@ async function persistFindings(
       : existingFinding?.source
         ? [existingFinding.source]
         : [];
-    const reportedBy = Array.from(new Set([...previousReportedBy, input.source]));
+
+    // Add current scanner to the list (deduplicated with Set)
+    const reportedBy = Array.from(new Set([...previousReportedBy, input.source])).sort();
+
     const detectedData = {
       ...finding,
-      reportedBy,
+      reportedBy, // Track: ['grype', 'snyk'] if both found it
     };
 
+    // Upsert: if finding exists, update severity/fixedVersion and add scanner to reportedBy
+    // if new finding, create it with current scanner
     await input.prisma.finding.upsert({
       where: {
         scanId_fingerprint: {
@@ -174,15 +201,17 @@ async function persistFindings(
         cvssScore: finding.cvssScore,
         fixedVersion: finding.fixedVersion,
         description: finding.description,
-        source: input.source,
-          detectedData: detectedData as unknown as Prisma.InputJsonValue,
+        source: input.source, // Original scanner that created it
+        detectedData: detectedData as unknown as Prisma.InputJsonValue,
       },
       update: {
+        // Update severity/fixedVersion from scanner (may improve over time)
         severity: finding.severity.toUpperCase(),
         cvssScore: finding.cvssScore,
         fixedVersion: finding.fixedVersion,
         description: finding.description,
-          detectedData: detectedData as unknown as Prisma.InputJsonValue,
+        // Keep reportedBy list updated (add new scanner if not already present)
+        detectedData: detectedData as unknown as Prisma.InputJsonValue,
       },
     });
   }
@@ -194,6 +223,16 @@ export async function executeScannerForScan(
   const { prisma, scanId, userId, source, providerKind, loggerLabel } = input;
   const scannerId = toCycloneDxScannerId(providerKind);
   const provider = getScannerProvider(providerKind);
+
+  const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+  if (!isUuid(scanId)) {
+    console.error(`[${loggerLabel}] Invalid scanId format: ${scanId}`);
+    return {
+      status: 'skipped',
+      findingsCount: 0,
+      scanResultId: null,
+    };
+  }
 
   try {
     console.log(`[${loggerLabel}] Starting scan ${scanId} for user ${userId} via provider ${providerKind}`);
@@ -245,14 +284,45 @@ export async function executeScannerForScan(
       ),
     };
 
-    const providerRun = scannerComponents.length > 0
-      ? await provider.scanComponents(scannerComponents, executionContext)
-      : {
+    let providerRun: any;
+    const health = await provider.getHealth(executionContext);
+    if (!health.configured || health.healthy === false) {
+      console.warn(`[${loggerLabel}] Skipping provider ${providerKind} for scan ${scanId} - Not healthy: ${health.message}`);
+      providerRun = {
+        provider: provider.kind,
+        rawOutput: { 
+          error: health.message || `${provider.displayName} is not healthy or not configured`,
+          failed: true,
+          unconfigured: !health.configured,
+          failedAt: new Date().toISOString()
+        },
+        findings: [],
+        durationMs: 0,
+      };
+    } else {
+      try {
+        providerRun = scannerComponents.length > 0
+          ? await provider.scanComponents(scannerComponents, executionContext)
+          : {
+              provider: provider.kind,
+              rawOutput: {},
+              findings: [],
+              durationMs: 0,
+            };
+      } catch (error) {
+        console.error(`[${loggerLabel}] Provider ${providerKind} failed for scan ${scanId}:`, error);
+        providerRun = {
           provider: provider.kind,
-          rawOutput: {},
+          rawOutput: { 
+            error: error instanceof Error ? error.message : String(error),
+            failed: true,
+            failedAt: new Date().toISOString()
+          },
           findings: [],
           durationMs: 0,
         };
+      }
+    }
 
     console.log(
       `[${loggerLabel}] Provider ${providerKind} completed for scan ${scanId} in ${providerRun.durationMs}ms`,

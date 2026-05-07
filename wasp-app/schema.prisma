@@ -18,10 +18,10 @@ enum ScanStatus {
 
 enum ScanSource {
   grype
-  syft
   codescoring_johnny
   owasp
   snyk
+  trivy
 }
 
 enum WebhookDeliveryStatus {

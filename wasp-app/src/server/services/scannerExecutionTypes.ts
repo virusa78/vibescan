@@ -25,5 +25,5 @@ export type ScannerExecutionResult = {
 
 export type ScannerFindingForPersistence = Pick<
   NormalizedFinding,
-  'cveId' | 'severity' | 'package' | 'version' | 'fixedVersion' | 'description' | 'cvssScore'
+  'cveId' | 'severity' | 'package' | 'version' | 'fixedVersion' | 'description' | 'cvssScore' | 'filePath'
 >;

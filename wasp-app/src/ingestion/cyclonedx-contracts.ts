@@ -595,10 +595,10 @@ function mapComponentsToVulnerabilities(
     const bomRef = component.bomRef || component["bom-ref"] || component.purl || `${component.name}@${component.version}`;
     const directVulnerabilities = refsToVulns.get(bomRef) || [];
     const locations = (component.properties || [])
-      .filter((property) => property.name.startsWith("syft:location:") && property.value)
+      .filter((property) => (property.name.startsWith("syft:location:") || property.name.startsWith("trivy:location:")) && property.value)
       .map((property) => property.value);
 
-    const foundBy = component.properties?.find((property) => property.name === "syft:package:foundBy")?.value;
+    const foundBy = component.properties?.find((property) => property.name === "syft:package:foundBy" || property.name === "trivy:package:foundBy")?.value;
 
     return {
       bomRef,

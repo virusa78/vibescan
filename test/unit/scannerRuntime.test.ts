@@ -56,19 +56,19 @@ describe('scannerRuntime', () => {
         throw new Error('docker not found');
       }
 
-      expect(command).toBe('syft');
-      expect(args).toEqual(['dir:' + sbomPath, '-o', 'cyclonedx-json']);
+      expect(command).toBe('trivy');
+      expect(args).toEqual(['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', sbomPath]);
       return '{"artifacts": []}';
     });
 
     const result = runScannerTool(
       {
-        tool: 'syft',
+        tool: 'trivy',
         targetPath: sbomPath,
         timeoutMs: 1000,
-        dockerImage: 'anchore/syft:latest',
-        localArgs: ['dir:' + sbomPath, '-o', 'cyclonedx-json'],
-        dockerArgs: ['syft', `dir:${sbomPath}`, '-o', 'cyclonedx-json'],
+        dockerImage: 'aquasec/trivy:latest',
+        localArgs: ['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', sbomPath],
+        dockerArgs: ['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', '/work'],
       },
       executor,
     );
@@ -76,7 +76,7 @@ describe('scannerRuntime', () => {
     expect(result).toBe('{"artifacts": []}');
     expect(executor).toHaveBeenCalledTimes(2);
     expect(executor.mock.calls[0][0]).toBe('docker');
-    expect(executor.mock.calls[1][0]).toBe('syft');
+    expect(executor.mock.calls[1][0]).toBe('trivy');
   });
 
   it('uses docker when runtime is forced to docker', () => {
@@ -87,18 +87,18 @@ describe('scannerRuntime', () => {
 
     const executor = jest.fn((command: string, args: string[]) => {
       expect(command).toBe('docker');
-      expect(args).toEqual(expect.arrayContaining(['--network=none', '--read-only', 'anchore/syft:latest', 'syft']));
+      expect(args).toEqual(expect.arrayContaining(['--network=none', '--read-only', 'aquasec/trivy:latest', 'fs']));
       return '{"artifacts": []}';
     });
 
     const result = runScannerTool(
       {
-        tool: 'syft',
+        tool: 'trivy',
         targetPath: repoDir,
         timeoutMs: 1000,
-        dockerImage: 'anchore/syft:latest',
-        localArgs: ['dir:' + repoDir, '-o', 'cyclonedx-json'],
-        dockerArgs: ['syft', `dir:${repoDir}`, '-o', 'cyclonedx-json'],
+        dockerImage: 'aquasec/trivy:latest',
+        localArgs: ['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', repoDir],
+        dockerArgs: ['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', '/work'],
       },
       executor,
     );

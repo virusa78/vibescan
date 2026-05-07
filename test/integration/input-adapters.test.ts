@@ -6,7 +6,7 @@
 import {
   validateAndExtractSBOM,
   validateGitHubUrl,
-  parseSyftOutput,
+  parseCycloneDXOutput,
   normalizeComponents,
   NormalizedComponent,
 } from '../../wasp-app/src/server/services/inputAdapterService';
@@ -147,10 +147,10 @@ describe('Input Adapter Service', () => {
     });
   });
 
-  describe('Syft Output Parsing', () => {
-    it('should parse valid Syft JSON output', () => {
-      const syftJson = JSON.stringify({
-        artifacts: [
+  describe('Trivy/CycloneDX Output Parsing', () => {
+    it('should parse valid CycloneDX JSON output', async () => {
+      const trivyJson = JSON.stringify({
+        components: [
           {
             name: 'requests',
             version: '2.28.1',
@@ -164,10 +164,10 @@ describe('Input Adapter Service', () => {
             type: 'python',
           },
         ],
-        source: { type: 'directory', target: '/app' },
+        metadata: { timestamp: '2024-01-01' },
       });
 
-      const result = parseSyftOutput(syftJson);
+      const result = await parseCycloneDXOutput(trivyJson);
 
       expect(result).toHaveLength(2);
       expect(result[0].name).toBe('requests');
@@ -175,19 +175,19 @@ describe('Input Adapter Service', () => {
       expect(result[1].name).toBe('flask');
     });
 
-    it('should handle Syft output with missing artifacts', () => {
-      const syftJson = JSON.stringify({
-        source: { type: 'directory', target: '/app' },
+    it('should handle output with missing components', async () => {
+      const trivyJson = JSON.stringify({
+        metadata: { timestamp: '2024-01-01' },
       });
 
-      const result = parseSyftOutput(syftJson);
+      const result = await parseCycloneDXOutput(trivyJson);
 
       expect(result).toHaveLength(0);
     });
 
-    it('should handle artifacts with missing version', () => {
-      const syftJson = JSON.stringify({
-        artifacts: [
+    it('should handle components with missing version', async () => {
+      const trivyJson = JSON.stringify({
+        components: [
           {
             name: 'some-package',
             type: 'library',
@@ -195,19 +195,17 @@ describe('Input Adapter Service', () => {
         ],
       });
 
-      const result = parseSyftOutput(syftJson);
+      const result = await parseCycloneDXOutput(trivyJson);
 
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('some-package');
       expect(result[0].version).toBe('unknown');
     });
 
-    it('should throw on invalid JSON', () => {
-      const invalidJson = '{ invalid syft output }';
+    it('should throw on invalid JSON', async () => {
+      const invalidJson = '{ invalid trivy output }';
 
-      expect(() => {
-        parseSyftOutput(invalidJson);
-      }).toThrow();
+      await expect(parseCycloneDXOutput(invalidJson)).rejects.toThrow();
     });
   });
 

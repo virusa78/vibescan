@@ -7,8 +7,6 @@
  */
 
 import { execSync } from 'child_process';
-import path from 'path';
-import type { ScanResult } from '@prisma/client';
 
 export interface NormalizedFinding {
   cveId: string;
@@ -19,6 +17,7 @@ export interface NormalizedFinding {
   cvssScore: number;
   description: string;
   source: string;
+  filePath?: string;
 }
 
 export interface SnykRawOutput {
@@ -46,7 +45,7 @@ export async function executeSnykScan(targetPath: string, timeout: number = 6000
     const output = execSync(cmd, {
       timeout,
       encoding: 'utf-8',
-      maxBuffer: 10 * 1024 * 1024,
+      maxBuffer: 20 * 1024 * 1024, // 20MB
       env: {
         ...process.env,
         SNYK_TOKEN: process.env.SNYK_TOKEN || '',

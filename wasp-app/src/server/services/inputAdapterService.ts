@@ -1,6 +1,6 @@
 /**
  * Input Adapter Service - component extraction and SBOM helpers.
- * The live path uses GitHub repo cloning + Syft fallback parsing.
+ * The live path uses GitHub repo cloning + Trivy fallback parsing.
  * SBOM/ZIP helpers stay available for project-level scan coverage.
  */
 
@@ -40,6 +40,11 @@ function ensureTrustedScanInputRoot() {
   return root;
 }
 
+const DEFAULT_PROCESS_OPTIONS = {
+  maxBuffer: 20 * 1024 * 1024, // 20MB
+  encoding: 'utf8' as const,
+};
+
 export function isJohnnyInstalled(): boolean {
   try {
     execSync('johnny --version', { stdio: 'ignore' });
@@ -49,9 +54,9 @@ export function isJohnnyInstalled(): boolean {
   }
 }
 
-export function isSyftInstalled(): boolean {
+export function isTrivyInstalled(): boolean {
   try {
-    execSync('syft --version', { stdio: 'ignore' });
+    execSync('trivy --version', { stdio: 'ignore' });
     return true;
   } catch {
     return false;
@@ -238,45 +243,7 @@ export async function loadScanArtifacts(
 }
 
 /**
- * Parse Syft JSON output and extract components
- * Syft format: { artifacts: [...], source: {...} }
- */
-export function parseSyftOutput(syftJson: string): NormalizedComponent[] {
-  let syftData: { artifacts?: Array<{ name?: string; version?: string; purl?: string; type?: string }> };
-
-  try {
-    syftData = JSON.parse(syftJson);
-  } catch (error) {
-    console.error('[InputAdapter] Failed to parse Syft output:', error);
-    throw new HttpError(
-      500,
-      'Syft parsing failed',
-      { detail: 'Failed to parse Syft SBOM output' }
-    );
-  }
-
-  const artifacts = syftData.artifacts || [];
-
-  // Normalize artifacts to components
-  const normalized: NormalizedComponent[] = artifacts
-    .map((artifact): NormalizedComponent | null => {
-      if (!artifact.name) return null;
-
-      return {
-        name: artifact.name,
-        version: artifact.version || '0',
-        purl: artifact.purl,
-        type: artifact.type,
-      } as NormalizedComponent;
-    })
-    .filter((c): c is NormalizedComponent => c !== null);
-
-  return normalized;
-}
-
-/**
  * Normalize components from any source into consistent format
- * Validates and deduplicates components
  */
 export async function normalizeComponents(
   raw: NormalizedComponent[]
@@ -443,7 +410,7 @@ function collectRepoComponents(repoPath: string): NormalizedComponent[] {
 }
 
 /**
- * Extract ZIP file and scan with Syft
+ * Extract ZIP file and scan with Trivy
  * Returns normalized components array
  * 
  * @param filePath Absolute path to ZIP file
@@ -504,14 +471,14 @@ export async function extractZipAndScanWithSBOMGenerator(
       );
     }
 
-    // Try Johnny first if installed (as requested by user integration snippet), then Syft
+    // Try Johnny first if installed (as requested by user integration snippet), then Trivy
     if (isJohnnyInstalled()) {
       try {
         console.log(`[InputAdapter] Using Johnny to scan ZIP: ${filePath}`);
         const johnnyOutput = execFileSync(
           'johnny',
           ['--input', extractDir, '--output-format', 'cyclonedx-json'],
-          { timeout: timeoutMs, encoding: 'utf8' },
+          { ...DEFAULT_PROCESS_OPTIONS, timeout: timeoutMs },
         );
         return parseCycloneDXOutput(johnnyOutput);
       } catch (error) {
@@ -519,20 +486,20 @@ export async function extractZipAndScanWithSBOMGenerator(
       }
     }
 
-    if (isSyftInstalled()) {
+    if (isTrivyInstalled()) {
       try {
-        const syftOutput = execFileSync(
-          'syft',
-          [`dir:${extractDir}`, '-o', 'cyclonedx-json'],
-          { timeout: timeoutMs, encoding: 'utf8' },
+        const trivyOutput = execFileSync(
+          'trivy',
+          ['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', extractDir],
+          { ...DEFAULT_PROCESS_OPTIONS, timeout: timeoutMs },
         );
-        return parseCycloneDXOutput(syftOutput);
+        return parseCycloneDXOutput(trivyOutput);
       } catch (error) {
-        console.warn(`[InputAdapter] syft scan failed for ZIP ${filePath}:`, error instanceof Error ? error.message : String(error));
+        console.warn(`[InputAdapter] trivy scan failed for ZIP ${filePath}:`, error instanceof Error ? error.message : String(error));
       }
     }
 
-    console.warn(`[InputAdapter] No SBOM generators (Johnny/Syft) available or successful for ZIP ${filePath}, falling back to manifest parsing`);
+    console.warn(`[InputAdapter] No SBOM generators (Johnny/Trivy) available or successful for ZIP ${filePath}, falling back to manifest parsing`);
     return normalizeComponents(collectRepoComponents(extractDir));
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
@@ -540,7 +507,7 @@ export async function extractZipAndScanWithSBOMGenerator(
 }
 
 /**
- * Helper to parse CycloneDX output from Johnny or Syft
+ * Helper to parse CycloneDX output from Johnny or Trivy
  */
 async function parseCycloneDXOutput(jsonOutput: string): Promise<NormalizedComponent[]> {
   const parsed = JSON.parse(jsonOutput);
@@ -562,7 +529,7 @@ async function parseCycloneDXOutput(jsonOutput: string): Promise<NormalizedCompo
 }
 
 /**
- * Clone GitHub repo and scan with best available SBOM generator (Johnny or Syft)
+ * Clone GitHub repo and scan with best available SBOM generator (Johnny or Trivy)
  * Returns normalized components array
  * 
  * @param url GitHub repository URL
@@ -634,14 +601,14 @@ export async function cloneGitHubAndScanWithSBOMGenerator(
       );
     }
 
-    // Try Johnny first if installed, then Syft
+    // Try Johnny first if installed, then Trivy
     if (isJohnnyInstalled()) {
       try {
         console.log(`[InputAdapter] Using Johnny to scan repo: ${url}`);
         const johnnyOutput = execFileSync(
           'johnny',
           ['--input', repoPath, '--output-format', 'cyclonedx-json'],
-          { timeout: timeoutMs, encoding: 'utf8' },
+          { ...DEFAULT_PROCESS_OPTIONS, timeout: timeoutMs },
         );
         return parseCycloneDXOutput(johnnyOutput);
       } catch (error) {
@@ -649,16 +616,16 @@ export async function cloneGitHubAndScanWithSBOMGenerator(
       }
     }
 
-    if (isSyftInstalled()) {
+    if (isTrivyInstalled()) {
       try {
-        const syftOutput = execFileSync(
-          'syft',
-          [`dir:${repoPath}`, '-o', 'cyclonedx-json'],
-          { timeout: timeoutMs, encoding: 'utf8' },
+        const trivyOutput = execFileSync(
+          'trivy',
+          ['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', repoPath],
+          { ...DEFAULT_PROCESS_OPTIONS, timeout: timeoutMs },
         );
-        return parseCycloneDXOutput(syftOutput);
+        return parseCycloneDXOutput(trivyOutput);
       } catch (error) {
-        console.warn(`[InputAdapter] syft scan failed for ${url}:`, error instanceof Error ? error.message : String(error));
+        console.warn(`[InputAdapter] trivy scan failed for ${url}:`, error instanceof Error ? error.message : String(error));
       }
     }
 

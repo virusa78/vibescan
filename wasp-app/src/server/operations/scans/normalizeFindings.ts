@@ -10,7 +10,8 @@ export interface NormalizedFinding {
   fixedVersion?: string;
   description: string;
   cvssScore: number;
-  source: "grype" | "codescoring_johnny" | "snyk" | "syft" | "owasp";
+  source: "grype" | "codescoring_johnny" | "snyk" | "owasp" | "trivy";
+  filePath?: string;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -93,6 +94,7 @@ export function normalizeGrypeFindings(rawOutput: unknown): NormalizedFinding[] 
     description: typedMatch.vulnerability?.description || "",
     cvssScore: parseScore(typedMatch.vulnerability?.cvssScore?.baseScore),
     source: "grype" as const,
+    filePath: (typedMatch.artifact as any)?.locations?.[0]?.path,
     };
   });
 }
@@ -135,6 +137,7 @@ export function normalizeCodescoringFindings(rawOutput: unknown): NormalizedFind
         description: vuln.description || "",
         cvssScore: parseScore(vuln.cvssScore),
         source: "codescoring_johnny" as const,
+        filePath: (typedComponent as any).path || (typedComponent as any).location,
       });
     }
   }
@@ -160,17 +163,35 @@ export function computeFindingFingerprint(
 }
 
 /**
- * Normalize Syft CycloneDX output to Finding array
- * Syft generates CycloneDX SBOM format with optional vulnerabilities
+ * Normalize Trivy CycloneDX output to Finding array
  */
-export function normalizeSyftFindings(rawOutput: unknown): NormalizedFinding[] {
-  if (!isRecord(rawOutput) || !Array.isArray(rawOutput.vulnerabilities)) {
+export function normalizeTrivyFindings(rawOutput: unknown): NormalizedFinding[] {
+  // Trivy CycloneDX format is very similar to Syft's
+  if (!isRecord(rawOutput)) {
     return [];
+  }
+
+  const vulnerabilities = Array.isArray(rawOutput.vulnerabilities) ? rawOutput.vulnerabilities : [];
+  const components = Array.isArray(rawOutput.components) ? rawOutput.components : [];
+
+  // Build component map
+  const componentMap = new Map<string, { name: string; version: string; properties?: any[] }>();
+  for (const comp of components) {
+    if (isRecord(comp)) {
+      const bomRef = comp['bom-ref'] as string || comp.purl as string;
+      if (bomRef) {
+        componentMap.set(bomRef, {
+          name: comp.name as string || 'unknown',
+          version: comp.version as string || 'unknown',
+          properties: Array.isArray(comp.properties) ? comp.properties : undefined,
+        });
+      }
+    }
   }
 
   const findings: NormalizedFinding[] = [];
 
-  for (const vuln of rawOutput.vulnerabilities) {
+  for (const vuln of vulnerabilities) {
     if (!isRecord(vuln)) continue;
 
     const severity = isRecord(vuln.ratings) && Array.isArray(vuln.ratings)
@@ -184,15 +205,23 @@ export function normalizeSyftFindings(rawOutput: unknown): NormalizedFinding[] {
     const fixes = Array.isArray(vuln.fixes) ? vuln.fixes : [];
     const fixedVersion = (fixes[0] as UnknownRecord)?.version as string | undefined;
 
+    const ref = vuln.ref as string;
+    const component = ref ? componentMap.get(ref) : null;
+    const componentProps = (component as any)?.properties || [];
+    const locationProp = Array.isArray(componentProps) 
+      ? componentProps.find((p: any) => p.name === 'trivy:location' || p.name.startsWith('syft:location:')) 
+      : null;
+
     findings.push({
       cveId: (vuln.id as string) || 'UNKNOWN',
       severity,
-      package: (vuln.ref as string) || 'unknown',
-      version: 'unknown', // Syft doesn't always include version in vuln record
+      package: component?.name || (vuln.ref as string) || 'unknown',
+      version: component?.version || 'unknown',
       fixedVersion,
       description: (vuln.description as string) || '',
       cvssScore,
-      source: 'syft' as const,
+      source: 'trivy' as const,
+      filePath: locationProp?.value,
     });
   }
 
