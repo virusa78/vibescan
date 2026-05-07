@@ -3,10 +3,10 @@
  * Grype is the free vulnerability scanner (Anchore)
  */
 
-import { execSync } from 'child_process';
-import { writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
+import { writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { resolve } from 'path';
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
+import { runGrypeCycloneDxScan, isToolAvailable } from './scannerRuntime.js';
 
 export interface GrypeFinding {
   cveId: string;
@@ -47,22 +47,10 @@ export type GrypeScanRun = {
   durationMs: number;
 };
 
-function isGrypeMissingError(error: unknown): boolean {
-  if (error && typeof error === 'object' && 'code' in error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') {
-      return true;
-    }
-  }
-
-  const message = error instanceof Error ? error.message : String(error);
-  return /grype/i.test(message) && /(not found|enoent)/i.test(message);
-}
-
 /**
  * Generate CycloneDX JSON SBOM from normalized components
  */
-function generateCycloneDxSbom(components: NormalizedComponent[]): string {
+export function generateCycloneDxSbom(components: NormalizedComponent[]): string {
   const sbom = {
     bomFormat: 'CycloneDX',
     specVersion: '1.4',
@@ -75,56 +63,6 @@ function generateCycloneDxSbom(components: NormalizedComponent[]): string {
     })),
   };
   return JSON.stringify(sbom, null, 2);
-}
-
-/**
- * Execute Grype CLI with timeout
- * @param sbomPath Path to SBOM file
- * @param timeoutMs Timeout in milliseconds (default: 5 minutes)
- * @returns Grype JSON output
- */
-export async function executeGrypeCli(
-  sbomPath: string,
-  timeoutMs: number = 300000
-): Promise<GrypeRawOutput> {
-  return new Promise((resolve, reject) => {
-    try {
-      // Execute: grype sbom:/path/to/sbom.json -o json
-      const command = `grype sbom:${sbomPath} -o json`;
-      
-      const timeout = setTimeout(() => {
-        reject(new Error(`Grype execution timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      try {
-        const output = execSync(command, {
-          encoding: 'utf-8',
-          timeout: timeoutMs,
-        });
-
-        clearTimeout(timeout);
-
-        // Parse JSON output
-        const result = JSON.parse(output);
-        resolve(result);
-      } catch (error) {
-        clearTimeout(timeout);
-        if (error instanceof Error) {
-          if (error.message.includes('timed out')) {
-            reject(new Error('Grype execution timed out'));
-          } else if (error.message.includes('ENOENT')) {
-            reject(new Error('Grype CLI not found'));
-          } else {
-            reject(new Error(`Grype execution failed: ${error.message}`));
-          }
-        } else {
-          reject(new Error('Grype execution failed'));
-        }
-      }
-    } catch (error) {
-      reject(error);
-    }
-  });
 }
 
 /**
@@ -182,25 +120,25 @@ export async function scanWithGrypeDetailed(
   let sbomPath: string | null = null;
 
   try {
-    if (!isGrypInstalled()) {
-      throw new Error('Grype CLI is not installed');
-    }
-
     // Generate SBOM
     const sbomContent = generateCycloneDxSbom(components);
 
-    // Write SBOM to temp file (keep within repo, avoid OS temp dir)
+    // Write SBOM to temp file
     const scratchDir = resolve(process.cwd(), '.cache', 'grype');
-    mkdirSync(scratchDir, { recursive: true });
+    if (!existsSync(scratchDir)) {
+        mkdirSync(scratchDir, { recursive: true });
+    }
     sbomPath = resolve(scratchDir, `sbom-${scanId}.json`);
     writeFileSync(sbomPath, sbomContent);
 
     console.log(`[Grype] Generated SBOM at ${sbomPath}`);
 
-    // Execute Grype
+    // Execute Grype using unified runtime (handles Docker fallback)
     const startTime = Date.now();
-    const grypOutput = await executeGrypeCli(sbomPath, timeoutMs);
+    const output = runGrypeCycloneDxScan(sbomPath, timeoutMs);
     const durationMs = Date.now() - startTime;
+
+    const grypOutput = JSON.parse(output) as GrypeRawOutput;
 
     console.log(`[Grype] Executed in ${durationMs}ms`);
 
@@ -215,19 +153,13 @@ export async function scanWithGrypeDetailed(
       durationMs,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (isGrypeMissingError(error)) {
-      throw new Error(`Grype CLI is not installed: ${message}`);
-    }
-
-    console.error(`[Grype] Scan failed: ${message}`);
+    console.error(`[Grype] Scan failed: ${error instanceof Error ? error.message : String(error)}`);
     throw error;
   } finally {
     // Cleanup temp file
     if (sbomPath && existsSync(sbomPath)) {
       try {
         unlinkSync(sbomPath);
-        console.log(`[Grype] Cleaned up SBOM at ${sbomPath}`);
       } catch (cleanupError) {
         console.error(`[Grype] Failed to cleanup SBOM:`, cleanupError);
       }
@@ -236,13 +168,8 @@ export async function scanWithGrypeDetailed(
 }
 
 /**
- * Check if Grype is installed
+ * Check if Grype is available (local or Docker)
  */
 export function isGrypInstalled(): boolean {
-  try {
-    execSync('which grype', { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
+  return isToolAvailable('grype');
 }

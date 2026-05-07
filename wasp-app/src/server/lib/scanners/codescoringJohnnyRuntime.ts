@@ -15,7 +15,7 @@ interface JohnnyRuntimeConfig extends RemoteSshConfig {
 
 type JohnnyExecutor = RemoteCommandExecutor;
 
-function buildCycloneDxSbom(components: JohnnyComponent[]) {
+export function buildCycloneDxSbom(components: JohnnyComponent[]) {
   return {
     bomFormat: 'CycloneDX',
     specVersion: '1.6',
@@ -77,7 +77,7 @@ function buildRemoteShellCommand(commandTemplate: string, remoteBomPath: string)
     || 'johnny scan --format json --no-summary --bom-path "$VIBESCAN_BOM_PATH"';
 
   return [
-    'set -euo pipefail',
+    'set -eu',
     `export VIBESCAN_BOM_PATH=${shellQuote(remoteBomPath)}`,
     `trap 'rm -f "$VIBESCAN_BOM_PATH"' EXIT`,
     'cat > "$VIBESCAN_BOM_PATH"',

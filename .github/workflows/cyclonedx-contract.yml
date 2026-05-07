@@ -1,0 +1,52 @@
+name: CycloneDX Contract
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'wasp-app/src/ingestion/cyclonedx-contracts.ts'
+      - 'wasp-app/src/server/services/inputAdapterService.ts'
+      - 'wasp-app/src/server/services/cyclonedxIngestionService.ts'
+      - 'wasp-app/src/server/lib/scanners/**'
+      - 'test/fixtures/cyclonedx/**'
+      - 'test/unit/cyclonedx*.test.ts'
+      - 'wasp-app/tests/pr01-cyclonedx-contracts.test.ts'
+      - 'wasp-app/tests/pr02-cyclonedx-ingestion.test.ts'
+      - '.github/workflows/cyclonedx-contract.yml'
+  pull_request:
+    paths:
+      - 'wasp-app/src/ingestion/cyclonedx-contracts.ts'
+      - 'wasp-app/src/server/services/inputAdapterService.ts'
+      - 'wasp-app/src/server/services/cyclonedxIngestionService.ts'
+      - 'wasp-app/src/server/lib/scanners/**'
+      - 'test/fixtures/cyclonedx/**'
+      - 'test/unit/cyclonedx*.test.ts'
+      - 'wasp-app/tests/pr01-cyclonedx-contracts.test.ts'
+      - 'wasp-app/tests/pr02-cyclonedx-ingestion.test.ts'
+      - '.github/workflows/cyclonedx-contract.yml'
+
+jobs:
+  cyclonedx-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.1'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run CycloneDX contract tests
+        run: npm run test:cyclonedx:contract
