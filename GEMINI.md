@@ -16,6 +16,10 @@ VibeScan is a provider-aware vulnerability scanning SaaS platform built with the
   - **Frontend**: React, Vite, Tailwind CSS, Shadcn/UI, Lucide React, Recharts.
   - **Infrastructure**: Docker for scan isolation, Kubernetes for production.
 
+### Contract Integrity
+- **Dual Validation**: When attempting to change any API contract (Wasp Operations, Webhooks, or CLI schemas), you MUST verify and update BOTH the frontend (client-side types and calls) and the backend (validation schemas and operation logic).
+- **Consistency**: Ensure that Zod schemas in operations strictly match the TypeScript types used in the frontend components.
+
 ## Building and Running
 
 ### Prerequisites

@@ -111,9 +111,9 @@ export function getSeverityColor(severity: SeverityLevel): string {
     case 'high':
       return 'text-orange-500';
     case 'medium':
-      return 'text-yellow-500';
+      return 'text-amber-500';
     case 'low':
-      return 'text-green-500';
+      return 'text-emerald-500';
     case 'info':
       return 'text-gray-500';
   }
@@ -129,9 +129,9 @@ export function getSeverityBgColor(severity: SeverityLevel): string {
     case 'high':
       return 'bg-orange-500/10';
     case 'medium':
-      return 'bg-yellow-500/10';
+      return 'bg-amber-500/10';
     case 'low':
-      return 'bg-green-500/10';
+      return 'bg-emerald-500/10';
     case 'info':
       return 'bg-gray-500/10';
   }
@@ -147,9 +147,9 @@ export function getSeverityBorderColor(severity: SeverityLevel): string {
     case 'high':
       return 'border-orange-500/30';
     case 'medium':
-      return 'border-yellow-500/30';
+      return 'border-amber-500/30';
     case 'low':
-      return 'border-green-500/30';
+      return 'border-emerald-500/30';
     case 'info':
       return 'border-gray-500/30';
   }
@@ -183,12 +183,12 @@ export function getStatusBadge(status: string) {
     return { color: 'text-red-500', bg: 'bg-red-500/10', border: 'border-red-500/30' };
   }
   if (normalized === 'done' || normalized === 'completed') {
-    return { color: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/30' };
+    return { color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' };
   }
   if (normalized === 'scanning' || normalized === 'running' || normalized === 'pending') {
     return { color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/30' };
   }
-  return { color: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30' };
+  return { color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/30' };
 }
 
 /**

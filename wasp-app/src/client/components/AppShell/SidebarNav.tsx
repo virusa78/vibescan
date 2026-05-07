@@ -12,7 +12,7 @@ import { type User } from "wasp/entities";
 import { cn } from "../../utils";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import type { NavigationItem } from "../NavBar/NavBar";
-import logo from "../../static/logo.webp";
+import Logo from "../common/Logo";
 
 export function SidebarNav({
   navigationItems,
@@ -62,13 +62,13 @@ export function SidebarNav({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className={cn("border-border flex h-16 items-center border-b px-3", collapsed ? "justify-center" : "justify-between")}>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className={cn("border-border flex h-16 shrink-0 items-center border-b px-3", collapsed ? "justify-center" : "justify-between")}>
         <WaspRouterLink
           to={routes.DashboardRoute.to}
           className={cn("text-foreground hover:text-primary flex items-center gap-2 transition-colors", collapsed && "justify-center")}
         >
-          <img className="size-8" src={logo} alt="App logo" />
+          <Logo className="size-8 shrink-0" />
           {!collapsed && (
             <span className="text-foreground text-sm font-semibold tracking-tight">
               VibeScan
@@ -78,25 +78,27 @@ export function SidebarNav({
         <button
           type="button"
           onClick={onToggleCollapsed}
+          aria-expanded={!collapsed}
           className={cn(
             "text-muted-foreground hover:text-foreground hover:bg-accent inline-flex items-center justify-center rounded-md p-2 transition-colors relative group",
             collapsed && "hidden",
           )}
           aria-label="Collapse sidebar"
         >
-          <ChevronLeft className="size-4" />
+          <ChevronLeft className="size-4 shrink-0" />
           {collapsed ? null : <Tooltip label="Collapse" />}
         </button>
         <button
           type="button"
           onClick={onToggleCollapsed}
+          aria-expanded={!collapsed}
           className={cn(
             "text-muted-foreground hover:text-foreground hover:bg-accent hidden items-center justify-center rounded-md p-2 transition-colors relative group",
             collapsed && "inline-flex",
           )}
           aria-label="Expand sidebar"
         >
-          <ChevronRight className="size-4" />
+          <ChevronRight className="size-4 shrink-0" />
           {collapsed ? <Tooltip label="Expand" /> : null}
         </button>
       </div>
@@ -144,7 +146,7 @@ export function SidebarNav({
         ) : (
           <div className={cn("flex items-center gap-3", collapsed && "flex-col items-stretch gap-2")}>
             <div className={cn("flex min-w-0 flex-1 items-center gap-3", collapsed && "justify-center")}>
-              <Avatar className="h-9 w-9">
+              <Avatar className="h-9 w-9 shrink-0">
                 <AvatarFallback className="text-xs font-semibold">{initials}</AvatarFallback>
               </Avatar>
               {!collapsed && (
@@ -165,7 +167,7 @@ export function SidebarNav({
               )}
               aria-label="Log out"
             >
-              <LogOut className="size-4" aria-hidden="true" />
+              <LogOut className="size-4 shrink-0" aria-hidden="true" />
               {!collapsed && <span>Logout</span>}
               {collapsed ? <Tooltip label="Logout" /> : null}
             </button>
