@@ -62,7 +62,7 @@ export function SidebarNav({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden relative">
       <div className={cn("border-border flex h-16 shrink-0 items-center border-b px-3", collapsed ? "justify-center" : "justify-between")}>
         <WaspRouterLink
           to={routes.DashboardRoute.to}
@@ -103,8 +103,8 @@ export function SidebarNav({
         </button>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-3" aria-label="Primary">
-        <ul className="space-y-1">
+      <nav className={cn("min-h-0 flex-1 overflow-y-auto px-2 py-3", collapsed && "no-scrollbar")} aria-label="Primary">
+        <ul className="space-y-1 pb-20">
           {items.map((item) => {
             const itemStyles = cn(
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors relative group",
@@ -130,7 +130,7 @@ export function SidebarNav({
         </ul>
       </nav>
 
-      <div className="border-border border-t p-3">
+      <div className="border-border absolute bottom-0 left-0 right-0 border-t bg-background p-3">
         {!user ? (
           <WaspRouterLink
             to={routes.LoginRoute.to}
@@ -144,7 +144,7 @@ export function SidebarNav({
             {collapsed ? <Tooltip label="Log in" /> : null}
           </WaspRouterLink>
         ) : (
-          <div className={cn("flex items-center gap-3", collapsed && "flex-col items-stretch gap-2")}>
+          <div className={cn("flex items-center gap-3", collapsed && "flex-col items-center gap-2")}>
             <div className={cn("flex min-w-0 flex-1 items-center gap-3", collapsed && "justify-center")}>
               <Avatar className="h-9 w-9 shrink-0">
                 <AvatarFallback className="text-xs font-semibold">{initials}</AvatarFallback>
