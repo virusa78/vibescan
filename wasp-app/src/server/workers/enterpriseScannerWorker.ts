@@ -189,38 +189,40 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
     });
 
     // Create Finding records
-    for (const finding of normalizedFindings) {
-      const fingerprint = `${finding.cveId}|${finding.package}|${finding.version}`;
+    await prisma.$transaction(
+      normalizedFindings.map((finding) => {
+        const fingerprint = `${finding.cveId}|${finding.package}|${finding.version}`;
 
-      await prisma.finding.upsert({
-        where: {
-          scanId_fingerprint: {
-            scanId,
-            fingerprint,
+        return prisma.finding.upsert({
+          where: {
+            scanId_fingerprint: {
+              scanId,
+              fingerprint,
+            },
           },
-        },
-        create: {
-          scanId,
-          userId,
-          fingerprint,
-          cveId: finding.cveId,
-          packageName: finding.package,
-          installedVersion: finding.version,
-          severity: finding.severity.toUpperCase(),
-          cvssScore: finding.cvssScore,
-          fixedVersion: finding.fixedVersion,
-          description: finding.description,
-          source: 'enterprise',
-          detectedData: finding as any,
-        },
-        update: {
-          severity: finding.severity.toUpperCase(),
-          cvssScore: finding.cvssScore,
-          fixedVersion: finding.fixedVersion,
-          description: finding.description,
-        },
-      });
-    }
+          create: {
+            scanId,
+            userId,
+            fingerprint,
+            cveId: finding.cveId,
+            packageName: finding.package,
+            installedVersion: finding.version,
+            severity: finding.severity.toUpperCase(),
+            cvssScore: finding.cvssScore,
+            fixedVersion: finding.fixedVersion,
+            description: finding.description,
+            source: 'enterprise',
+            detectedData: finding as any,
+          },
+          update: {
+            severity: finding.severity.toUpperCase(),
+            cvssScore: finding.cvssScore,
+            fixedVersion: finding.fixedVersion,
+            description: finding.description,
+          },
+        });
+      })
+    );
 
     console.log(`[Enterprise Scanner] Created ${normalizedFindings.length} findings for scan ${scanId}`);
 
