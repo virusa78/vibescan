@@ -192,7 +192,6 @@ describe('Reimport Logic', () => {
     });
   });
 
-
   describe('computeFingerprint', () => {
     it('should generate consistent hashes for identical findings', () => {
       const finding: NormalizedFinding = {
@@ -217,6 +216,7 @@ describe('Reimport Logic', () => {
         severity: 'low',
         source: 'free' as ScanSource,
       };
+
       const finding2: NormalizedFinding = {
         ...finding1,
         cveId: 'CVE-5678',
@@ -275,5 +275,4 @@ describe('Reimport Logic', () => {
       expect(summary.unchangedCount).toBe(4);
     });
   });
-
 });
