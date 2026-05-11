@@ -189,37 +189,44 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
     });
 
     // Create Finding records
-    for (const finding of normalizedFindings) {
-      const fingerprint = `${finding.cveId}|${finding.package}|${finding.version}`;
+    const batchSize = 100;
+    for (let i = 0; i < normalizedFindings.length; i += batchSize) {
+      const batch = normalizedFindings.slice(i, i + batchSize);
 
-      await prisma.finding.upsert({
-        where: {
-          scanId_fingerprint: {
-            scanId,
-            fingerprint,
+      const upsertPromises = batch.map((finding) => {
+        const fingerprint = `${finding.cveId}|${finding.package}|${finding.version}`;
+
+        return prisma.finding.upsert({
+          where: {
+            scanId_fingerprint: {
+              scanId,
+              fingerprint,
+            },
           },
-        },
-        create: {
-          scanId,
-          userId,
-          fingerprint,
-          cveId: finding.cveId,
-          packageName: finding.package,
-          installedVersion: finding.version,
-          severity: finding.severity.toUpperCase(),
-          cvssScore: finding.cvssScore,
-          fixedVersion: finding.fixedVersion,
-          description: finding.description,
-          source: 'enterprise',
-          detectedData: finding as any,
-        },
-        update: {
-          severity: finding.severity.toUpperCase(),
-          cvssScore: finding.cvssScore,
-          fixedVersion: finding.fixedVersion,
-          description: finding.description,
-        },
+          create: {
+            scanId,
+            userId,
+            fingerprint,
+            cveId: finding.cveId,
+            packageName: finding.package,
+            installedVersion: finding.version,
+            severity: finding.severity.toUpperCase(),
+            cvssScore: finding.cvssScore,
+            fixedVersion: finding.fixedVersion,
+            description: finding.description,
+            source: 'enterprise',
+            detectedData: finding as any,
+          },
+          update: {
+            severity: finding.severity.toUpperCase(),
+            cvssScore: finding.cvssScore,
+            fixedVersion: finding.fixedVersion,
+            description: finding.description,
+          },
+        });
       });
+
+      await prisma.$transaction(upsertPromises);
     }
 
     console.log(`[Enterprise Scanner] Created ${normalizedFindings.length} findings for scan ${scanId}`);
