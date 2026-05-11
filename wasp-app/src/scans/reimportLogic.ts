@@ -219,34 +219,59 @@ export async function applyReimportResult(
       }
 
       // 3. Mark mitigated findings
-      for (const item of reimportResult.mitigated) {
-        const finding = await tx.finding.findFirst({
+      if (reimportResult.mitigated.length > 0) {
+        const cveIdsToMitigate = reimportResult.mitigated.map(item => item.findingId);
+
+        // Build map for quick access to mitigation data
+        const mitigatedDataMap = new Map();
+        for (const item of reimportResult.mitigated) {
+          mitigatedDataMap.set(item.findingId, item);
+        }
+
+        // Find all matching active findings
+        const findingsToMitigate = await tx.finding.findMany({
           where: {
-            cveId: item.findingId,
-            status: 'active', // Only mitigate active findings
+            cveId: { in: cveIdsToMitigate },
+            status: 'active',
           },
           orderBy: { createdAt: 'desc' },
         });
 
-        if (finding) {
-          await tx.finding.update({
-            where: { id: finding.id },
-            data: {
-              status: 'mitigated',
-              mitigatedAt: item.mitigatedAt,
-              mitigatedInScanId: scanId,
-            },
-          });
+        if (findingsToMitigate.length > 0) {
+          // Deduplicate to only keep the latest per cveId, matching original logic
+          const latestFindingsMap = new Map();
+          for (const finding of findingsToMitigate) {
+            if (!latestFindingsMap.has(finding.cveId)) {
+              latestFindingsMap.set(finding.cveId, finding);
+            }
+          }
 
-          // Log to history
-          await tx.findingHistory.create({
-            data: {
+          const findings = Array.from(latestFindingsMap.values());
+
+          // Update status and timestamps using Promise.all to preserve exact mitigatedAt timestamps
+          await Promise.all(
+            findings.map(finding => {
+              const mitigatedData = mitigatedDataMap.get(finding.cveId);
+              return tx.finding.update({
+                where: { id: finding.id },
+                data: {
+                  status: 'mitigated',
+                  mitigatedAt: mitigatedData.mitigatedAt,
+                  mitigatedInScanId: scanId,
+                },
+              });
+            })
+          );
+
+          // Batch create history records
+          await tx.findingHistory.createMany({
+            data: findings.map(finding => ({
               findingId: finding.id,
               event: 'auto_mitigated',
               metadata: {
                 mitigatedInScanId: scanId,
               },
-            },
+            })),
           });
         }
       }
