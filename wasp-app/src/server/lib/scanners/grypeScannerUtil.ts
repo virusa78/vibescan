@@ -3,7 +3,7 @@
  * Grype is the free vulnerability scanner (Anchore)
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
 import { resolve } from 'path';
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
@@ -62,14 +62,14 @@ export async function executeGrypeCli(
   return new Promise((resolve, reject) => {
     try {
       // Execute: grype sbom:/path/to/sbom.json -o json
-      const command = `grype sbom:${sbomPath} -o json`;
+      const args = [`sbom:${sbomPath}`, '-o', 'json'];
       
       const timeout = setTimeout(() => {
         reject(new Error(`Grype execution timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
       try {
-        const output = execSync(command, {
+        const output = execFileSync('grype', args, {
           encoding: 'utf-8',
           timeout: timeoutMs,
         });
@@ -199,7 +199,7 @@ export async function scanWithGrype(
  */
 export function isGrypInstalled(): boolean {
   try {
-    execSync('which grype', { stdio: 'ignore' });
+    execFileSync('which', ['grype'], { stdio: 'ignore' });
     return true;
   } catch {
     return false;
