@@ -65,77 +65,91 @@ export async function emitWebhookEvent(event: WebhookEvent): Promise<void> {
       .update(payloadStr)
       .digest('hex');
 
-    // Enqueue delivery jobs for each webhook
-    for (const webhook of webhooks) {
-      try {
-        // Check for duplicate delivery (idempotency)
-        const existingDelivery = await prisma.webhookDelivery.findFirst({
-          where: {
-            webhookId: webhook.id,
-            scanId: scanId,
-            payloadHash: payloadHash,
-          },
-        });
+    // Retrieve all existing deliveries for idempotency
+    const existingDeliveries = await prisma.webhookDelivery.findMany({
+      where: {
+        webhookId: { in: webhooks.map((w) => w.id) },
+        scanId: scanId,
+        payloadHash: payloadHash,
+      },
+      select: { webhookId: true },
+    });
 
-        if (existingDelivery) {
-          console.log(
-            `[WebhookEmitter] Skipping duplicate delivery: webhook ${webhook.id}, scan ${scanId}`
-          );
-          continue;
-        }
+    const existingWebhookIds = new Set(existingDeliveries.map((d) => d.webhookId));
 
-        // Create WebhookDelivery record (start with attempt 1)
-        const delivery = await prisma.webhookDelivery.create({
-          data: {
-            webhookId: webhook.id,
-            scanId: scanId,
-            eventType: eventType,
-            payload: payload,
-            targetUrl: webhook.url,
-            payloadHash: payloadHash,
-            attemptNumber: 1, // Initial attempt
-            status: 'pending',
-          },
-        });
-
-        // Enqueue delivery job
-        const jobData: DeliveryQueueJob = {
-          deliveryId: delivery.id,
-          webhookId: webhook.id,
-          scanId: scanId,
-          eventType: eventType,
-          payload: payloadStr,
-          payloadHash: payloadHash,
-          targetUrl: webhook.url,
-          signingSecretEncrypted: webhook.signingSecretEncrypted,
-          attemptNumber: 1, // Will be updated on retry based on job.attemptsMade
-        };
-
-        await webhookDeliveryQueue.add(
-          `delivery-${delivery.id}`,
-          jobData,
-          {
-            priority: 5, // Normal priority for webhooks
-            attempts: 5, // Retry up to 5 times
-            backoff: {
-              type: 'exponential',
-              delay: 2000, // Start at 2s, exponential backoff
-            },
-            removeOnComplete: true,
-            removeOnFail: false,
-          }
-        );
-
+    // Filter webhooks that need new deliveries
+    const webhooksToProcess = webhooks.filter((w) => {
+      if (existingWebhookIds.has(w.id)) {
         console.log(
-          `[WebhookEmitter] Enqueued delivery job for webhook: ${webhook.id}, delivery: ${delivery.id}`
+          `[WebhookEmitter] Skipping duplicate delivery: webhook ${w.id}, scan ${scanId}`
         );
-      } catch (error) {
-        console.error(
-          `[WebhookEmitter] Failed to enqueue webhook ${webhook.id}:`,
-          error instanceof Error ? error.message : String(error)
-        );
-        // Continue with next webhook instead of failing entire event
+        return false;
       }
+      return true;
+    });
+
+    if (webhooksToProcess.length === 0) {
+      return;
+    }
+
+    // Create all WebhookDelivery records at once
+    const deliveries = await prisma.webhookDelivery.createManyAndReturn({
+      data: webhooksToProcess.map((webhook) => ({
+        webhookId: webhook.id,
+        scanId: scanId,
+        eventType: eventType,
+        payload: payload,
+        targetUrl: webhook.url,
+        payloadHash: payloadHash,
+        attemptNumber: 1, // Initial attempt
+        status: 'pending',
+      })),
+    });
+
+    // Bulk enqueue delivery jobs
+    const jobs = deliveries.map((delivery) => {
+      const webhook = webhooksToProcess.find((w) => w.id === delivery.webhookId)!;
+      const jobData: DeliveryQueueJob = {
+        deliveryId: delivery.id,
+        webhookId: webhook.id,
+        scanId: scanId,
+        eventType: eventType,
+        payload: payloadStr,
+        payloadHash: payloadHash,
+        targetUrl: webhook.url,
+        signingSecretEncrypted: webhook.signingSecretEncrypted,
+        attemptNumber: 1, // Will be updated on retry based on job.attemptsMade
+      };
+
+      return {
+        name: `delivery-${delivery.id}`,
+        data: jobData,
+        opts: {
+          priority: 5, // Normal priority for webhooks
+          attempts: 5, // Retry up to 5 times
+          backoff: {
+            type: 'exponential',
+            delay: 2000, // Start at 2s, exponential backoff
+          },
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
+      };
+    });
+
+    try {
+      await webhookDeliveryQueue.addBulk(jobs);
+
+      for (const delivery of deliveries) {
+        console.log(
+          `[WebhookEmitter] Enqueued delivery job for webhook: ${delivery.webhookId}, delivery: ${delivery.id}`
+        );
+      }
+    } catch (error) {
+      console.error(
+        `[WebhookEmitter] Failed to enqueue bulk delivery jobs:`,
+        error instanceof Error ? error.message : String(error)
+      );
     }
   } catch (error) {
     console.error(
