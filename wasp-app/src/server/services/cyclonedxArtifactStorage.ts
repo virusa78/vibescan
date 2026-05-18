@@ -149,7 +149,7 @@ export async function captureCycloneDxArtifacts(options: {
   const client = getS3Client(config);
   const storedArtifacts: CycloneDxArtifactMeta[] = [];
 
-  for (const artifact of options.artifacts) {
+  const uploadPromises = options.artifacts.map(async (artifact) => {
     const body = serializeArtifactPayload(artifact.payload);
     const sha256 = createHash('sha256').update(body).digest('hex');
     const artifactKey = buildCycloneDxArtifactKey({
@@ -164,23 +164,38 @@ export async function captureCycloneDxArtifacts(options: {
     try {
       await client.send(
         new PutObjectCommand({
-          Bucket: config.bucket,
+          Bucket: config.bucket as string,
           Key: artifactKey,
           Body: body,
           ContentType: 'application/json',
         }),
       );
 
-      storedArtifacts.push({
-        artifactKey,
-        sha256,
-        sizeBytes: Buffer.byteLength(body),
-        capturedAt: capturedAt.toISOString(),
-        retentionUntil: retentionUntil.toISOString(),
-      });
+      return {
+        success: true,
+        artifact: {
+          artifactKey,
+          sha256,
+          sizeBytes: Buffer.byteLength(body),
+          capturedAt: capturedAt.toISOString(),
+          retentionUntil: retentionUntil.toISOString(),
+        },
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      warnings.push(`artifact_upload_failed:${artifact.artifactType}:${message}`);
+      return {
+        success: false,
+        warning: `artifact_upload_failed:${artifact.artifactType}:${message}`,
+      };
+    }
+  });
+
+  const results = await Promise.all(uploadPromises);
+  for (const result of results) {
+    if (result.success && result.artifact) {
+      storedArtifacts.push(result.artifact);
+    } else if (result.warning) {
+      warnings.push(result.warning);
     }
   }
 
@@ -218,27 +233,41 @@ export async function cleanupExpiredCycloneDxArtifacts(options: {
   const removedArtifacts: CycloneDxArtifactMeta[] = [];
   const warnings: string[] = [];
 
-  for (const artifact of options.artifacts) {
+  const cleanupPromises = options.artifacts.map(async (artifact) => {
     const expiresAt = new Date(artifact.retentionUntil);
     const isExpired = Number.isFinite(expiresAt.getTime()) && expiresAt <= now;
 
     if (!isExpired) {
-      keptArtifacts.push(artifact);
-      continue;
+      return { action: 'kept', artifact };
     }
 
     try {
       await client.send(
         new DeleteObjectCommand({
-          Bucket: config.bucket,
+          Bucket: config.bucket as string,
           Key: artifact.artifactKey,
         }),
       );
-      removedArtifacts.push(artifact);
+      return { action: 'removed', artifact };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      warnings.push(`artifact_delete_failed:${artifact.artifactKey}:${message}`);
-      keptArtifacts.push(artifact);
+      return {
+        action: 'error',
+        artifact,
+        warning: `artifact_delete_failed:${artifact.artifactKey}:${message}`,
+      };
+    }
+  });
+
+  const results = await Promise.all(cleanupPromises);
+  for (const result of results) {
+    if (result.action === 'kept') {
+      keptArtifacts.push(result.artifact!);
+    } else if (result.action === 'removed') {
+      removedArtifacts.push(result.artifact!);
+    } else if (result.action === 'error') {
+      keptArtifacts.push(result.artifact!);
+      warnings.push(result.warning!);
     }
   }
 
