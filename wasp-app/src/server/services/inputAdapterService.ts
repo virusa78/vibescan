@@ -454,6 +454,8 @@ export async function extractZipAndScanWithSBOMGenerator(
             '        member_path = member.filename',
             '        if member_path.startswith("/") or member_path.startswith("\\\\"):',
             '            raise ValueError(f"Unsafe ZIP entry: {member_path}")',
+            '        if ".." in member_path.replace("\\\\", "/").split("/"):',
+            '            raise ValueError(f"Unsafe ZIP entry: {member_path}")',
             '        destination = os.path.abspath(os.path.join(target_dir, member_path))',
             '        if destination != target_dir and not destination.startswith(target_dir + os.sep):',
             '            raise ValueError(f"Unsafe ZIP entry: {member_path}")',
