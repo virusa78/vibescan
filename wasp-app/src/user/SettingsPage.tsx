@@ -480,7 +480,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2">
               <Label htmlFor="projectKey">Project key</Label>
               <Input id="projectKey" placeholder="project-key" value={projectKey} onChange={(e) => setProjectKey(e.target.value)} className="w-48" />
-              <Button onClick={loadNotificationSettings} disabled={notifLoading}>{notifLoading ? "Loading..." : "Load"}</Button>
+              <Button onClick={() => loadNotificationSettings(projectKey)} disabled={notifLoading}>{notifLoading ? "Loading..." : "Load"}</Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
