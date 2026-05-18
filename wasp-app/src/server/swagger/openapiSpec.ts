@@ -251,13 +251,18 @@ async function createSwaggerGenerator(): Promise<SwaggerGenerator> {
 
   if (!(refParserUrl as any).__vibescanResolvePatched) {
     const originalResolve = refParserUrl.resolve;
-    refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {
+    const patchedResolve = function (path1: string, path2?: string) {
       if (path2 == null) {
         return path1;
       }
       return originalResolve(path1, path2);
     };
-    (refParserUrl as any).__vibescanResolvePatched = true;
+    try {
+      refParserUrl.resolve = patchedResolve;
+      (refParserUrl as any).__vibescanResolvePatched = true;
+    } catch (e) {
+      // module is read-only in ESM. This doesn't matter unless there are nested deep refs.
+    }
   }
 
   const swaggerJsdocModule = await import('swagger-jsdoc');
