@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "../client/components/ui/select";
 import { useAsyncState } from "../client/hooks/useAsyncState";
+import { api } from "wasp/client/api";
 import {
   getNotificationSettings,
   getScannerAccessSettings,
@@ -228,20 +229,14 @@ export default function SettingsPage() {
     );
   };
 
-  // Notification settings UI state
-  const [projectKey, setProjectKey] = useState("");
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifSuccess, setNotifSuccess] = useState<string | null>(null);
   const [notifError, setNotifError] = useState<string | null>(null);
-  const [emailOnScanComplete, setEmailOnScanComplete] = useState(true);
-  const [emailOnVulnerability, setEmailOnVulnerability] = useState(true);
-  const [weeklyDigest, setWeeklyDigest] = useState(false);
-  const [smsEnabled, setSmsEnabled] = useState(false);
 
   const projectKeyRegex = /^[a-zA-Z0-9._-]+$/;
 
-  const loadNotificationSettings = async () => {
+  const fetchNotificationSettingsViaApi = async () => {
     setNotifError(null);
     setNotifSuccess(null);
     if (!projectKey || !projectKeyRegex.test(projectKey)) {
@@ -265,7 +260,7 @@ export default function SettingsPage() {
     }
   };
 
-  const saveNotificationSettings = async () => {
+  const saveNotificationSettingsViaApi = async () => {
     setNotifError(null);
     setNotifSuccess(null);
     if (!projectKey || !projectKeyRegex.test(projectKey)) {
@@ -480,7 +475,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2">
               <Label htmlFor="projectKey">Project key</Label>
               <Input id="projectKey" placeholder="project-key" value={projectKey} onChange={(e) => setProjectKey(e.target.value)} className="w-48" />
-              <Button onClick={() => loadNotificationSettings(projectKey)} disabled={notifLoading}>{notifLoading ? "Loading..." : "Load"}</Button>
+              <Button onClick={fetchNotificationSettingsViaApi} disabled={notifLoading}>{notifLoading ? "Loading..." : "Load"}</Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -510,7 +505,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button onClick={saveNotificationSettings} disabled={notifSaving}>{notifSaving ? "Saving..." : "Save notification settings"}</Button>
+              <Button onClick={saveNotificationSettingsViaApi} disabled={notifSaving}>{notifSaving ? "Saving..." : "Save notification settings"}</Button>
               <Button variant="ghost" onClick={() => { setProjectKey(''); setNotifError(null); setNotifSuccess(null); }}>Reset</Button>
               <div className="ml-auto text-xs text-muted-foreground">
                 {smsEnabled ? "SMS enabled (read-only)" : "SMS disabled"}

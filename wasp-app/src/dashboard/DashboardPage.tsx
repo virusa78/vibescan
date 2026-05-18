@@ -358,14 +358,8 @@ export default function DashboardPage() {
 
   // Apply simple table filters
   const filteredTableScans = useMemo(() => {
-    const q = scanQuery.trim().toLowerCase();
-    return tableScans.filter(s => {
-      if (scanStatusFilter !== 'all' && s.status.toLowerCase() !== scanStatusFilter) return false;
-      if (scanTypeFilter !== 'all' && s.inputType.toLowerCase() !== scanTypeFilter) return false;
-      if (!q) return true;
-      return s.id.toLowerCase().includes(q) || (s.inputRef ?? '').toLowerCase().includes(q);
-    });
-  }, [tableScans, scanQuery, scanStatusFilter, scanTypeFilter]);
+    return tableScans;
+  }, [tableScans]);
 
   const statCards = [
     {
