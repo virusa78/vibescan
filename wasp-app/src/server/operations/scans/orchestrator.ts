@@ -187,12 +187,13 @@ export async function cancelScan(scanId: string, errorMessage?: string) {
     try {
       // Remove from free queue
       const freeJobs = await freeScanQueue.getJobs(['waiting', 'delayed']);
-      for (const job of freeJobs) {
-        if (job.data.scanId === scanId) {
+      const freeJobsToRemove = freeJobs.filter((job) => job.data.scanId === scanId);
+      await Promise.all(
+        freeJobsToRemove.map(async (job) => {
           await job.remove();
           console.log(`[Orchestrator] Removed free scanner job ${job.id}`);
-        }
-      }
+        })
+      );
     } catch (error) {
       console.error(`[Orchestrator] Failed to remove free queue jobs for ${scanId}:`, error);
     }
@@ -200,12 +201,13 @@ export async function cancelScan(scanId: string, errorMessage?: string) {
     try {
       // Remove from enterprise queue
       const enterpriseJobs = await enterpriseScanQueue.getJobs(['waiting', 'delayed']);
-      for (const job of enterpriseJobs) {
-        if (job.data.scanId === scanId) {
+      const enterpriseJobsToRemove = enterpriseJobs.filter((job) => job.data.scanId === scanId);
+      await Promise.all(
+        enterpriseJobsToRemove.map(async (job) => {
           await job.remove();
           console.log(`[Orchestrator] Removed enterprise scanner job ${job.id}`);
-        }
-      }
+        })
+      );
     } catch (error) {
       console.error(`[Orchestrator] Failed to remove enterprise queue jobs for ${scanId}:`, error);
     }
