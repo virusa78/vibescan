@@ -249,15 +249,20 @@ async function createSwaggerGenerator(): Promise<SwaggerGenerator> {
   const refParserModule = (await import(refParserModulePath)) as any;
   const refParserUrl = refParserModule.default ?? refParserModule;
 
-  if (!(refParserUrl as any).__vibescanResolvePatched) {
-    const originalResolve = refParserUrl.resolve;
-    refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {
-      if (path2 == null) {
-        return path1;
-      }
-      return originalResolve(path1, path2);
-    };
-    (refParserUrl as any).__vibescanResolvePatched = true;
+  try {
+    if (!(refParserUrl as any).__vibescanResolvePatched) {
+      const originalResolve = refParserUrl.resolve;
+      refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {
+        if (path2 == null) {
+          return path1;
+        }
+        return originalResolve(path1, path2);
+      };
+      (refParserUrl as any).__vibescanResolvePatched = true;
+    }
+  } catch (error) {
+    // If the imported module is read-only (e.g. running in certain ESM setups like tsx),
+    // skip patching. We only strictly need this patch in environments where ref-parser is buggy.
   }
 
   const swaggerJsdocModule = await import('swagger-jsdoc');
