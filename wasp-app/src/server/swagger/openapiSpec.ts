@@ -245,19 +245,26 @@ function countV1Operations(spec: OpenApiDocument): number {
 }
 
 async function createSwaggerGenerator(): Promise<SwaggerGenerator> {
-  const refParserModulePath = '@apidevtools/json-schema-ref-parser/lib/util/url.js';
-  const refParserModule = (await import(refParserModulePath)) as any;
-  const refParserUrl = refParserModule.default ?? refParserModule;
+  // @apidevtools/json-schema-ref-parser path is patched in openapiSpec.ts to avoid node crashes
+  // in certain environments when resolve is called incorrectly.
+  // We use require to avoid read-only module export issues with ES modules.
+  const { createRequire } = await import('module');
+  const require = createRequire(process.cwd() + '/');
+  const refParserUrl = require('@apidevtools/json-schema-ref-parser/lib/util/url.js');
 
-  if (!(refParserUrl as any).__vibescanResolvePatched) {
+  if (!refParserUrl.__vibescanResolvePatched) {
     const originalResolve = refParserUrl.resolve;
-    refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {
-      if (path2 == null) {
-        return path1;
-      }
-      return originalResolve(path1, path2);
-    };
-    (refParserUrl as any).__vibescanResolvePatched = true;
+    Object.defineProperty(refParserUrl, 'resolve', {
+      value: function patchedResolve(path1: string, path2?: string) {
+        if (path2 == null) {
+          return path1;
+        }
+        return originalResolve(path1, path2);
+      },
+      writable: true,
+      configurable: true,
+    });
+    refParserUrl.__vibescanResolvePatched = true;
   }
 
   const swaggerJsdocModule = await import('swagger-jsdoc');
