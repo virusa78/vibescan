@@ -189,38 +189,42 @@ export async function freeScannerWorker(job: Job<ScanJob>) {
       ingestionMeta,
     });
 
-    // Create Finding records
-    for (const finding of normalizedFindings) {
-      const fingerprint = `${finding.cveId}|${finding.package}|${finding.version}`;
-
-      await prisma.finding.upsert({
-        where: {
-          scanId_fingerprint: {
-            scanId,
-            fingerprint,
+    // Create Finding records in batches to avoid N+1 query performance issues
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < normalizedFindings.length; i += BATCH_SIZE) {
+      const batch = normalizedFindings.slice(i, i + BATCH_SIZE);
+      const batchPromises = batch.map((finding) => {
+        const fingerprint = `${finding.cveId}|${finding.package}|${finding.version}`;
+        return prisma.finding.upsert({
+          where: {
+            scanId_fingerprint: {
+              scanId,
+              fingerprint,
+            },
           },
-        },
-        create: {
-          scanId,
-          userId,
-          fingerprint,
-          cveId: finding.cveId,
-          packageName: finding.package,
-          installedVersion: finding.version,
-          severity: finding.severity.toUpperCase(),
-          cvssScore: finding.cvssScore,
-          fixedVersion: finding.fixedVersion,
-          description: finding.description,
-          source: 'free',
-          detectedData: finding as any,
-        },
-        update: {
-          severity: finding.severity.toUpperCase(),
-          cvssScore: finding.cvssScore,
-          fixedVersion: finding.fixedVersion,
-          description: finding.description,
-        },
+          create: {
+            scanId,
+            userId,
+            fingerprint,
+            cveId: finding.cveId,
+            packageName: finding.package,
+            installedVersion: finding.version,
+            severity: finding.severity.toUpperCase(),
+            cvssScore: finding.cvssScore,
+            fixedVersion: finding.fixedVersion,
+            description: finding.description,
+            source: 'free',
+            detectedData: finding as any,
+          },
+          update: {
+            severity: finding.severity.toUpperCase(),
+            cvssScore: finding.cvssScore,
+            fixedVersion: finding.fixedVersion,
+            description: finding.description,
+          },
+        });
       });
+      await prisma.$transaction(batchPromises);
     }
 
     console.log(`[Free Scanner] Created ${normalizedFindings.length} findings for scan ${scanId}`);
