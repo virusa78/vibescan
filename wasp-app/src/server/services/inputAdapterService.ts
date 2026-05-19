@@ -554,7 +554,7 @@ export async function cloneGitHubAndScanWithSBOMGenerator(
     try {
       execFileSync(
         'git',
-        ['clone', '--depth', '1', '--filter=blob:none', '--quiet', url, repoPath],
+        ['clone', '--depth', '1', '--filter=blob:none', '--quiet', '--', url, repoPath],
         { timeout: timeoutMs, stdio: 'pipe' },
       );
     } catch (error) {
