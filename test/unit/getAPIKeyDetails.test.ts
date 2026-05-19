@@ -44,7 +44,7 @@ describe('getAPIKeyDetails', () => {
         { date: '2026-04-22', count: 1 },
         { date: '2026-04-23', count: 2 },
       ],
-      status: 'active',
+      status: 'expired',
     });
   });
 });
