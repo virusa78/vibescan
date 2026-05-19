@@ -245,30 +245,31 @@ function countV1Operations(spec: OpenApiDocument): number {
 }
 
 async function createSwaggerGenerator(): Promise<SwaggerGenerator> {
-  const refParserModulePath = '@apidevtools/json-schema-ref-parser/lib/util/url.js';
-  let refParserUrl: any;
   try {
+    const refParserModulePath = '@apidevtools/json-schema-ref-parser/lib/util/url.js';
     const refParserModule = (await import(refParserModulePath)) as any;
-    refParserUrl = refParserModule.default ?? refParserModule;
-  } catch (err) {
-    // try the new dist path
-    const refParserModule = (await import('@apidevtools/json-schema-ref-parser/dist/lib/util/url.js')) as any;
-    refParserUrl = refParserModule.default ?? refParserModule;
-  }
+    const refParserUrl = refParserModule.default ?? refParserModule;
 
-  if (!(refParserUrl as any).__vibescanResolvePatched) {
-    const originalResolve = refParserUrl.resolve;
-    try {
-      refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {
-        if (path2 == null) {
-          return path1;
+    if (!(refParserUrl as any).__vibescanResolvePatched) {
+      const originalResolve = refParserUrl.resolve;
+      try {
+        if (!Object.isFrozen(refParserUrl)) {
+          try {
+            refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {
+              if (path2 == null) {
+                return path1;
+              }
+              return originalResolve(path1, path2);
+            };
+          } catch(e) { /* ignore */ }
+          (refParserUrl as any).__vibescanResolvePatched = true;
         }
-        return originalResolve(path1, path2);
-      };
-      (refParserUrl as any).__vibescanResolvePatched = true;
-    } catch (e) {
-      // module might be read-only (ESM)
+      } catch (e) {
+        // Ignore if properties are not writable
+      }
     }
+  } catch (e) {
+    // Ignore module not found errors when trying to patch
   }
 
   const swaggerJsdocModule = await import('swagger-jsdoc');
