@@ -249,19 +249,15 @@ async function createSwaggerGenerator(): Promise<SwaggerGenerator> {
   const refParserModule = (await import(refParserModulePath)) as any;
   const refParserUrl = refParserModule.default ?? refParserModule;
 
-  if (!(refParserUrl as any).__vibescanResolvePatched && typeof refParserUrl === 'object' && !Object.isFrozen(refParserUrl)) {
-    try {
-      const originalResolve = refParserUrl.resolve;
-      refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {
-        if (path2 == null) {
-          return path1;
-        }
-        return originalResolve(path1, path2);
-      };
-      (refParserUrl as any).__vibescanResolvePatched = true;
-    } catch (err) {
-      // Ignore frozen object assignment errors from ESM imports
-    }
+  if (!(refParserUrl as any).__vibescanResolvePatched) {
+    const originalResolve = refParserUrl.resolve;
+    refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {
+      if (path2 == null) {
+        return path1;
+      }
+      return originalResolve(path1, path2);
+    };
+    (refParserUrl as any).__vibescanResolvePatched = true;
   }
 
   const swaggerJsdocModule = await import('swagger-jsdoc');
