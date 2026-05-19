@@ -29,7 +29,6 @@
     "retention:cyclonedx:m3": "node --import tsx scripts/cyclonedx-artifact-retention.ts"
   },
   "dependencies": {
-    "@apidevtools/json-schema-ref-parser": "^15.3.5",
     "@aws-sdk/s3-request-presigner": "^3.1024.0",
     "ajv": "8.18.0",
     "bcrypt": "^6.0.0",
@@ -45,6 +44,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@apidevtools/json-schema-ref-parser": "^15.3.5",
     "@aws-sdk/client-s3": "^3.1024.0",
     "@aws-sdk/lib-storage": "^3.1024.0",
     "@playwright/test": "^1.59.1",
@@ -66,6 +66,7 @@
     "nodemon": "^3.1.14",
     "prom-client": "^15.1.3",
     "stripe": "^22.0.0",
+    "swagger-jsdoc": "^6.2.8",
     "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
