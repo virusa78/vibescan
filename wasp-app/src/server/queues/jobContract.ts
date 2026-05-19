@@ -14,7 +14,7 @@ export const QUEUE_NAMES = {
 
 export type QueueName = typeof QUEUE_NAMES[keyof typeof QUEUE_NAMES];
 
-export type ScanJobInputType = 'source_zip' | 'sbom_upload' | 'github_app';
+export type ScanJobInputType = 'source_zip' | 'sbom_upload' | 'github_app' | 'dast_upload';
 
 export interface ScanJob {
   scanId: string;

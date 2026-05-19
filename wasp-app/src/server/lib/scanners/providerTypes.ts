@@ -1,7 +1,7 @@
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
 import type { NormalizedFinding } from '../../operations/scans/normalizeFindings.js';
 
-export type ScannerProviderKind = 'grype' | 'codescoring-johnny' | 'snyk' | 'owasp' | 'trivy';
+export type ScannerProviderKind = 'grype' | 'codescoring-johnny' | 'snyk' | 'owasp' | 'trivy' | 'dast';
 
 export type ScannerCredentialSource =
   | { mode: 'environment' }
@@ -19,7 +19,7 @@ export type ScannerResolvedCredentials = {
 export type ScannerExecutionContext = {
   scanId: string;
   userId: string;
-  inputType: 'source_zip' | 'sbom_upload' | 'github_app';
+  inputType: 'source_zip' | 'sbom_upload' | 'github_app' | 'dast_upload';
   inputRef: string;
   credentialSource?: ScannerCredentialSource;
   resolvedCredentials?: ScannerResolvedCredentials;

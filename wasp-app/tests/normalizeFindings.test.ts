@@ -7,6 +7,7 @@ import {
   normalizeGrypeFindings,
   normalizeCodescoringFindings,
   computeFindingFingerprint,
+  normalizeDastFindings,
 } from '../src/server/operations/scans/normalizeFindings';
 
 describe('Finding Normalization', () => {
@@ -222,3 +223,70 @@ describe('Finding Normalization', () => {
     });
   });
 });
+
+  describe('normalizeDastFindings', () => {
+    it('should normalize valid DAST ZAP output', () => {
+      const zapOutput = {
+        site: [
+          {
+            '@name': 'http://localhost:3000',
+            '@host': 'localhost',
+            alerts: [
+              {
+                pluginid: '10020',
+                name: 'Anti-CSRF Tokens Check',
+                riskcode: '2',
+                desc: 'No Anti-CSRF tokens were found.',
+                instances: [
+                  { uri: 'http://localhost:3000/api/test' },
+                  { uri: 'http://localhost:3000/api/test2' }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+
+      const findings = normalizeDastFindings(zapOutput);
+
+      expect(findings).toHaveLength(2);
+      expect(findings[0]).toEqual({
+        cveId: 'ZAP-10020',
+        severity: 'medium',
+        package: 'dast-endpoint',
+        version: 'N/A',
+        fixedVersion: undefined,
+        description: 'No Anti-CSRF tokens were found.',
+        cvssScore: 0,
+        source: 'dast',
+        filePath: 'http://localhost:3000/api/test',
+      });
+      expect(findings[1].filePath).toBe('http://localhost:3000/api/test2');
+    });
+
+    it('should handle missing instances array gracefully', () => {
+      const zapOutput = {
+        site: [
+          {
+            '@name': 'http://example.com',
+            alerts: [
+              {
+                pluginid: '12345',
+                name: 'Test Alert',
+                riskcode: '3',
+                desc: 'A critical issue'
+              }
+            ]
+          }
+        ]
+      };
+
+      const findings = normalizeDastFindings(zapOutput);
+
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toEqual(expect.objectContaining({
+        severity: 'high',
+        filePath: 'http://example.com'
+      }));
+    });
+  });

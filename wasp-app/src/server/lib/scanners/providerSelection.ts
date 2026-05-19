@@ -48,6 +48,7 @@ const ENTERPRISE_PLAN_EXECUTIONS: PlannedScannerExecution[] = [
 export type ScannerPlanningContext = {
   userId?: string;
   snykReadiness?: SnykScannerReadiness | null;
+  inputType?: string;
 };
 
 function buildSnykExecution(credentialSource: ScannerCredentialSource): PlannedScannerExecution {
@@ -63,6 +64,17 @@ export function resolvePlannedScannerExecutions(
   planAtSubmission: string,
   context?: ScannerPlanningContext,
 ): PlannedScannerExecution[] {
+  if (context?.inputType === 'dast_upload' || context?.inputType === 'dast') {
+    return [
+      {
+        provider: 'dast',
+        queueTarget: 'free', // Could be either, but 'free' handles non-enterprise jobs too
+        resultSource: 'dast',
+        credentialSource: { mode: 'environment' },
+      },
+    ];
+  }
+
   if (planAtSubmission === 'enterprise') {
     if (!context?.snykReadiness?.enabled) {
       return ENTERPRISE_PLAN_EXECUTIONS;
