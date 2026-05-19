@@ -170,7 +170,7 @@ export async function emitWebhookEvent(event: WebhookEvent): Promise<void> {
         }
       ).then(() => {
         console.log(
-          `[WebhookEmitter] Enqueued delivery job for webhook: ${webhook.id}, delivery: ${delivery.id}`
+          `[WebhookEmitter] Skipping duplicate delivery: webhook ${w.id}, scan ${scanId}`
         );
       }).catch((error) => {
         console.error(
