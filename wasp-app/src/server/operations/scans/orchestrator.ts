@@ -187,9 +187,9 @@ export async function cancelScan(scanId: string, errorMessage?: string) {
     try {
       // Remove from free queue
       const freeJobs = await freeScanQueue.getJobs(['waiting', 'delayed']);
-      const freeJobsToRemove = freeJobs.filter((job) => job.data.scanId === scanId);
+      const freeJobsToRemove = freeJobs.filter((job: any) => job.data.scanId === scanId);
       await Promise.all(
-        freeJobsToRemove.map(async (job) => {
+        freeJobsToRemove.map(async (job: any) => {
           await job.remove();
           console.log(`[Orchestrator] Removed free scanner job ${job.id}`);
         })
@@ -201,9 +201,9 @@ export async function cancelScan(scanId: string, errorMessage?: string) {
     try {
       // Remove from enterprise queue
       const enterpriseJobs = await enterpriseScanQueue.getJobs(['waiting', 'delayed']);
-      const enterpriseJobsToRemove = enterpriseJobs.filter((job) => job.data.scanId === scanId);
+      const enterpriseJobsToRemove = enterpriseJobs.filter((job: any) => job.data.scanId === scanId);
       await Promise.all(
-        enterpriseJobsToRemove.map(async (job) => {
+        enterpriseJobsToRemove.map(async (job: any) => {
           await job.remove();
           console.log(`[Orchestrator] Removed enterprise scanner job ${job.id}`);
         })
