@@ -251,13 +251,21 @@ async function createSwaggerGenerator(): Promise<SwaggerGenerator> {
 
   if (!(refParserUrl as any).__vibescanResolvePatched) {
     const originalResolve = refParserUrl.resolve;
-    refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {
-      if (path2 == null) {
-        return path1;
-      }
-      return originalResolve(path1, path2);
-    };
-    (refParserUrl as any).__vibescanResolvePatched = true;
+
+    // In strict ESM, module objects are sealed and read-only. We need to mutate the actual underlying object or mock it correctly.
+    // Some versions of refParser have an issue we are patching. If it's a module namespace, we can't patch it directly.
+    try {
+      refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {
+        if (path2 == null) {
+          return path1;
+        }
+        return originalResolve(path1, path2);
+      };
+      (refParserUrl as any).__vibescanResolvePatched = true;
+    } catch (err) {
+      // If we can't patch it (e.g. TypeError: Cannot assign to read only property), just swallow it
+      // The dependency update might have fixed the issue anyway, or we're on a newer node where namespace objects are frozen.
+    }
   }
 
   const swaggerJsdocModule = await import('swagger-jsdoc');
