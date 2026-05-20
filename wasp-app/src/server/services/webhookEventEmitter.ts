@@ -65,122 +65,78 @@ export async function emitWebhookEvent(event: WebhookEvent): Promise<void> {
       .update(payloadStr)
       .digest('hex');
 
-    // Find existing deliveries to prevent duplicates (idempotency) in a single query
-    const existingDeliveries = await prisma.webhookDelivery.findMany({
-      where: {
-        webhookId: { in: webhooks.map((w) => w.id) },
-        scanId: scanId,
-        payloadHash: payloadHash,
-      },
-    });
+    // Enqueue delivery jobs for each webhook
+    for (const webhook of webhooks) {
+      try {
+        // Check for duplicate delivery (idempotency)
+        const existingDelivery = await prisma.webhookDelivery.findFirst({
+          where: {
+            webhookId: webhook.id,
+            scanId: scanId,
+            payloadHash: payloadHash,
+          },
+        });
 
-    const existingWebhookIds = new Set(existingDeliveries.map((d) => d.webhookId));
+        if (existingDelivery) {
+          console.log(
+            `[WebhookEmitter] Skipping duplicate delivery: webhook ${webhook.id}, scan ${scanId}`
+          );
+          continue;
+        }
 
-    // Filter out webhooks that already have a delivery for this event/scan/payload
-    const newWebhooks = webhooks.filter((w) => !existingWebhookIds.has(w.id));
+        // Create WebhookDelivery record (start with attempt 1)
+        const delivery = await prisma.webhookDelivery.create({
+          data: {
+            webhookId: webhook.id,
+            scanId: scanId,
+            eventType: eventType,
+            payload: payload,
+            targetUrl: webhook.url,
+            payloadHash: payloadHash,
+            attemptNumber: 1, // Initial attempt
+            status: 'pending',
+          },
+        });
 
-    if (existingWebhookIds.size > 0) {
-      console.log(
-        `[WebhookEmitter] Skipping ${existingWebhookIds.size} duplicate deliveries for scan ${scanId}`
-      );
-    }
-
-    if (newWebhooks.length === 0) {
-      return;
-    }
-
-    // Create WebhookDelivery records in a transaction
-    const deliveryCreates = newWebhooks.map((webhook) => {
-      return prisma.webhookDelivery.create({
-        data: {
+        // Enqueue delivery job
+        const jobData: DeliveryQueueJob = {
+          deliveryId: delivery.id,
           webhookId: webhook.id,
           scanId: scanId,
           eventType: eventType,
-          payload: payload,
-          targetUrl: webhook.url,
+          payload: payloadStr,
           payloadHash: payloadHash,
-          attemptNumber: 1, // Initial attempt
-          status: 'pending',
-        },
-      });
-    });
+          targetUrl: webhook.url,
+          signingSecretEncrypted: webhook.signingSecretEncrypted,
+          attemptNumber: 1, // Will be updated on retry based on job.attemptsMade
+        };
 
-    let createdDeliveries: any[] = [];
-    try {
-      createdDeliveries = await prisma.$transaction(deliveryCreates);
-    } catch (error) {
-      console.error(
-        `[WebhookEmitter] Failed to create webhook deliveries in transaction:`,
-        error instanceof Error ? error.message : String(error)
-      );
-      // Fallback: If transaction fails, try individually so we don't drop all of them
-      for (const webhook of newWebhooks) {
-        try {
-          const delivery = await prisma.webhookDelivery.create({
-            data: {
-              webhookId: webhook.id,
-              scanId: scanId,
-              eventType: eventType,
-              payload: payload,
-              targetUrl: webhook.url,
-              payloadHash: payloadHash,
-              attemptNumber: 1,
-              status: 'pending',
+        await webhookDeliveryQueue.add(
+          `delivery-${delivery.id}`,
+          jobData,
+          {
+            priority: 5, // Normal priority for webhooks
+            attempts: 5, // Retry up to 5 times
+            backoff: {
+              type: 'exponential',
+              delay: 2000, // Start at 2s, exponential backoff
             },
-          });
-          createdDeliveries.push(delivery);
-        } catch (innerError) {
-          console.error(
-            `[WebhookEmitter] Failed to create webhook delivery for ${webhook.id}:`,
-            innerError instanceof Error ? innerError.message : String(innerError)
-          );
-        }
-      }
-    }
-
-    // Enqueue delivery jobs for each successfully created delivery
-    const queuePromises = createdDeliveries.map((delivery) => {
-      const webhook = newWebhooks.find((w) => w.id === delivery.webhookId);
-      if (!webhook) return Promise.resolve();
-
-      const jobData: DeliveryQueueJob = {
-        deliveryId: delivery.id,
-        webhookId: webhook.id,
-        scanId: scanId,
-        eventType: eventType,
-        payload: payloadStr,
-        payloadHash: payloadHash,
-        targetUrl: webhook.url,
-        signingSecretEncrypted: webhook.signingSecretEncrypted,
-        attemptNumber: 1, // Will be updated on retry based on job.attemptsMade
-      };
-
-      return webhookDeliveryQueue.add(
-        `delivery-${delivery.id}`,
-        jobData,
-        {
-          priority: 5, // Normal priority for webhooks
-          attempts: 5, // Retry up to 5 times
-          backoff: {
-            type: 'exponential',
-            delay: 2000, // Start at 2s, exponential backoff
-          },
-          removeOnComplete: true,
-          removeOnFail: false,
-        }
-      ).then(() => {
-        console.log(
-          `[WebhookEmitter] Skipping duplicate delivery: webhook ${w.id}, scan ${scanId}`
+            removeOnComplete: true,
+            removeOnFail: false,
+          }
         );
-      }).catch((error) => {
+
+        console.log(
+          `[WebhookEmitter] Enqueued delivery job for webhook: ${webhook.id}, delivery: ${delivery.id}`
+        );
+      } catch (error) {
         console.error(
           `[WebhookEmitter] Failed to enqueue webhook ${webhook.id}:`,
           error instanceof Error ? error.message : String(error)
         );
-      });
-    });
-
-    await Promise.allSettled(queuePromises);
+        // Continue with next webhook instead of failing entire event
+      }
+    }
   } catch (error) {
     console.error(
       `[WebhookEmitter] Failed to emit webhook event:`,
