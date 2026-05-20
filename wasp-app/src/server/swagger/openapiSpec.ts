@@ -245,27 +245,26 @@ function countV1Operations(spec: OpenApiDocument): number {
 }
 
 async function createSwaggerGenerator(): Promise<SwaggerGenerator> {
-  const refParserModulePath = '@apidevtools/json-schema-ref-parser/lib/util/url.js';
-  const refParserModule = (await import(refParserModulePath)) as any;
-  const refParserUrl = refParserModule.default ?? refParserModule;
+  // @apidevtools/json-schema-ref-parser path is patched in openapiSpec.ts to avoid node crashes
+  // in certain environments when resolve is called incorrectly.
+  // We use require to avoid read-only module export issues with ES modules.
+  const { createRequire } = await import('module');
+  const require = createRequire(process.cwd() + '/');
+  const refParserUrl = require('@apidevtools/json-schema-ref-parser/lib/util/url.js');
 
-  if (!(refParserUrl as any).__vibescanResolvePatched) {
+  if (!refParserUrl.__vibescanResolvePatched) {
     const originalResolve = refParserUrl.resolve;
-
-    // In strict ESM, module objects are sealed and read-only. We need to mutate the actual underlying object or mock it correctly.
-    // Some versions of refParser have an issue we are patching. If it's a module namespace, we can't patch it directly.
-    try {
-      refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {
+    Object.defineProperty(refParserUrl, 'resolve', {
+      value: function patchedResolve(path1: string, path2?: string) {
         if (path2 == null) {
           return path1;
         }
         return originalResolve(path1, path2);
-      };
-      (refParserUrl as any).__vibescanResolvePatched = true;
-    } catch (err) {
-      // If we can't patch it (e.g. TypeError: Cannot assign to read only property), just swallow it
-      // The dependency update might have fixed the issue anyway, or we're on a newer node where namespace objects are frozen.
-    }
+      },
+      writable: true,
+      configurable: true,
+    });
+    refParserUrl.__vibescanResolvePatched = true;
   }
 
   const swaggerJsdocModule = await import('swagger-jsdoc');
