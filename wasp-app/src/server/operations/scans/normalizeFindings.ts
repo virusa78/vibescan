@@ -10,7 +10,7 @@ export interface NormalizedFinding {
   fixedVersion?: string;
   description: string;
   cvssScore: number;
-  source: "grype" | "codescoring_johnny" | "snyk" | "owasp" | "trivy";
+  source: "grype" | "codescoring_johnny" | "snyk" | "owasp" | "trivy" | "dast";
   filePath?: string;
 }
 
@@ -139,6 +139,81 @@ export function normalizeCodescoringFindings(rawOutput: unknown): NormalizedFind
         source: "codescoring_johnny" as const,
         filePath: (typedComponent as any).path || (typedComponent as any).location,
       });
+    }
+  }
+
+  return findings;
+}
+
+/**
+ * Normalize DAST findings (e.g., from OWASP ZAP) to Finding array
+ * Assumes a structure similar to ZAP JSON output
+ */
+export function normalizeDastFindings(rawOutput: unknown): NormalizedFinding[] {
+  if (!isRecord(rawOutput) || !Array.isArray(rawOutput.site)) {
+    return [];
+  }
+
+  const findings: NormalizedFinding[] = [];
+
+  for (const site of rawOutput.site) {
+    if (!isRecord(site) || !Array.isArray(site.alerts)) continue;
+
+    const host = (site['@name'] as string) || (site['@host'] as string) || 'unknown_host';
+
+    for (const alert of site.alerts) {
+      if (!isRecord(alert)) continue;
+
+      const severityRisk = (alert.riskcode as string) || '1'; // Default info
+      let severity: NormalizedFinding['severity'] = 'info';
+      switch (String(severityRisk)) {
+        case '3':
+          severity = 'high';
+          break;
+        case '2':
+          severity = 'medium';
+          break;
+        case '1':
+          severity = 'low';
+          break;
+        case '0':
+        default:
+          severity = 'info';
+          break;
+      }
+
+      const instances = Array.isArray(alert.instances) ? alert.instances : [];
+
+      // If there are multiple instances, create a finding for each
+      if (instances.length > 0) {
+        for (const instance of instances) {
+          if (!isRecord(instance)) continue;
+
+          findings.push({
+            cveId: (alert.pluginid as string) ? `ZAP-${alert.pluginid}` : 'UNKNOWN_DAST',
+            severity,
+            package: 'dast-endpoint',
+            version: 'N/A',
+            fixedVersion: undefined,
+            description: (alert.desc as string) || (alert.name as string) || '',
+            cvssScore: 0, // ZAP typically doesn't provide CVSS in standard JSON output
+            source: 'dast',
+            filePath: (instance.uri as string) || host,
+          });
+        }
+      } else {
+        findings.push({
+          cveId: (alert.pluginid as string) ? `ZAP-${alert.pluginid}` : 'UNKNOWN_DAST',
+          severity,
+          package: 'dast-endpoint',
+          version: 'N/A',
+          fixedVersion: undefined,
+          description: (alert.desc as string) || (alert.name as string) || '',
+          cvssScore: 0,
+          source: 'dast',
+          filePath: host,
+        });
+      }
     }
   }
 

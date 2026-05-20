@@ -6,7 +6,7 @@ import type { AuthenticatedScanUser } from './shared.js';
 
 const submitScanInputSchema = z.object({
   inputRef: z.string(),
-  inputType: z.enum(['github', 'sbom', 'source_zip']),
+  inputType: z.enum(['github', 'sbom', 'source_zip', 'dast']),
 });
 
 export type SubmitScanInput = z.infer<typeof submitScanInputSchema>;

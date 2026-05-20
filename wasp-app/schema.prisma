@@ -17,6 +17,7 @@ enum ScanStatus {
 }
 
 enum ScanSource {
+  dast
   grype
   codescoring_johnny
   owasp
@@ -324,7 +325,7 @@ model Scan {
   workspaceId String? @map("workspace_id") @db.Uuid
 
   // Input details
-  inputType     String @map("input_type") // 'source_zip', 'sbom_upload', 'github_app', 'ci_plugin'
+  inputType     String @map("input_type") // 'source_zip', 'sbom_upload', 'github_app', 'ci_plugin', 'dast_upload'
   inputRef      String @map("input_ref") // filename, SBOM URL, GitHub ref, etc.
   githubContext Json?  @map("github_context")
 

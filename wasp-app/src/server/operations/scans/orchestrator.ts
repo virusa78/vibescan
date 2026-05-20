@@ -36,7 +36,7 @@ export async function orchestrateScan(input: OrchestratorInput): Promise<any> {
     }
 
     const plannedExecutions =
-      input.plannedExecutions ?? resolvePlannedScannerExecutions(planAtSubmission);
+      input.plannedExecutions ?? resolvePlannedScannerExecutions(planAtSubmission, { inputType: input.inputType });
     const enqueuedExecutions: OrchestratorResult['enqueuedExecutions'] = [];
     let freeJobId: string | undefined;
     let enterpriseJobId: string | undefined;

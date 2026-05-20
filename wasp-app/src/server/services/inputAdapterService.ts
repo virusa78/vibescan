@@ -182,7 +182,7 @@ function getBranchNameFromGitRef(ref: string | null | undefined): string | null 
   return ref;
 }
 
-function normalizeScanInputType(inputType: string): 'github' | 'sbom' | 'source_zip' {
+function normalizeScanInputType(inputType: string): 'github' | 'sbom' | 'source_zip' | 'dast' {
   switch (inputType) {
     case 'github':
     case 'github_app':
@@ -193,6 +193,9 @@ function normalizeScanInputType(inputType: string): 'github' | 'sbom' | 'source_
       return 'sbom';
     case 'source_zip':
       return 'source_zip';
+    case 'dast':
+    case 'dast_upload':
+      return 'dast';
     default:
       throw new HttpError(422, 'unsupported_scan_input', {
         detail: `Unsupported scan input type: ${inputType}`,
@@ -237,6 +240,14 @@ export async function loadScanArtifacts(
       return {
         components,
         sbomRaw: buildCycloneDxSbom(components),
+      };
+    }
+    case 'dast': {
+      // DAST doesn't have components in the SCA sense. Return an empty array.
+      // The dastProvider will read the inputRef directly.
+      return {
+        components: [],
+        sbomRaw: {},
       };
     }
   }

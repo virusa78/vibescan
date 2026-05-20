@@ -12,7 +12,7 @@ import { getSnykScannerReadiness } from "./scannerReadinessService.js";
 import { resolvePlannedScannerExecutions } from "../lib/scanners/providerSelection.js";
 import type { PersistedGitHubScanContext } from './githubAppService';
 
-export type ScanInputType = "github" | "sbom" | "source_zip";
+export type ScanInputType = "github" | "sbom" | "source_zip" | "dast";
 
 export interface ScanSubmissionResult {
   scan: Scan;
@@ -35,6 +35,8 @@ function internalInputTypeFor(inputType: ScanInputType): ScanJobInputType {
       return "sbom_upload";
     case "source_zip":
       return "source_zip";
+    case "dast":
+      return "dast_upload";
   }
 }
 
