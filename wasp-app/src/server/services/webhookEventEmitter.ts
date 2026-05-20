@@ -65,19 +65,26 @@ export async function emitWebhookEvent(event: WebhookEvent): Promise<void> {
       .update(payloadStr)
       .digest('hex');
 
+    // Fetch existing deliveries for all webhooks in a single query to avoid N+1 problem
+    const webhookIds = webhooks.map((w) => w.id);
+    const existingDeliveries = await prisma.webhookDelivery.findMany({
+      where: {
+        webhookId: { in: webhookIds },
+        scanId: scanId,
+        payloadHash: payloadHash,
+      },
+      select: { webhookId: true },
+    });
+
+    const existingDeliveryWebhookIds = new Set(
+      existingDeliveries.map((delivery) => delivery.webhookId)
+    );
+
     // Enqueue delivery jobs for each webhook
     for (const webhook of webhooks) {
       try {
-        // Check for duplicate delivery (idempotency)
-        const existingDelivery = await prisma.webhookDelivery.findFirst({
-          where: {
-            webhookId: webhook.id,
-            scanId: scanId,
-            payloadHash: payloadHash,
-          },
-        });
-
-        if (existingDelivery) {
+        // Check for duplicate delivery (idempotency) using pre-fetched data
+        if (existingDeliveryWebhookIds.has(webhook.id)) {
           console.log(
             `[WebhookEmitter] Skipping duplicate delivery: webhook ${webhook.id}, scan ${scanId}`
           );
