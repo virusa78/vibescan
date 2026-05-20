@@ -47,13 +47,10 @@ export async function sweepExpiredScans(now: Date = new Date()): Promise<number>
       take: 100,
     });
 
-    let cancelledCount = 0;
-    for (const scan of staleScans) {
-      const cancelled = await cancelExpiredScan(scan.id, scan.userId, timeoutMs);
-      if (cancelled) {
-        cancelledCount += 1;
-      }
-    }
+    const results = await Promise.all(
+      staleScans.map((scan) => cancelExpiredScan(scan.id, scan.userId, timeoutMs)),
+    );
+    const cancelledCount = results.filter(Boolean).length;
 
     if (cancelledCount > 0) {
       console.log(
