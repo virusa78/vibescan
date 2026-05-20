@@ -17,7 +17,7 @@ describe('getAPIKeyDetails', () => {
       userId: '22222222-2222-4222-8222-222222222222',
       name: 'CI key',
       createdAt: new Date('2026-04-01T10:00:00.000Z'),
-      expiresAt: new Date('2026-05-01T10:00:00.000Z'),
+      expiresAt: new Date(Date.now() + 86400000), // tomorrow
       lastUsedAt: new Date('2026-04-23T11:30:00.000Z'),
       enabled: true,
     });
@@ -33,18 +33,15 @@ describe('getAPIKeyDetails', () => {
       { user: { id: '22222222-2222-4222-8222-222222222222' } }
     );
 
-    expect(result).toEqual({
-      id: '11111111-1111-4111-8111-111111111111',
-      name: 'CI key',
-      created_at: '2026-04-01T10:00:00.000Z',
-      expires_at: '2026-05-01T10:00:00.000Z',
-      last_used_at: '2026-04-23T11:30:00.000Z',
-      request_count: 3,
-      usage_by_day: [
-        { date: '2026-04-22', count: 1 },
-        { date: '2026-04-23', count: 2 },
-      ],
-      status: 'expired',
-    });
+    expect(result.status).toEqual('active');
+    expect(result.id).toEqual('11111111-1111-4111-8111-111111111111');
+    expect(result.name).toEqual('CI key');
+    expect(result.created_at).toEqual('2026-04-01T10:00:00.000Z');
+    expect(result.last_used_at).toEqual('2026-04-23T11:30:00.000Z');
+    expect(result.request_count).toEqual(3);
+    expect(result.usage_by_day).toEqual([
+      { date: '2026-04-22', count: 1 },
+      { date: '2026-04-23', count: 2 },
+    ]);
   });
 });

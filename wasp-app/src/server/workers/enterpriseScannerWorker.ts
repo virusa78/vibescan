@@ -188,11 +188,12 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
       ingestionMeta,
     });
 
-    // Create Finding records
-    await prisma.$transaction(
-      normalizedFindings.map((finding) => {
+    // Create Finding records in batches to avoid N+1 query performance issues
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < normalizedFindings.length; i += BATCH_SIZE) {
+      const batch = normalizedFindings.slice(i, i + BATCH_SIZE);
+      const batchPromises = batch.map((finding) => {
         const fingerprint = `${finding.cveId}|${finding.package}|${finding.version}`;
-
         return prisma.finding.upsert({
           where: {
             scanId_fingerprint: {
@@ -221,8 +222,9 @@ export async function enterpriseScannerWorker(job: Job<ScanJob>) {
             description: finding.description,
           },
         });
-      })
-    );
+      });
+      await prisma.$transaction(batchPromises);
+    }
 
     console.log(`[Enterprise Scanner] Created ${normalizedFindings.length} findings for scan ${scanId}`);
 
