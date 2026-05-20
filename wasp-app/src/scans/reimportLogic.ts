@@ -220,59 +220,63 @@ export async function applyReimportResult(
 
       // 3. Mark mitigated findings
       if (reimportResult.mitigated.length > 0) {
-        const cveIdsToMitigate = reimportResult.mitigated.map(item => item.findingId);
+        const mitigatedFindingIds = reimportResult.mitigated.map(item => item.findingId);
 
-        // Build map for quick access to mitigation data
-        const mitigatedDataMap = new Map();
-        for (const item of reimportResult.mitigated) {
-          mitigatedDataMap.set(item.findingId, item);
-        }
-
-        // Find all matching active findings
-        const findingsToMitigate = await tx.finding.findMany({
+        // Fetch all active findings matching the mitigated CVE IDs
+        const activeFindings = await tx.finding.findMany({
           where: {
-            cveId: { in: cveIdsToMitigate },
-            status: 'active',
+            cveId: { in: mitigatedFindingIds },
+            status: 'active', // Only mitigate active findings
           },
           orderBy: { createdAt: 'desc' },
         });
 
-        if (findingsToMitigate.length > 0) {
-          // Deduplicate to only keep the latest per cveId, matching original logic
-          const latestFindingsMap = new Map();
-          for (const finding of findingsToMitigate) {
-            if (!latestFindingsMap.has(finding.cveId)) {
-              latestFindingsMap.set(finding.cveId, finding);
-            }
+        // Group by cveId, keeping the first (most recent) finding for each
+        const findingsByCveId = new Map();
+        for (const finding of activeFindings) {
+          if (!findingsByCveId.has(finding.cveId)) {
+            findingsByCveId.set(finding.cveId, finding);
           }
+        }
 
-          const findings = Array.from(latestFindingsMap.values());
+        const batchPromises: Promise<any>[] = [];
 
-          // Update status and timestamps using Promise.all to preserve exact mitigatedAt timestamps
-          await Promise.all(
-            findings.map(finding => {
-              const mitigatedData = mitigatedDataMap.get(finding.cveId);
-              return tx.finding.update({
+        for (const item of reimportResult.mitigated) {
+          const finding = findingsByCveId.get(item.findingId);
+
+          if (finding) {
+            batchPromises.push(
+              tx.finding.update({
                 where: { id: finding.id },
                 data: {
                   status: 'mitigated',
-                  mitigatedAt: mitigatedData.mitigatedAt,
+                  mitigatedAt: item.mitigatedAt,
                   mitigatedInScanId: scanId,
                 },
-              });
-            })
-          );
+              })
+            );
 
-          // Batch create history records
-          await tx.findingHistory.createMany({
-            data: findings.map(finding => ({
-              findingId: finding.id,
-              event: 'auto_mitigated',
-              metadata: {
-                mitigatedInScanId: scanId,
-              },
-            })),
-          });
+            // Log to history
+            batchPromises.push(
+              tx.findingHistory.create({
+                data: {
+                  findingId: finding.id,
+                  event: 'auto_mitigated',
+                  metadata: {
+                    mitigatedInScanId: scanId,
+                  },
+                },
+              })
+            );
+          }
+        }
+
+        // Execute all updates and creations concurrently
+        // Chunking the batch execution is a standard project practice for large arrays
+        const CHUNK_SIZE = 100;
+        for (let i = 0; i < batchPromises.length; i += CHUNK_SIZE) {
+          const chunk = batchPromises.slice(i, i + CHUNK_SIZE);
+          await Promise.all(chunk);
         }
       }
 
