@@ -245,26 +245,27 @@ function countV1Operations(spec: OpenApiDocument): number {
 }
 
 async function createSwaggerGenerator(): Promise<SwaggerGenerator> {
-  // @apidevtools/json-schema-ref-parser path is patched in openapiSpec.ts to avoid node crashes
-  // in certain environments when resolve is called incorrectly.
-  // We use require to avoid read-only module export issues with ES modules.
-  const { createRequire } = await import('module');
-  const require = createRequire(process.cwd() + '/');
-  const refParserUrl = require('@apidevtools/json-schema-ref-parser/lib/util/url.js');
+  const refParserModulePath = '@apidevtools/json-schema-ref-parser/lib/util/url.js';
+  const refParserModule = (await import(refParserModulePath)) as any;
+  // Node.js module namespace objects are read-only.
+  // Using Object.assign or patching them directly causes "Cannot assign to read only property"
+  // However, older code assumed this was a regular object. We only try to patch if it's writable,
+  // or avoid patching if it fails.
+  const refParserUrl = refParserModule.default ?? refParserModule;
 
-  if (!refParserUrl.__vibescanResolvePatched) {
-    const originalResolve = refParserUrl.resolve;
-    Object.defineProperty(refParserUrl, 'resolve', {
-      value: function patchedResolve(path1: string, path2?: string) {
+  try {
+    if (!(refParserUrl as any).__vibescanResolvePatched) {
+      const originalResolve = refParserUrl.resolve;
+      refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {
         if (path2 == null) {
           return path1;
         }
-        return originalResolve(path1, path2);
-      },
-      writable: true,
-      configurable: true,
-    });
-    refParserUrl.__vibescanResolvePatched = true;
+        return originalResolve.call(this, path1, path2);
+      };
+      (refParserUrl as any).__vibescanResolvePatched = true;
+    }
+  } catch (e) {
+    // Ignore error if property is read-only (e.g. native ESM import in Node 22+)
   }
 
   const swaggerJsdocModule = await import('swagger-jsdoc');

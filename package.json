@@ -22,6 +22,7 @@
     "test:e2e": "API_URL=${API_URL:-http://127.0.0.1:3555} FRONTEND_URL=${FRONTEND_URL:-http://127.0.0.1:3000} playwright test -c playwright.wasp.config.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "test:coverage": "jest --coverage",
     "test:coverage:gate": "COVERAGE_GATE_MODE=staged jest --coverage",
     "test:coverage:strict": "COVERAGE_GATE_MODE=strict jest --coverage",
     "smoke:cyclonedx:m3": "node --import tsx scripts/cyclonedx-m3-smoke.ts",
