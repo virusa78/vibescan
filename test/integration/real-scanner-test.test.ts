@@ -9,7 +9,6 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
-import * as path from 'path';
 import type { NormalizedComponent } from '../../wasp-app/src/server/services/inputAdapterService';
 import { buildCycloneDxSbom } from '../../wasp-app/src/server/services/inputAdapterService.js';
 
