@@ -10,6 +10,7 @@
     "start": "cd wasp-app && wasp start",
     "migrate": "cd wasp-app && wasp db migrate-dev",
     "seed:mock-data": "DATABASE_URL=${DATABASE_URL:-postgresql://vibescan:vibescan@localhost:5432/vibescan} node --import tsx scripts/fill-mock-data.ts",
+    "seed:mock-data:reset": "DATABASE_URL=${DATABASE_URL:-postgresql://vibescan:vibescan@localhost:5432/vibescan} RESET_DEMO_DATA=true node --import tsx scripts/fill-mock-data.ts",
     "wasp:up": "./scripts/wasp-dev.sh",
     "wasp:down": "./scripts/wasp-dev.sh --stop",
     "wasp:dev": "./run-wasp.sh",
@@ -25,6 +26,7 @@
     "test:coverage": "jest --coverage",
     "test:wasp": "cd wasp-app && wasp test client",
     "test:e2e": "API_URL=${API_URL:-http://127.0.0.1:3555} FRONTEND_URL=${FRONTEND_URL:-http://127.0.0.1:3000} playwright test -c playwright.wasp.config.ts",
+    "test:e2e:ntn": "API_URL=${API_URL:-http://127.0.0.1:3555} FRONTEND_URL=${FRONTEND_URL:-http://127.0.0.1:3000} playwright test -c playwright.wasp.config.ts test/e2e-wasp/ntn-smoke.spec.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test:coverage:gate": "COVERAGE_GATE_MODE=staged jest --coverage",
@@ -49,7 +51,9 @@
     "redis": "^5.11.0",
     "swagger-jsdoc": "^6.2.8",
     "uuid": "^14.0.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "nodemailer": "^6.9.4",
+    "@sendgrid/mail": "^7.7.0"
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "^3.1024.0",
