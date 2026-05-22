@@ -5,7 +5,7 @@ import { normalizeDastFindings } from '../operations/scans/normalizeFindings.js'
 import { persistNormalizedFindingsForScan } from './findingPersistenceService.js';
 import { finalizeScanIfReady, handleScannerFailure } from './scanLifecycleService.js';
 
-type DastImportPrismaClient = Pick<PrismaClient, 'scan' | 'scanResult' | 'finding' | 'user' | 'githubInstallation'>;
+type DastImportPrismaClient = Pick<PrismaClient, 'scan' | 'scanResult' | 'finding' | 'user' | 'githubInstallation' | 'project' | 'projectFinding'>;
 const DAST_SOURCE = 'dast' as unknown as ScanSource;
 
 export type DastImportRequest = {

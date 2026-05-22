@@ -226,6 +226,7 @@ export default function App() {
 
     add('Navigate', 'Dashboard', '/dashboard', 'home metrics scans', () => navigate(routes.DashboardRoute.to));
     add('Navigate', 'Scans', '/new-scan', 'scan submit', () => navigate(routes.NewScanRoute.to));
+    add('Navigate', 'Findings', '/findings', 'cve vulnerabilities project triage', () => navigate(routes.FindingsRoute.to));
     add('Navigate', 'Webhooks', '/webhooks', 'events delivery', () => navigate(routes.WebhooksRoute.to));
     add('Navigate', 'API Keys', '/api-keys', 'tokens auth', () => navigate(routes.ApiKeysRoute.to));
     add('Navigate', 'Settings', '/settings', 'preferences account', () => navigate(routes.SettingsRoute.to));

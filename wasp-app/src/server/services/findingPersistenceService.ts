@@ -1,9 +1,12 @@
-import { createHash } from 'crypto';
 import type { Prisma, PrismaClient, ScanSource } from '@prisma/client';
 import type { ScannerResultSource } from '../lib/scanners/providerSelection.js';
 import type { ScannerFindingForPersistence } from './scannerExecutionTypes.js';
+import {
+  buildProjectFindingFingerprint,
+  persistProjectFindingsForScan,
+} from './projectFindingLifecycleService.js';
 
-type FindingPersistencePrismaClient = Pick<PrismaClient, 'finding'>;
+type FindingPersistencePrismaClient = Pick<PrismaClient, 'finding' | 'scan' | 'projectFinding' | 'project'>;
 export type PersistedFindingSource = ScannerResultSource | 'dast';
 
 export type PersistNormalizedFindingsInput = {
@@ -20,9 +23,7 @@ export async function persistNormalizedFindingsForScan(
   let persistedCount = 0;
 
   for (const finding of input.findings) {
-    const normalizedPath = finding.filePath ? finding.filePath.replace(/^\.\//, '') : '';
-    const fingerprintKey = `${finding.cveId}|${finding.package}|${finding.version}|${normalizedPath}`;
-    const fingerprint = createHash('sha256').update(fingerprintKey).digest('hex');
+    const fingerprint = buildProjectFindingFingerprint(finding);
 
     const existingFinding = await input.prisma.finding.findUnique({
       where: {
@@ -84,6 +85,13 @@ export async function persistNormalizedFindingsForScan(
 
     persistedCount += 1;
   }
+
+  await persistProjectFindingsForScan({
+    prisma: input.prisma,
+    scanId: input.scanId,
+    source: input.source,
+    findings: input.findings,
+  });
 
   return persistedCount;
 }

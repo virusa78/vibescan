@@ -13,6 +13,7 @@ import { resolvePlannedScannerExecutions } from "../lib/scanners/providerSelecti
 import { reserveScannerMonthlyUsage } from "./scannerUsageService.js";
 import type { PersistedGitHubScanContext } from './githubAppService';
 import { importDastReportForScan } from './dastImportService.js';
+import { resolveProjectForScanInput } from './projectFindingLifecycleService.js';
 
 export type ScanInputType = "github" | "sbom" | "source_zip" | "dast";
 const DAST_SOURCE = 'dast' as unknown as ScanSource;
@@ -67,10 +68,17 @@ export async function submitScanSubmission(
 
   if (input.inputType === 'dast') {
     await prisma.$transaction(async (tx) => {
+      const project = await resolveProjectForScanInput(tx as any, {
+        workspaceId: input.workspaceId,
+        inputType: input.inputType,
+        inputRef: input.inputRef,
+      });
+
       const scan = await tx.scan.create({
         data: {
           userId: input.userId,
           workspaceId: input.workspaceId,
+          projectId: project.id,
           inputType: 'dast',
           inputRef: input.inputRef,
           githubContext: input.githubContext as Prisma.InputJsonValue | undefined,
@@ -146,10 +154,17 @@ export async function submitScanSubmission(
   }
 
   await prisma.$transaction(async (tx) => {
+    const project = await resolveProjectForScanInput(tx as any, {
+      workspaceId: input.workspaceId,
+      inputType: input.inputType,
+      inputRef: input.inputRef,
+    });
+
     const scan = await tx.scan.create({
       data: {
         userId: input.userId,
         workspaceId: input.workspaceId,
+        projectId: project.id,
         inputType: internalInputTypeFor(input.inputType),
         inputRef: input.inputRef,
         githubContext: input.githubContext as Prisma.InputJsonValue | undefined,

@@ -63,6 +63,7 @@ test("NTN smoke - full surface coverage with soft non-core checks", async ({ pag
 
     await softCheck("sidebar navigation", async () => {
       await expect(page.getByRole("link", { name: /scans/i })).toBeVisible();
+      await expect(page.getByRole("link", { name: /findings/i })).toBeVisible();
       await expect(page.getByRole("link", { name: /api keys/i })).toBeVisible();
       await expect(page.getByRole("link", { name: /settings/i })).toBeVisible();
       await expect(page.getByRole("link", { name: /webhooks/i })).toBeVisible();
@@ -132,6 +133,17 @@ test("NTN smoke - full surface coverage with soft non-core checks", async ({ pag
 
     await softCheck("report actions", async () => {
       await expect(page.getByRole("button", { name: /generate pdf/i })).toBeVisible();
+    }, issues);
+  });
+
+  await test.step("findings surface", async () => {
+    await page.goto("/findings");
+    await softCheck("findings heading", async () => {
+      await expect(page.getByRole("heading", { name: /^findings$/i })).toBeVisible({ timeout: 20_000 });
+    }, issues);
+
+    await softCheck("findings table", async () => {
+      await expect(page.getByText(/project \/ cve/i)).toBeVisible();
     }, issues);
   });
 

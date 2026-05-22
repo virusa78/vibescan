@@ -45,6 +45,36 @@ enum VulnAcceptanceStatus {
   expired
 }
 
+enum ProjectTargetType {
+  github
+  sbom
+  source_zip
+  dast
+  other
+}
+
+enum ProjectFindingStatus {
+  active
+  mitigated
+  accepted
+  snoozed
+  rejected
+}
+
+enum ProjectFindingAnnotationState {
+  accepted
+  snoozed
+  rejected
+  expired
+}
+
+enum SlaState {
+  none
+  on_track
+  due_soon
+  overdue
+}
+
 enum CycloneDxRolloutStage {
   shadow_smoke
   canary_cutover_cohort
@@ -135,6 +165,7 @@ model User {
   quotaLedger                 QuotaLedger[]
   scannerUsageLedger          ScannerUsageLedger[]
   projectNotificationSettings ProjectNotificationSetting[]
+  projectFindingAnnotations   ProjectFindingAnnotation[]
 
   @@index([activeWorkspaceId])
   @@map("users")
@@ -229,6 +260,9 @@ model Workspace {
   members                     WorkspaceMembership[]
   activeUsers                 User[]                       @relation("ActiveWorkspace")
   scans                       Scan[]
+  projects                    Project[]
+  projectFindings             ProjectFinding[]
+  projectFindingAnnotations   ProjectFindingAnnotation[]
   scannerUsageLedger          ScannerUsageLedger[]
   apiKeys                     ApiKey[]
   webhooks                    Webhook[]
@@ -257,6 +291,29 @@ model WorkspaceMembership {
   @@unique([workspaceId, userId], map: "workspace_memberships_unique")
   @@index([userId], map: "workspace_memberships_user_id_idx")
   @@map("workspace_memberships")
+}
+
+model Project {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspaceId         String            @map("workspace_id") @db.Uuid
+  name                String
+  slug                String
+  targetType          ProjectTargetType @default(other) @map("target_type")
+  targetRef           String            @map("target_ref")
+  normalizedTargetRef String            @map("normalized_target_ref")
+  metadata            Json              @default("{}")
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  scans           Scan[]
+  projectFindings ProjectFinding[]
+
+  @@unique([workspaceId, normalizedTargetRef], map: "projects_workspace_normalized_target_ref_unique")
+  @@index([workspaceId], map: "projects_workspace_id_idx")
+  @@index([slug], map: "projects_slug_idx")
+  @@map("projects")
 }
 
 // API Keys for CI/CD integration
@@ -325,6 +382,7 @@ model Scan {
   userId      String  @map("user_id") @db.Uuid
   orgId       String? @map("org_id") @db.Uuid
   workspaceId String? @map("workspace_id") @db.Uuid
+  projectId   String? @map("project_id") @db.Uuid
 
   // Input details
   inputType     String @map("input_type") // 'source_zip', 'sbom_upload', 'github_app', 'ci_plugin', 'dast_upload'
@@ -340,15 +398,16 @@ model Scan {
   planAtSubmission String       @default("free_trial") @map("plan_at_submission") // free_trial, starter, pro, enterprise
   plannedSources   ScanSource[] @default([]) @map("planned_sources")
   errorMessage     String?      @map("error_message")
-  
+
   // Retry tracking
-  retryCount       Int          @default(0) @map("retry_count")
-  lastRetryError   String?      @map("last_retry_error")
-  lastRetryAt      DateTime?    @map("last_retry_at")
+  retryCount     Int       @default(0) @map("retry_count")
+  lastRetryError String?   @map("last_retry_error")
+  lastRetryAt    DateTime? @map("last_retry_at")
 
   // Relations
   user                    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace               Workspace?               @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  project                 Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
   scanResults             ScanResult[]
   findings                Finding[]
   scanDeltas              ScanDelta[]
@@ -358,8 +417,10 @@ model Scan {
   securityScores          SecurityScore[]
   vulnAcceptances         VulnAcceptance[]
   webhookDeliveries       WebhookDelivery[]
+  latestProjectFindings   ProjectFinding[]         @relation("ProjectFindingLastScan")
 
   @@index([workspaceId])
+  @@index([projectId])
   @@map("scans")
 }
 
@@ -456,6 +517,79 @@ model FindingHistory {
   @@index([findingId])
   @@index([event])
   @@map("finding_history")
+}
+
+model ProjectFinding {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspaceId String @map("workspace_id") @db.Uuid
+  projectId   String @map("project_id") @db.Uuid
+  fingerprint String
+
+  cveId            String  @map("cve_id")
+  packageName      String  @map("package_name")
+  installedVersion String  @map("installed_version")
+  filePath         String? @map("file_path")
+
+  severity     String
+  cvssScore    Decimal? @map("cvss_score") @db.Decimal(3, 1)
+  fixedVersion String?  @map("fixed_version")
+  description  String?
+
+  status          ProjectFindingStatus @default(active)
+  firstSeenAt     DateTime             @map("first_seen_at")
+  lastSeenAt      DateTime             @map("last_seen_at")
+  lastDetectedAt  DateTime             @map("last_detected_at")
+  lastScanId      String?              @map("last_scan_id") @db.Uuid
+  lastMitigatedAt DateTime?            @map("last_mitigated_at")
+  reopenedAt      DateTime?            @map("reopened_at")
+  scanCount       Int                  @default(1) @map("scan_count")
+
+  reportedBy      ScanSource[] @default([]) @map("reported_by")
+  firstDetectedBy ScanSource   @map("first_detected_by")
+  lastDetectedBy  ScanSource   @map("last_detected_by")
+
+  slaDueAt DateTime? @map("sla_due_at")
+  slaState SlaState  @default(none) @map("sla_state")
+  metadata Json      @default("{}")
+
+  workspace   Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lastScan    Scan?                      @relation("ProjectFindingLastScan", fields: [lastScanId], references: [id], onDelete: SetNull)
+  annotations ProjectFindingAnnotation[]
+
+  @@unique([projectId, fingerprint], map: "project_findings_project_fingerprint_unique")
+  @@index([workspaceId, status], map: "project_findings_workspace_status_idx")
+  @@index([projectId, status], map: "project_findings_project_status_idx")
+  @@index([cveId], map: "project_findings_cve_id_idx")
+  @@index([severity], map: "project_findings_severity_idx")
+  @@index([lastSeenAt], map: "project_findings_last_seen_at_idx")
+  @@index([slaDueAt], map: "project_findings_sla_due_at_idx")
+  @@map("project_findings")
+}
+
+model ProjectFindingAnnotation {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  projectFindingId String                        @map("project_finding_id") @db.Uuid
+  workspaceId      String                        @map("workspace_id") @db.Uuid
+  userId           String                        @map("user_id") @db.Uuid
+  state            ProjectFindingAnnotationState
+  reason           String?
+  expiresAt        DateTime?                     @map("expires_at")
+
+  projectFinding ProjectFinding @relation(fields: [projectFindingId], references: [id], onDelete: Cascade)
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectFindingId], map: "project_finding_annotations_project_finding_id_idx")
+  @@index([workspaceId, state], map: "project_finding_annotations_workspace_state_idx")
+  @@index([userId], map: "project_finding_annotations_user_id_idx")
+  @@map("project_finding_annotations")
 }
 
 // Delta comparison (enterprise vs free)
@@ -641,7 +775,7 @@ model Webhook {
   workspaceId            String?  @map("workspace_id") @db.Uuid
   url                    String
   events                 String[] @default(["scan_complete"]) // JSON array of event types
-  signingSecretEncrypted String  @map("signing_secret_encrypted")
+  signingSecretEncrypted String   @map("signing_secret_encrypted")
   enabled                Boolean  @default(true)
 
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -718,17 +852,17 @@ model ScannerUsageLedger {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
 
-  userId      String @map("user_id") @db.Uuid
-  workspaceId String? @map("workspace_id") @db.Uuid
-  scanId      String @map("scan_id") @db.Uuid
-  provider    String
-  planTier    String @map("plan_tier")
-  periodKey   String @map("period_key")
-  limitApplied Int?  @map("limit_applied")
+  userId       String  @map("user_id") @db.Uuid
+  workspaceId  String? @map("workspace_id") @db.Uuid
+  scanId       String  @map("scan_id") @db.Uuid
+  provider     String
+  planTier     String  @map("plan_tier")
+  periodKey    String  @map("period_key")
+  limitApplied Int?    @map("limit_applied")
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  scan      Scan      @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  scan      Scan       @relation(fields: [scanId], references: [id], onDelete: Cascade)
 
   @@unique([userId, provider, periodKey, scanId], map: "scanner_usage_ledger_unique")
   @@index([userId, provider, periodKey], map: "scanner_usage_ledger_usage_idx")

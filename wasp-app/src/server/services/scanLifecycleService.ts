@@ -6,6 +6,7 @@ import {
 import { emitWebhookEvent, buildWebhookPayload } from './webhookEventEmitter.js';
 import { resolveExpectedScanSources, type ScannerResultSource } from '../lib/scanners/providerSelection.js';
 import { syncGitHubCheckRunForScan } from './githubCheckRunService.js';
+import { markProjectFindingsMitigatedForCompletedScan } from './projectFindingLifecycleService.js';
 
 type LifecycleScanSource = ScannerResultSource | 'dast';
 
@@ -18,7 +19,7 @@ type ScanWithResults = {
   scanResults: Array<Pick<ScanResult, 'source'>>;
 };
 
-type ScanPrismaClient = Pick<PrismaClient, 'scan' | 'githubInstallation'>;
+type ScanPrismaClient = Pick<PrismaClient, 'scan' | 'githubInstallation' | 'finding' | 'project' | 'projectFinding'>;
 
 type FinalizeScanInput = {
   prisma: ScanPrismaClient;
@@ -138,6 +139,16 @@ export async function finalizeScanIfReady({
 
   if (completedScan.count === 0) {
     return;
+  }
+
+  try {
+    await markProjectFindingsMitigatedForCompletedScan({
+      prisma,
+      scanId,
+      completedAt,
+    });
+  } catch (lifecycleError) {
+    console.error(`[${loggerLabel}] Failed to finalize project finding lifecycle for scan ${scanId}:`, lifecycleError);
   }
 
   try {

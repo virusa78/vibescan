@@ -8,7 +8,7 @@ import type { ScannerResultSource } from '../lib/scanners/providerSelection.js';
 
 export type ScannerExecutionPrismaClient = Pick<
   PrismaClient,
-  'scan' | 'scanResult' | 'finding' | 'user'
+  'scan' | 'scanResult' | 'finding' | 'user' | 'project' | 'projectFinding'
 >;
 
 export type ScannerExecutionRequest = {

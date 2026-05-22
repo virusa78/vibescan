@@ -11,6 +11,7 @@
     "migrate": "cd wasp-app && wasp db migrate-dev",
     "seed:mock-data": "DATABASE_URL=${DATABASE_URL:-postgresql://vibescan:vibescan@localhost:5432/vibescan} node --import tsx scripts/fill-mock-data.ts",
     "seed:mock-data:reset": "DATABASE_URL=${DATABASE_URL:-postgresql://vibescan:vibescan@localhost:5432/vibescan} RESET_DEMO_DATA=true node --import tsx scripts/fill-mock-data.ts",
+    "backfill:project-findings": "DATABASE_URL=${DATABASE_URL:-postgresql://vibescan:vibescan@localhost:5432/vibescan} node --import tsx scripts/backfill-project-findings.ts",
     "wasp:up": "./scripts/wasp-dev.sh",
     "wasp:down": "./scripts/wasp-dev.sh --stop",
     "wasp:dev": "./run-wasp.sh",

@@ -166,6 +166,12 @@ page ReportsPage {
   component: import ReportsPage from "@src/reports/ReportsPage"
 }
 
+route FindingsRoute { path: "/findings", to: FindingsPage }
+page FindingsPage {
+  authRequired: true,
+  component: import FindingsPage from "@src/findings/FindingsPage"
+}
+
 route ScanDetailsRoute { path: "/scans/:scanId", to: ScanDetailsPage }
 page ScanDetailsPage {
   authRequired: true,
@@ -389,6 +395,38 @@ action exportScans {
 }
 //#endregion Dashboard & Analytics
 //#endregion
+
+//#region Findings
+query getFindingsOverview {
+  fn: import { getFindingsOverview } from "@src/server/operations/findingOperations",
+  entities: [User, Workspace, Project, ProjectFinding, ProjectFindingAnnotation, Scan],
+  auth: true
+}
+
+action acceptProjectFinding {
+  fn: import { acceptProjectFinding } from "@src/server/operations/findingOperations",
+  entities: [User, ProjectFinding, ProjectFindingAnnotation],
+  auth: true
+}
+
+action snoozeProjectFinding {
+  fn: import { snoozeProjectFinding } from "@src/server/operations/findingOperations",
+  entities: [User, ProjectFinding, ProjectFindingAnnotation],
+  auth: true
+}
+
+action rejectProjectFinding {
+  fn: import { rejectProjectFinding } from "@src/server/operations/findingOperations",
+  entities: [User, ProjectFinding, ProjectFindingAnnotation],
+  auth: true
+}
+
+action reopenProjectFinding {
+  fn: import { reopenProjectFinding } from "@src/server/operations/findingOperations",
+  entities: [User, ProjectFinding],
+  auth: true
+}
+//#endregion Findings
 
 //#region Reports & Analysis
 query getReport {
