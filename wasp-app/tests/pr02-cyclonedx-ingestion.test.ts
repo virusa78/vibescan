@@ -33,7 +33,7 @@ const {
 
 const repoRoot = join(process.cwd(), "..");
 const sampleSbomPath = join(repoRoot, "test", "fixtures", "sample.sbom.json");
-const cyclonePath = join(repoRoot, "cyclone.json");
+const cyclonePath = join(repoRoot, "test", "fixtures", "cyclone.json");
 
 describe("PR-02: CycloneDX ingestion runtime", () => {
   it("validates the committed CycloneDX fixtures", () => {
