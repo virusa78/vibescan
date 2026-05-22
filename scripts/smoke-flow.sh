@@ -35,10 +35,10 @@ log_fail() { echo -e "${RED}[✗]${NC} $*"; ((TESTS_FAILED++)); }
 log_skip() { echo -e "${YELLOW}[~]${NC} $*"; ((TESTS_SKIPPED++)); }
 
 # Configuration
-BACKEND_URL="http://localhost:3555"
-FRONTEND_URL="http://localhost:3000"
-DEMO_EMAIL="priya.sharma@devcraft.in"
-DEMO_PASSWORD="vs_demo_starter_2026"
+BACKEND_URL="${BACKEND_URL:-${API_URL:-http://127.0.0.1:3555}}"
+FRONTEND_URL="${FRONTEND_URL:-${WEB_CLIENT_URL:-http://127.0.0.1:3000}}"
+DEMO_EMAIL="${DEMO_EMAIL:-priya.sharma@devcraft.in}"
+DEMO_PASSWORD="${DEMO_PASSWORD:-vs_demo_starter_2026}"
 
 # Check prerequisite: backend running
 log_test "Checking backend availability at $BACKEND_URL"

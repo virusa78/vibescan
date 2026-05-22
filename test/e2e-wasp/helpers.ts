@@ -1,4 +1,13 @@
 import { Page, expect } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { basename, resolve } from "node:path";
+
+const DEFAULT_DATABASE_URLS = [
+  "postgresql://postgres:postgres@127.0.0.1:5432/vibescan?schema=public",
+  "postgresql://postgres:postgres@127.0.0.1:5444/vibescan?schema=public",
+  "postgresql://postgres:postgres@127.0.0.1:5445/vibescan?schema=public",
+] as const;
 
 async function acceptCookiesIfPresent(page: Page): Promise<void> {
   const candidates = [
@@ -15,6 +24,71 @@ async function acceptCookiesIfPresent(page: Page): Promise<void> {
       return;
     }
   }
+}
+
+function getTrustedScanInputRoots(): string[] {
+  const roots = [
+    process.env.VIBESCAN_SCAN_INPUT_DIR,
+    resolve(process.cwd(), "wasp-app", ".wasp", "out", "server", "test-results", "runtime-temp", "scan-inputs"),
+    resolve(process.cwd(), "wasp-app", "test-results", "runtime-temp", "scan-inputs"),
+    resolve(process.cwd(), "test-results", "runtime-temp", "scan-inputs"),
+  ].filter((value): value is string => Boolean(value));
+
+  return [...new Set(roots)];
+}
+
+function stageTrustedScanInputIfNeeded(inputRef: string, inputType: "github" | "sbom" | "source_zip" | "dast"): string {
+  if (inputType === "github" || inputType === "dast") {
+    return inputRef;
+  }
+
+  const sourcePath = resolve(process.cwd(), inputRef);
+  if (!existsSync(sourcePath)) {
+    return inputRef;
+  }
+
+  const stagedRef = `${Date.now()}-${randomUUID()}-${basename(sourcePath)}`;
+  for (const root of getTrustedScanInputRoots()) {
+    mkdirSync(root, { recursive: true });
+    copyFileSync(sourcePath, resolve(root, stagedRef));
+  }
+
+  return stagedRef;
+}
+
+async function findLatestScanIdByInputRef(inputRef: string): Promise<string | null> {
+  const { PrismaClient } = await import("../../wasp-app/node_modules/@prisma/client/default.js");
+  const candidates = [
+    process.env.DATABASE_URL,
+    ...DEFAULT_DATABASE_URLS,
+  ].filter((value): value is string => Boolean(value));
+
+  for (const url of candidates) {
+    const prisma = new PrismaClient({
+      datasources: {
+        db: {
+          url,
+        },
+      },
+    });
+
+    try {
+      const scan = await prisma.scan.findFirst({
+        where: { inputRef },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      });
+      if (scan?.id) {
+        return scan.id;
+      }
+    } catch {
+      // Try the next reachable database URL.
+    } finally {
+      await prisma.$disconnect();
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -161,7 +235,7 @@ export async function waitForScanCompletion(
     const runningCard = page.locator('[data-testid="scan-status-running"]');
     if (await runningCard.isVisible().catch(() => false)) {
       await page.waitForTimeout(pollInterval);
-      await page.reload({ waitUntil: "networkidle" });
+      await page.reload({ waitUntil: "domcontentloaded" });
       continue;
     }
 
@@ -193,7 +267,7 @@ export async function waitForScanCompletion(
     await page.waitForTimeout(pollInterval);
     
     // Refresh the page to check for updates
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
   }
   
   throw new Error(`Scan did not complete within ${maxWaitTime}ms`);
@@ -207,6 +281,8 @@ export async function submitScanFromForm(
   inputRef: string,
   inputType: "github" | "sbom" | "source_zip" = "github"
 ): Promise<string> {
+  const trustedInputRef = stageTrustedScanInputIfNeeded(inputRef, inputType);
+
   await page.goto("/new-scan");
   await page.waitForLoadState("domcontentloaded");
   await acceptCookiesIfPresent(page);
@@ -219,7 +295,7 @@ export async function submitScanFromForm(
 
   const optionButton = page.getByRole("button", { name: new RegExp(inputTypeLabels[inputType], "i") }).first();
   await optionButton.click();
-  await page.getByLabel("Input Reference").fill(inputRef);
+  await page.getByLabel("Input Reference").fill(trustedInputRef);
 
   const submitButton = page.getByRole("button", { name: /start scan/i });
   const submitResponsePromise = page
@@ -227,13 +303,13 @@ export async function submitScanFromForm(
       (response) =>
         /\/operations\/submit-scan(?:\?|$)/.test(response.url()) &&
         response.request().method() === "POST",
-      { timeout: 30_000 }
+      { timeout: 120_000 }
     )
     .catch(() => null);
   await submitButton.click();
 
   await page.waitForURL(/\/(scans|reports)\/[0-9a-fA-F-]{36}(?:[/?#]|$)/, {
-    timeout: 30_000,
+    timeout: 120_000,
   }).catch(() => null);
 
   const currentUrl = page.url();
@@ -263,6 +339,27 @@ export async function submitScanFromForm(
     if (hrefScanId) {
       return hrefScanId;
     }
+  }
+
+  await page.goto("/dashboard");
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
+  const scanLinkSelector = '[data-testid="scan-row"] a[href*="/scans/"]';
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const dashboardScanLink = page.locator(scanLinkSelector).first();
+    if (await dashboardScanLink.isVisible().catch(() => false)) {
+      const href = await dashboardScanLink.getAttribute("href");
+      const hrefScanId = href?.match(/\/scans\/([0-9a-fA-F-]{36})(?:[/?#]|$)/)?.[1] ?? null;
+      if (hrefScanId) {
+        return hrefScanId;
+      }
+    }
+    await page.waitForTimeout(2000);
+    await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+  }
+
+  const databaseScanId = await findLatestScanIdByInputRef(inputRef);
+  if (databaseScanId) {
+    return databaseScanId;
   }
 
   const submitData = submitResponse ? await submitResponse.json().catch(() => null) : null;

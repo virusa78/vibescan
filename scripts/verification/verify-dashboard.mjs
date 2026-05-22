@@ -1,7 +1,7 @@
 // Manual verification script using Chrome
 import { chromium } from 'playwright';
 
-const API_URL = 'http://127.0.0.1:3555';
+const API_URL = process.env.API_URL || process.env.WASP_SERVER_URL || 'http://127.0.0.1:3555';
 
 async function main() {
   const browser = await chromium.launch();

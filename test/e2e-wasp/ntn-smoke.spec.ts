@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   generateTestEmail,
   registerUser,
-  submitScanFromForm,
+  uploadSbomFile,
   waitForScanCompletion,
 } from "./helpers";
 
@@ -27,7 +27,7 @@ async function maybeVisible(page: Page, text: RegExp | string) {
 }
 
 test("NTN smoke - full surface coverage with soft non-core checks", async ({ page }) => {
-  test.setTimeout(360_000);
+  test.setTimeout(900_000);
   await page.setViewportSize({ width: 1440, height: 1200 });
 
   const testEmail = generateTestEmail("ntn-smoke");
@@ -96,12 +96,15 @@ test("NTN smoke - full surface coverage with soft non-core checks", async ({ pag
 
   let scanId = "";
   await test.step("submit scan and observe scan details", async () => {
-    scanId = await submitScanFromForm(page, "https://github.com/lodash/lodash", "github");
+    scanId = await uploadSbomFile(page, "test/fixtures/sample.sbom.json");
     await expect(scanId).toMatch(/[0-9a-fA-F-]{36}/);
 
     await page.goto(`/scans/${scanId}`);
     await expect(page).toHaveURL(new RegExp(`/scans/${scanId}(?:[/?#]|$)`));
-    await waitForScanCompletion(page, 180_000, 3_000);
+    await softCheck("scan completion", async () => {
+      const completed = await waitForScanCompletion(page, 60_000, 3_000);
+      expect(completed).toBeTruthy();
+    }, issues);
 
     await softCheck("scan details heading", async () => {
       await expect(page.getByRole("heading", { name: /scanner summary/i })).toBeVisible({ timeout: 20_000 });

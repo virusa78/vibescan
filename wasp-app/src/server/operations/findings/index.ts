@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { ensureArgsSchemaOrThrowHttpError } from '../../validation';
 import { requireWorkspaceScopedUser } from '../../services/workspaceAccess';
 import { calculateSlaState } from '../../services/projectFindingLifecycleService';
+import { buildFindingGroups, type FindingOverviewRow } from './grouping';
 
 const severitySchema = z.enum(['critical', 'high', 'medium', 'low', 'info']);
 const statusSchema = z.enum(['active', 'accepted', 'snoozed', 'rejected', 'mitigated']);
@@ -11,6 +12,7 @@ const slaSchema = z.enum(['overdue', 'due_soon', 'on_track', 'none']);
 const scannerSchema = z.enum(['grype', 'codescoring_johnny', 'snyk', 'trivy', 'owasp', 'dast']);
 const sortFieldSchema = z.enum(['severity', 'firstSeen', 'lastSeen', 'project', 'package', 'scanCount', 'fixedVersion', 'sla']);
 const sortDirectionSchema = z.enum(['asc', 'desc']);
+const groupBySchema = z.enum(['project', 'cve']).default('project');
 
 const getFindingsOverviewSchema = z.object({
   q: z.string().trim().max(160).optional(),
@@ -21,6 +23,7 @@ const getFindingsOverviewSchema = z.object({
   fixable: z.boolean().optional(),
   sla: z.array(slaSchema).default([]),
   age: z.array(z.enum(['new', '7d', '30d', '90d'])).default([]),
+  groupBy: groupBySchema,
   sort: z.object({
     field: sortFieldSchema,
     direction: sortDirectionSchema,
@@ -88,6 +91,10 @@ function buildOrderBy(args: z.infer<typeof getFindingsOverviewSchema>): Prisma.P
   }
 }
 
+function buildProjectGroups(findings: FindingOverviewRow[]) {
+  return buildFindingGroups(findings, 'project');
+}
+
 export async function getFindingsOverview(rawArgs: unknown, context: any): Promise<any> {
   const user = await requireWorkspaceScopedUser(context.user);
   const args = ensureArgsSchemaOrThrowHttpError(getFindingsOverviewSchema, rawArgs ?? {});
@@ -145,7 +152,7 @@ export async function getFindingsOverview(rawArgs: unknown, context: any): Promi
     }),
   ]);
 
-  const findings = rawFindings
+  const findings: FindingOverviewRow[] = rawFindings
     .filter((finding) => matchesAgeBucket(finding, args.age, now))
     .map((finding) => {
       const annotation = normalizeAnnotation(finding.annotations[0] ?? null, now);
@@ -201,18 +208,19 @@ export async function getFindingsOverview(rawArgs: unknown, context: any): Promi
     });
   }
 
-  const groupedProjects = projects.map((project) => {
-    const projectFindings = findings.filter((finding) => finding.project.id === project.id);
-    return {
-      id: project.id,
-      name: project.name,
-      count: projectFindings.length,
-      activeCount: projectFindings.filter((finding) => finding.status === 'active').length,
-      criticalHighCount: projectFindings.filter((finding) => finding.severity === 'critical' || finding.severity === 'high').length,
-    };
-  }).filter((project) => project.count > 0);
+  const projectGroups = buildProjectGroups(findings);
+  const groups = args.groupBy === 'project' ? projectGroups : buildFindingGroups(findings, 'cve');
+  const projectSummaries = projectGroups.map((group) => ({
+    id: group.key,
+    name: group.title,
+    count: group.count,
+    activeCount: group.activeCount,
+    criticalHighCount: group.criticalHighCount,
+    targetRef: group.subtitle,
+  }));
 
   return {
+    groupBy: args.groupBy,
     summary: {
       active: findings.filter((finding) => finding.status === 'active').length,
       criticalHigh: findings.filter((finding) => finding.severity === 'critical' || finding.severity === 'high').length,
@@ -220,7 +228,8 @@ export async function getFindingsOverview(rawArgs: unknown, context: any): Promi
       newlySeen: findings.filter((finding) => finding.ageDays < 7).length,
       mitigated: findings.filter((finding) => finding.status === 'mitigated').length,
     },
-    projects: groupedProjects,
+    groups,
+    projects: projectSummaries,
     projectOptions: projects,
     findings,
     total: findings.length,

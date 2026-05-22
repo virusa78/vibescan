@@ -9,6 +9,8 @@ Provider-aware vulnerability scanning SaaS built on Wasp 0.23+.
 - **Frontend port** is `3000`
 - **Archived notes** live in `Backup/`
 - **Email setup** is documented in `docs/EMAIL_SETUP.md`
+- **Deployment model** keeps the control plane stable while the execution plane
+  can run locally, in containers, or on cloud workers such as DigitalOcean
 
 ## Quick start
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   acceptProjectFinding,
   getFindingsOverview,
@@ -7,7 +7,7 @@ import {
   snoozeProjectFinding,
   useQuery,
 } from 'wasp/client/operations';
-import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Copy, ExternalLink, ShieldAlert, TimerReset } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronRight, Copy, ExternalLink, ShieldAlert, TimerReset } from 'lucide-react';
 import { Badge } from '../client/components/ui/badge';
 import { Button } from '../client/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
@@ -30,6 +30,20 @@ import { ScannerBadges } from '../reports/ScannerBadges';
 
 type FindingStatus = 'active' | 'accepted' | 'snoozed' | 'rejected' | 'mitigated';
 type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+type FindingsGroupBy = 'project' | 'cve';
+type SortField = 'severity' | 'firstSeen' | 'lastSeen' | 'project' | 'package' | 'scanCount' | 'fixedVersion' | 'sla';
+type SortDirection = 'asc' | 'desc';
+type FindingsGroup = {
+  key: string;
+  type: FindingsGroupBy;
+  title: string;
+  subtitle: string;
+  count: number;
+  activeCount: number;
+  criticalHighCount: number;
+  findings?: ProjectFindingRow[];
+};
+type ProjectOption = { id: string; name: string };
 
 type ProjectFindingRow = {
   id: string;
@@ -57,6 +71,26 @@ type ProjectFindingRow = {
   links: { nvd: string; githubAdvisory: string };
 };
 
+const SCANNER_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'grype', label: 'Grype' },
+  { value: 'codescoring_johnny', label: 'Codescoring Johnny' },
+  { value: 'snyk', label: 'Snyk' },
+  { value: 'trivy', label: 'Trivy' },
+  { value: 'owasp', label: 'OWASP' },
+  { value: 'dast', label: 'DAST' },
+];
+
+const SORT_OPTIONS: Array<{ value: SortField; label: string }> = [
+  { value: 'severity', label: 'Severity' },
+  { value: 'firstSeen', label: 'First seen' },
+  { value: 'lastSeen', label: 'Last seen' },
+  { value: 'project', label: 'Project' },
+  { value: 'package', label: 'Package' },
+  { value: 'scanCount', label: 'Scan count' },
+  { value: 'fixedVersion', label: 'Fixed version' },
+  { value: 'sla', label: 'SLA' },
+];
+
 const severityClasses: Record<Severity, string> = {
   critical: 'border-l-red-600 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300',
   high: 'border-l-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300',
@@ -64,6 +98,49 @@ const severityClasses: Record<Severity, string> = {
   low: 'border-l-sky-500 bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300',
   info: 'border-l-slate-400 bg-slate-50 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300',
 };
+
+const summaryCards = [
+  {
+    label: 'Active',
+    value: 'active',
+    icon: ShieldAlert,
+    accent: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/25 dark:text-emerald-300',
+    valueClass: 'text-emerald-700 dark:text-emerald-300',
+    iconClass: 'text-emerald-600 dark:text-emerald-300',
+  },
+  {
+    label: 'Critical / High',
+    value: 'criticalHigh',
+    icon: AlertCircle,
+    accent: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/25 dark:text-rose-300',
+    valueClass: 'text-rose-700 dark:text-rose-300',
+    iconClass: 'text-rose-600 dark:text-rose-300',
+  },
+  {
+    label: 'Overdue SLA',
+    value: 'overdueSla',
+    icon: TimerReset,
+    accent: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-300',
+    valueClass: 'text-amber-700 dark:text-amber-300',
+    iconClass: 'text-amber-600 dark:text-amber-300',
+  },
+  {
+    label: 'Newly seen',
+    value: 'newlySeen',
+    icon: ChevronRight,
+    accent: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/25 dark:text-sky-300',
+    valueClass: 'text-sky-700 dark:text-sky-300',
+    iconClass: 'text-sky-600 dark:text-sky-300',
+  },
+  {
+    label: 'Mitigated',
+    value: 'mitigated',
+    icon: CheckCircle2,
+    accent: 'border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900/60 dark:bg-teal-950/25 dark:text-teal-300',
+    valueClass: 'text-teal-700 dark:text-teal-300',
+    iconClass: 'text-teal-600 dark:text-teal-300',
+  },
+] as const;
 
 function formatDate(value?: string | null): string {
   if (!value) return '—';
@@ -87,36 +164,42 @@ function SlaBadge({ state, dueAt }: { state: ProjectFindingRow['slaState']; dueA
 
 export default function FindingsPage() {
   const [query, setQuery] = useState('');
+  const [groupBy, setGroupBy] = useState<FindingsGroupBy>('project');
   const [severity, setSeverity] = useState<string>('all');
   const [status, setStatus] = useState<string>('active');
+  const [projectId, setProjectId] = useState<string>('all');
+  const [scanner, setScanner] = useState<string>('all');
+  const [fixable, setFixable] = useState<string>('all');
   const [sla, setSla] = useState<string>('all');
-  const [sort, setSort] = useState<string>('severity:desc');
+  const [age, setAge] = useState<string>('all');
+  const [sortField, setSortField] = useState<SortField>('severity');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [selectedFinding, setSelectedFinding] = useState<ProjectFindingRow | null>(null);
 
-  const [sortField, sortDirection] = sort.split(':') as [string, 'asc' | 'desc'];
+  useEffect(() => {
+    setExpandedProjects(new Set());
+  }, [groupBy]);
+
   const overviewArgs = useMemo(() => ({
     q: query || undefined,
+    groupBy,
     severity: severity === 'all' ? [] : [severity],
     status: status === 'all' ? [] : [status],
+    projectId: projectId === 'all' ? undefined : projectId,
+    scanner: scanner === 'all' ? [] : [scanner],
+    fixable: fixable === 'all' ? undefined : fixable === 'fixable',
     sla: sla === 'all' ? [] : [sla],
+    age: age === 'all' ? [] : [age],
     sort: { field: sortField, direction: sortDirection },
     limit: 250,
-  }), [query, severity, sla, sortDirection, sortField, status]);
+  }), [age, fixable, groupBy, projectId, query, scanner, severity, sla, sortDirection, sortField, status]);
 
   const { data, isLoading, error, refetch } = useQuery(getFindingsOverview, overviewArgs);
-  const findings = (data?.findings ?? []) as ProjectFindingRow[];
+  const findings = Array.isArray(data?.findings) ? (data.findings as ProjectFindingRow[]) : [];
+  const groups = Array.isArray(data?.groups) ? (data.groups as FindingsGroup[]) : [];
+  const projectOptions = Array.isArray(data?.projectOptions) ? (data.projectOptions as ProjectOption[]) : [];
   const summary = data?.summary ?? { active: 0, criticalHigh: 0, overdueSla: 0, newlySeen: 0, mitigated: 0 };
-
-  const grouped = useMemo(() => {
-    const groups = new Map<string, { project: ProjectFindingRow['project']; rows: ProjectFindingRow[] }>();
-    for (const finding of findings) {
-      const existing = groups.get(finding.project.id) ?? { project: finding.project, rows: [] };
-      existing.rows.push(finding);
-      groups.set(finding.project.id, existing);
-    }
-    return Array.from(groups.values());
-  }, [findings]);
 
   const runAction = async (action: 'accept' | 'snooze' | 'reject' | 'reopen', finding: ProjectFindingRow) => {
     const payload = {
@@ -144,48 +227,101 @@ export default function FindingsPage() {
         </div>
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {[
-            { label: 'Active', value: summary.active, icon: ShieldAlert },
-            { label: 'Critical / High', value: summary.criticalHigh, icon: AlertCircle },
-            { label: 'Overdue SLA', value: summary.overdueSla, icon: TimerReset },
-            { label: 'Newly seen', value: summary.newlySeen, icon: ChevronRight },
-            { label: 'Mitigated', value: summary.mitigated, icon: CheckCircle2 },
-          ].map((item) => (
-            <Card key={item.label} className="rounded-lg">
+          {summaryCards.map((item) => (
+            <Card key={item.label} className={`rounded-lg border ${item.accent}`}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{item.label}</CardTitle>
-                <item.icon className="size-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">{item.label}</CardTitle>
+                <item.icon className={`size-4 ${item.iconClass}`} />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-semibold">{item.value}</div>
+                <div className={`text-2xl font-semibold ${item.valueClass}`}>{summary[item.value]}</div>
               </CardContent>
             </Card>
           ))}
         </section>
 
-        <section className="flex flex-col gap-3 rounded-lg border bg-background p-3 lg:flex-row lg:items-center">
+        <section className="grid gap-3 rounded-lg border bg-background p-3 md:grid-cols-2 xl:grid-cols-4">
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search CVE, package, project, or path"
-            className="lg:max-w-md"
+            className="md:col-span-2 xl:col-span-2"
           />
+          <Select value={groupBy} onValueChange={(value) => setGroupBy(value as FindingsGroupBy)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Group by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="project">Group by project</SelectItem>
+              <SelectItem value="cve">Group by CVE</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={projectId} onValueChange={setProjectId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Project" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All projects</SelectItem>
+              {projectOptions.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={severity} onValueChange={setSeverity}>
-            <SelectTrigger className="lg:w-40"><SelectValue placeholder="Severity" /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue placeholder="Severity" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All severities</SelectItem>
               {(['critical', 'high', 'medium', 'low', 'info'] as Severity[]).map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="lg:w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
               {(['active', 'accepted', 'snoozed', 'rejected', 'mitigated'] as FindingStatus[]).map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={scanner} onValueChange={setScanner}>
+            <SelectTrigger>
+              <SelectValue placeholder="Scanner" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All scanners</SelectItem>
+              {SCANNER_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={fixable} onValueChange={setFixable}>
+            <SelectTrigger>
+              <SelectValue placeholder="Fixability" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All findings</SelectItem>
+              <SelectItem value="fixable">Fixable only</SelectItem>
+              <SelectItem value="unfixed">Unfixed only</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={age} onValueChange={setAge}>
+            <SelectTrigger>
+              <SelectValue placeholder="Age" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any age</SelectItem>
+              <SelectItem value="new">New</SelectItem>
+              <SelectItem value="7d">7d+</SelectItem>
+              <SelectItem value="30d">30d+</SelectItem>
+              <SelectItem value="90d">90d+</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={sla} onValueChange={setSla}>
-            <SelectTrigger className="lg:w-40"><SelectValue placeholder="SLA" /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue placeholder="SLA" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All SLA</SelectItem>
               <SelectItem value="overdue">Overdue</SelectItem>
@@ -194,18 +330,26 @@ export default function FindingsPage() {
               <SelectItem value="none">No SLA</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={sort} onValueChange={setSort}>
-            <SelectTrigger className="lg:w-52"><SelectValue placeholder="Sort" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="severity:desc">Severity, SLA, age</SelectItem>
-              <SelectItem value="firstSeen:asc">First seen oldest</SelectItem>
-              <SelectItem value="lastSeen:desc">Last seen newest</SelectItem>
-              <SelectItem value="project:asc">Project A-Z</SelectItem>
-              <SelectItem value="package:asc">Package A-Z</SelectItem>
-              <SelectItem value="scanCount:desc">Scan count</SelectItem>
-              <SelectItem value="fixedVersion:asc">Fixed version</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Sort field" />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
+              aria-label={`Sort ${sortDirection === 'asc' ? 'ascending' : 'descending'}`}
+              title={sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+            >
+              {sortDirection === 'asc' ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
+            </Button>
+          </div>
         </section>
 
         <section className="overflow-hidden rounded-lg border">
@@ -223,30 +367,34 @@ export default function FindingsPage() {
             <div className="p-8 text-sm text-muted-foreground">Loading findings...</div>
           ) : error ? (
             <div className="p-8 text-sm text-destructive">Unable to load findings.</div>
-          ) : grouped.length === 0 ? (
+          ) : groups.length === 0 ? (
             <div className="p-8 text-sm text-muted-foreground">No findings match the current filters.</div>
-          ) : grouped.map((group) => {
-            const expanded = expandedProjects.has(group.project.id);
+          ) : groups.map((group) => {
+            const expanded = expandedProjects.has(group.key);
             return (
-              <div key={group.project.id}>
+              <div key={group.key}>
                 <button
                   type="button"
                   onClick={() => setExpandedProjects((prev) => {
                     const next = new Set(prev);
-                    if (next.has(group.project.id)) next.delete(group.project.id);
-                    else next.add(group.project.id);
+                    if (next.has(group.key)) next.delete(group.key);
+                    else next.add(group.key);
                     return next;
                   })}
-                  className="flex w-full items-center justify-between border-b bg-background px-4 py-3 text-left hover:bg-muted/40"
+                  className="flex w-full items-center justify-between gap-4 border-b bg-background px-4 py-3 text-left hover:bg-muted/40"
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-                    <span className="truncate font-medium">{group.project.name}</span>
-                    <Badge variant="secondary">{group.rows.length}</Badge>
+                    <span className="truncate font-medium">{group.title}</span>
+                    <Badge variant="secondary">{group.count}</Badge>
                   </span>
-                  <span className="truncate text-xs text-muted-foreground">{group.project.targetRef}</span>
+                  <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                    <span className="truncate">{group.subtitle}</span>
+                    <Badge variant="outline" className="shrink-0">{group.activeCount} active</Badge>
+                    <Badge variant="outline" className="shrink-0">{group.criticalHighCount} high+</Badge>
+                  </span>
                 </button>
-                {expanded ? group.rows.map((finding) => (
+                {expanded ? (group.findings ?? []).map((finding) => (
                   <button
                     key={finding.id}
                     type="button"
@@ -254,12 +402,13 @@ export default function FindingsPage() {
                     className="grid w-full grid-cols-[minmax(240px,1.3fr)_minmax(170px,0.9fr)_minmax(180px,1fr)_120px_120px_130px_110px_130px] gap-3 border-b px-4 py-3 text-left text-sm hover:bg-muted/30"
                   >
                     <span className="min-w-0 border-l-4 pl-3">
-                      <span className="block truncate font-medium">{finding.cveId}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{finding.filePath || 'No path'}</span>
+                      <span className="block truncate font-medium">{finding.project.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{finding.cveId}</span>
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate">{finding.packageName}</span>
                       <span className="block truncate text-xs text-muted-foreground">{finding.installedVersion} → {finding.fixedVersion || 'unfixed'}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">{finding.filePath || finding.project.targetRef}</span>
                     </span>
                     <ScannerBadges cveId={finding.cveId} reportedBy={finding.reportedBy} />
                     <span><Badge variant="outline" className={`border-l-4 ${severityClasses[finding.severity]}`}>{finding.severity}</Badge></span>

@@ -79,7 +79,7 @@ function SheetContent({
         className={cn(sheetVariants({ side }), className)}
         {...props}
       >
-        <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none">
+        <SheetPrimitive.Close className="ring-offset-background border-border/70 text-muted-foreground bg-background/95 hover:bg-muted hover:text-foreground focus:bg-muted focus:text-foreground absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-md border shadow-sm opacity-80 transition-colors hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>

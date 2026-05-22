@@ -26,9 +26,12 @@ ENV PATH="/home/nodejs/.wasp/bin:${PATH}"
 COPY --chown=nodejs:nodejs wasp-app/ ./
 RUN wasp build
 
-ENV PORT=3000 \
-    WASP_SERVER_URL=http://127.0.0.1:3000 \
-    WASP_WEB_CLIENT_URL=http://127.0.0.1:3000
+ARG PORT=3000
+ARG WASP_SERVER_URL=http://127.0.0.1:3000
+ARG WASP_WEB_CLIENT_URL=http://127.0.0.1:3000
+ENV PORT=${PORT} \
+    WASP_SERVER_URL=${WASP_SERVER_URL} \
+    WASP_WEB_CLIENT_URL=${WASP_WEB_CLIENT_URL}
 
 EXPOSE 3000
 

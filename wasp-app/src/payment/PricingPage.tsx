@@ -121,7 +121,7 @@ const PricingPage = () => {
       return;
     }
 
-    window.open(customerPortalUrl, "_blank");
+    window.open(customerPortalUrl, "_blank", "noopener,noreferrer");
   };
 
   return (

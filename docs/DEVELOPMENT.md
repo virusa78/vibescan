@@ -10,6 +10,10 @@ The easiest way to start VibeScan:
 ./run.sh
 ```
 
+This starts the local dev control plane and a local execution environment. The
+same scan contract is used in production, but production should scale the
+execution plane separately instead of reusing the local host model.
+
 ### Scanner tooling
 
 Use the scanner bootstrap script to install or update the local lanes used by the backend:
@@ -27,6 +31,10 @@ This will:
 3. Start the Wasp dev stack (backend + frontend)
 4. Display access URLs and demo credentials
 5. Write rotating dev-server logs to `.logs/wasp-dev.log` with daily rotation and a 200 KB cap per active file
+
+Scanner execution mode is not selected here. The shell bootstrap only wires the
+dev contour; the backend scanner providers decide whether execution happens
+locally, in a container, or on a remote worker.
 
 For the current repo map and archive boundaries, see `docs/ARCHITECTURE.md`.
 For mail provider setup, see `docs/EMAIL_SETUP.md`.
@@ -159,6 +167,21 @@ OPENSAAS_PLATFORM_OWNED=auth,api_keys,billing,settings
 
 - `OPENSAAS_MODE=false` keeps all routes in the current backend.
 - `core_workflow` (`/scans`, `/reports`, `/remediation`) remains backend-owned in this cutover stage.
+
+## Development vs Production Contract
+
+- Development may run the scan execution plane locally or in containers on the
+  same machine as the app.
+- Production should keep the app, queue, and persistence centralized, then add
+  execution capacity independently through containers, Kubernetes Jobs, or
+  disposable cloud workers.
+- Scanner execution mode is a backend-owned decision driven by provider/runtime
+  config, not a shell-script decision.
+- Do not rely on host-local scan paths as part of the public contract. Use
+  staged input refs or storage-backed artifacts when the execution plane moves
+  off the app host.
+- OWASP Dependency-Check is the one scanner that may keep a warm cache/data
+  directory; everything else should remain stateless.
 
 ## Database Management
 

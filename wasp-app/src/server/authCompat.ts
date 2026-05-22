@@ -3,19 +3,8 @@ import { parseJsonBodyWithLimit, enforceRateLimit, getRateLimitKey } from "./htt
 import { sendOperationError } from "./http/httpErrors";
 import { getBackendBaseUrl } from "./config/runtime.js";
 
-function resolveBackendBaseUrl(request: Request): string {
-  const configuredBaseUrl = getBackendBaseUrl();
-  const forwardedProto = request.headers["x-forwarded-proto"];
-  const protocol = Array.isArray(forwardedProto)
-    ? forwardedProto[0]
-    : forwardedProto?.split(",")[0] ?? request.protocol;
-  const host = request.get("host");
-
-  if (host && configuredBaseUrl === "http://127.0.0.1:3555") {
-    return `${protocol}://${host}`.replace(/\/$/, "");
-  }
-
-  return configuredBaseUrl;
+export function resolveBackendBaseUrl(_request: Request): string {
+  return getBackendBaseUrl();
 }
 
 async function proxyAuthRequest(

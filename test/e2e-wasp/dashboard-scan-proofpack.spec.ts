@@ -11,8 +11,8 @@ import {
   submitScanFromForm,
   waitForScanCompletion,
 } from "./helpers";
+import { getManagedContourDatabaseUrl } from "./managed-contour";
 
-const prisma = new PrismaClient();
 const repoUrl = "https://github.com/lodash/lodash";
 const repoSlug = "lodash/lodash";
 
@@ -94,6 +94,15 @@ function writeZip(sourceDir: string, zipPath: string) {
     { stdio: "pipe" },
   );
 }
+
+const databaseUrl = await getManagedContourDatabaseUrl();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: databaseUrl,
+    },
+  },
+});
 
 async function buildRepoArtifacts(repo: string): Promise<RepoArtifacts> {
   const artifactsRoot = path.join(process.cwd(), "test-results");

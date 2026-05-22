@@ -57,12 +57,13 @@ test("Complete Happy Path E2E - Full MVP flow", async ({ page, context: _context
     await page.waitForLoadState("networkidle");
     
     // The app may land on landing, login, dashboard, or onboarding depending on session state.
+    const currentUrl = new URL(page.url());
     const isLanding =
-      page.url().includes("landing") ||
-      page.url().includes("login") ||
-      page.url().includes("dashboard") ||
-      page.url().includes("onboarding") ||
-      page.url() === "http://127.0.0.1:3000/";
+      currentUrl.pathname === "/" ||
+      currentUrl.pathname.startsWith("/landing") ||
+      currentUrl.pathname.startsWith("/login") ||
+      currentUrl.pathname.startsWith("/dashboard") ||
+      currentUrl.pathname.startsWith("/onboarding");
     expect(isLanding).toBeTruthy();
     console.log("✓ Step 1-2: App opened, on landing page");
     

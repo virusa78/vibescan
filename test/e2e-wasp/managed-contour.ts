@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +8,7 @@ type ManagedContourState = {
   pid: number;
   command: string;
   startedAt: string;
+  databaseUrl?: string;
 };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -97,6 +98,28 @@ async function removeManagedContourState(): Promise<void> {
   await fs.rm(stateFile, { force: true });
 }
 
+function detectManagedDatabaseUrl(): string {
+  const hostPort = execSync(
+    "docker inspect --format '{{with (index .NetworkSettings.Ports \"5432/tcp\")}}{{(index . 0).HostPort}}{{end}}' vibescan-postgres",
+    { cwd: repoRoot, encoding: "utf8" }
+  ).trim();
+
+  if (!hostPort) {
+    throw new Error("Unable to detect managed PostgreSQL host port");
+  }
+
+  return `postgresql://vibescan:vibescan@127.0.0.1:${hostPort}/vibescan`;
+}
+
+export async function getManagedContourDatabaseUrl(): Promise<string> {
+  const state = await readManagedContourState();
+  if (state?.databaseUrl) {
+    return state.databaseUrl;
+  }
+
+  return detectManagedDatabaseUrl();
+}
+
 export async function ensureManagedContourStarted(): Promise<boolean> {
   const existingState = await readManagedContourState();
   if (existingState) {
@@ -156,6 +179,13 @@ export async function waitForManagedContourReady(
     ]);
 
     if (backendReady && frontendReady) {
+      const state = await readManagedContourState();
+      if (state && !state.databaseUrl) {
+        await writeManagedContourState({
+          ...state,
+          databaseUrl: detectManagedDatabaseUrl(),
+        });
+      }
       return;
     }
 

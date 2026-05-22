@@ -1,7 +1,9 @@
 import { getRedisHost, getRedisPort, shouldEmbedWorkersFromEnv } from './env.js';
 
-export const DEFAULT_BACKEND_URL = 'http://127.0.0.1:3555';
-export const DEFAULT_FRONTEND_URL = 'http://127.0.0.1:3000';
+export const DEFAULT_BACKEND_URL =
+  process.env.DEFAULT_BACKEND_URL?.trim() || process.env.BACKEND_URL?.trim() || 'http://127.0.0.1:3555';
+export const DEFAULT_FRONTEND_URL =
+  process.env.DEFAULT_FRONTEND_URL?.trim() || process.env.FRONTEND_URL?.trim() || 'http://127.0.0.1:3000';
 
 function normalizeBaseUrl(value: string | undefined, fallback: string): string {
   return (value ?? fallback).replace(/\/$/, '');

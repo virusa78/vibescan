@@ -5,7 +5,7 @@ test("Severity Filtering Smoke Test - URL Parameter Validation", async ({ page }
 
   // Test 1: Direct navigation with severity parameter
   await test.step("direct severity URL navigation", async () => {
-    await page.goto("http://127.0.0.1:3000/dashboard?severity=critical");
+    await page.goto("/dashboard?severity=critical");
     
     // Check URL has parameter
     const url = page.url();
@@ -15,7 +15,7 @@ test("Severity Filtering Smoke Test - URL Parameter Validation", async ({ page }
 
   // Test 2: Multiple severities
   await test.step("multiple severities URL", async () => {
-    await page.goto("http://127.0.0.1:3000/dashboard?severity=critical,high");
+    await page.goto("/dashboard?severity=critical,high");
     const url = page.url();
     expect(url).toContain("severity=critical");
     console.log(`✓ Multiple severities work: ${url}`);
@@ -23,7 +23,7 @@ test("Severity Filtering Smoke Test - URL Parameter Validation", async ({ page }
 
   // Test 3: Severity parameter persists with other params
   await test.step("severity with other parameters", async () => {
-    await page.goto("http://127.0.0.1:3000/dashboard?sort=submitted&dir=desc&severity=medium&q=test");
+    await page.goto("/dashboard?sort=submitted&dir=desc&severity=medium&q=test");
     const url = page.url();
     expect(url).toContain("severity=medium");
     expect(url).toContain("sort=submitted");
@@ -35,7 +35,7 @@ test("Severity Filtering Smoke Test - URL Parameter Validation", async ({ page }
   await test.step("all severity levels", async () => {
     const severities = ["critical", "high", "medium", "low", "info"];
     for (const severity of severities) {
-      await page.goto(`http://127.0.0.1:3000/dashboard?severity=${severity}`);
+      await page.goto(`/dashboard?severity=${severity}`);
       const url = page.url();
       expect(url).toContain(`severity=${severity}`);
     }

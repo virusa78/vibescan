@@ -1,7 +1,14 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { PrismaClient } from '../../wasp-app/node_modules/@prisma/client';
 
-process.env.DATABASE_URL ||= 'postgresql://vibescan:vibescan@localhost:5432/vibescan';
+process.env.DATABASE_URL ||= process.env.TEST_DATABASE_URL || (() => {
+  const host = process.env.DB_HOST || '127.0.0.1';
+  const port = process.env.DB_PORT || '5432';
+  const name = process.env.DB_NAME || 'vibescan';
+  const user = process.env.DB_USER || 'vibescan';
+  const password = process.env.DB_PASSWORD || 'vibescan';
+  return `postgresql://${user}:${password}@${host}:${port}/${name}`;
+})();
 
 const prisma = new PrismaClient();
 

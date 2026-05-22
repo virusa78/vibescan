@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BACKEND_URL="${BACKEND_URL:-${API_URL:-http://127.0.0.1:3555}}"
+FRONTEND_URL="${FRONTEND_URL:-${WEB_CLIENT_URL:-http://127.0.0.1:3000}}"
 
 usage() {
   cat <<'EOF'
@@ -19,7 +21,7 @@ status() {
   fi
 
   if command -v curl >/dev/null 2>&1; then
-    for url in "http://127.0.0.1:3555/docs/swagger.json" "http://127.0.0.1:3000"; do
+    for url in "${BACKEND_URL}/docs/swagger.json" "${FRONTEND_URL}"; do
       if curl -fsS "$url" >/dev/null 2>&1; then
         echo "OK $url"
       else

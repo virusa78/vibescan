@@ -11,6 +11,7 @@ import type { Job } from 'bullmq';
 import { signWebhookPayload } from '../services/webhookSigner.js';
 import type { WebhookDeliveryJob } from '../queues/jobContract.js';
 import { validateWebhookTargetUrl } from '../../shared/webhookTarget';
+import { isProductionEnvironment } from '../config/env.js';
 
 const prisma = new PrismaClient();
 
@@ -105,7 +106,7 @@ export async function webhookDeliveryWorker(
 
     try {
       await validateWebhookTargetUrl(targetUrl, {
-        allowHttp: true,
+        allowLocalHttp: !isProductionEnvironment(),
       });
 
       // Generate signature

@@ -44,6 +44,14 @@ function parseArgs(argv: string[]): Args {
     return { userEmail, grypePath, blackduckPath, inputRef };
 }
 
+function getDatabaseUrl(): string {
+    return (
+        process.env.DATABASE_URL ||
+        process.env.DB_URL ||
+        `postgresql://${process.env.DB_USER || 'vibescan'}:${process.env.DB_PASSWORD || 'vibescan'}@${process.env.DB_HOST || '127.0.0.1'}:${process.env.DB_PORT || '5432'}/${process.env.DB_NAME || 'vibescan'}`
+    );
+}
+
 function normalizeGrypeVulns(doc: any): any[] {
     const items = Array.isArray(doc.vulnerabilities) ? doc.vulnerabilities : [];
     return items.map((v: any) => ({
@@ -79,11 +87,7 @@ async function main() {
     const delta = computeDelta(freeVulns, enterpriseVulns);
 
     const client = new Client({
-        host: process.env.DB_HOST || '127.0.0.1',
-        port: Number(process.env.DB_PORT || '5432'),
-        database: process.env.DB_NAME || 'vibescan',
-        user: process.env.DB_USER || 'vibescan',
-        password: process.env.DB_PASSWORD || 'vibescan'
+        connectionString: getDatabaseUrl(),
     });
 
     await client.connect();

@@ -34,6 +34,11 @@ NC='\033[0m' # No Color
 DO_SEED=false
 DO_SMOKE=false
 DO_FULL=false
+BACKEND_URL="${BACKEND_URL:-${API_URL:-http://127.0.0.1:3555}}"
+FRONTEND_URL="${FRONTEND_URL:-${WEB_CLIENT_URL:-http://127.0.0.1:3000}}"
+API_DOCS_URL="${API_DOCS_URL:-${BACKEND_URL}/docs}"
+DEMO_EMAIL="${DEMO_EMAIL:-priya.sharma@devcraft.in}"
+DEMO_PASSWORD="${DEMO_PASSWORD:-vs_demo_starter_2026}"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -139,7 +144,7 @@ start_docker_stack() {
   log_success "Redis is ready"
   
   # Verify MinIO
-  if ! curl -s http://localhost:9000/minio/health/live >/dev/null; then
+  if ! curl -s "${MINIO_URL:-http://localhost:9000}/minio/health/live" >/dev/null; then
     log_warn "MinIO not responding yet, will retry during app startup"
   else
     log_success "MinIO is ready"
@@ -203,9 +208,15 @@ start_wasp() {
   cd "$WASP_DIR"
   export PATH="$SCANNER_TOOLS_BIN:$PATH"
   export OWASP_DATA_DIRECTORY="${OWASP_DATA_DIRECTORY:-$WASP_DIR/.cache/owasp/data}"
+  export PORT="${PORT:-3555}"
+  export WASP_SERVER_URL="${WASP_SERVER_URL:-$BACKEND_URL}"
+  export WASP_WEB_CLIENT_URL="${WASP_WEB_CLIENT_URL:-$FRONTEND_URL}"
+  export REACT_APP_API_URL="${REACT_APP_API_URL:-$BACKEND_URL}"
+  export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-$BACKEND_URL}"
+  export VITE_API_PROXY_TARGET="${VITE_API_PROXY_TARGET:-$BACKEND_URL}"
   
   # Start in background
-  PORT=3555 wasp start >>"$ROOT_DIR/wasp-startup.log" 2>&1 &
+  wasp start >>"$ROOT_DIR/wasp-startup.log" 2>&1 &
   local wasp_pid=$!
   echo $wasp_pid > "$ROOT_DIR/.wasp.pid"
   
@@ -213,8 +224,8 @@ start_wasp() {
   log_info "Waiting for Wasp server (max 60s)..."
   local elapsed=0
   while (( elapsed < 60 )); do
-    if curl -s http://localhost:3555/health >/dev/null 2>&1 || \
-       curl -s http://localhost:3000 >/dev/null 2>&1; then
+    if curl -s "${BACKEND_URL}/health" >/dev/null 2>&1 || \
+       curl -s "${FRONTEND_URL}" >/dev/null 2>&1; then
       log_success "Wasp server is ready (PID: $wasp_pid)"
       return 0
     fi
@@ -239,13 +250,13 @@ run_smoke_tests() {
   cd "$ROOT_DIR"
   
   # Create test script
-  cat > "$ROOT_DIR/smoke-flow.log" <<'SMOKETEST'
+  cat > "$ROOT_DIR/smoke-flow.log" <<SMOKETEST
 # Smoke Flow Test Report
 Generated: $(date)
 
 ## 1. Health Checks
-- Backend (3555): Checking...
-- Frontend (3000): Checking...
+- Backend (${BACKEND_URL}): Checking...
+- Frontend (${FRONTEND_URL}): Checking...
 - Database: Checking...
 
 ## 2. API Endpoints
@@ -254,8 +265,8 @@ Generated: $(date)
 - GET /api/v1/scans
 
 ## 3. Demo User Login
-- Email: priya.sharma@devcraft.in
-- Password: vs_demo_starter_2026
+- Email: ${DEMO_EMAIL}
+- Password: ${DEMO_PASSWORD}
 
 ## 4. Dashboard Load
 - Stats display
@@ -291,7 +302,7 @@ SMOKETEST
   local checks_passed=0
   local checks_failed=0
   
-  if curl -s http://localhost:3555/health >/dev/null 2>&1; then
+  if curl -s "${BACKEND_URL}/health" >/dev/null 2>&1; then
     log_success "Backend health check passed"
     ((checks_passed++))
   else
@@ -299,7 +310,7 @@ SMOKETEST
     ((checks_failed++))
   fi
   
-  if curl -s http://localhost:3000 >/dev/null 2>&1; then
+  if curl -s "${FRONTEND_URL}" >/dev/null 2>&1; then
     log_success "Frontend health check passed"
     ((checks_passed++))
   else
@@ -317,9 +328,9 @@ print_summary() {
   log_success "DEV ENVIRONMENT READY!"
   log_success "═══════════════════════════════════════════════════════════════"
   echo ""
-  log_info "Frontend:  http://localhost:3000"
-  log_info "Backend:   http://localhost:3555"
-  log_info "API Docs:  http://localhost:3555/docs"
+  log_info "Frontend:  ${FRONTEND_URL}"
+  log_info "Backend:   ${BACKEND_URL}"
+  log_info "API Docs:  ${API_DOCS_URL}"
   echo ""
   
   if [[ "$DO_SEED" == "true" ]]; then

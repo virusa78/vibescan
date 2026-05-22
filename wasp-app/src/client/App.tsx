@@ -13,7 +13,6 @@ import {
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { applyAppLocale, resolveAppLocale } from './i18n';
 import { applyTheme, persistTheme, readThemePreference } from './theme';
-import { useTokenRefresh } from './hooks/useTokenRefresh';
 import { toast } from './hooks/use-toast';
 import { isEditableTarget } from './utils/keyboard';
 import './theme-init';
@@ -80,8 +79,6 @@ export default function App() {
   const { data: onboardingState } = useQuery(getOnboardingState, {
     enabled: Boolean(user),
   });
-
-  useTokenRefresh();
 
   const redirectPath = useMemo(() => {
     if (isAuthLoading) {
