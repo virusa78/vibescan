@@ -3,6 +3,7 @@
  * Shows colored badges for each scanner with count and external links
  */
 
+import { Badge } from '../client/components/ui/badge';
 import { Link as ExternalLink } from '../client/components/common/VibeUI';
 
 interface ScannerBadgesProps {
@@ -86,17 +87,13 @@ export function ScannerBadges({ cveId, reportedBy = [], _count }: ScannerBadgesP
   const scannerCount = uniqueScanners.length;
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {/* Multi-scanner indicator */}
+    <div className="flex flex-wrap items-center gap-2">
       {scannerCount > 1 && (
-        <div className="flex items-center gap-1">
-          <span className="text-xs font-bold text-muted-foreground">
-            Found by {scannerCount}:
-          </span>
-        </div>
+        <Badge variant="secondary" className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+          {scannerCount} scanners
+        </Badge>
       )}
 
-      {/* Scanner badges */}
       {uniqueScanners.map((scanner) => {
         const config = SCANNER_CONFIG[scanner] || {
           letter: scanner.charAt(0).toUpperCase(),
@@ -151,7 +148,6 @@ export function ScannerBadges({ cveId, reportedBy = [], _count }: ScannerBadgesP
         );
       })}
 
-      {/* External CVE reference link */}
       <CVEDatabaseLink cveId={cveId} />
     </div>
   );

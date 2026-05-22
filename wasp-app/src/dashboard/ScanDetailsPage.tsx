@@ -310,7 +310,7 @@ export function ScanDetailsPage() {
           </div>
 
           {/* Header */}
-          <div className="flex items-center justify-between mb-8" data-testid="scan-status-completed">
+          <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-testid="scan-status-completed">
             <div className="flex items-center gap-3">
               <CheckCircle className="text-green-500" size={32} />
               <div>
@@ -319,9 +319,9 @@ export function ScanDetailsPage() {
               </div>
             </div>
             {scan && (
-              <div className="text-right">
+              <div className="sm:text-right">
                 <p className="text-slate-400 text-sm">Completed</p>
-                <p className="text-white font-medium">{formatDate(scan.completedAt || new Date())}</p>
+                <p className="font-medium text-white">{formatDate(scan.completedAt || new Date())}</p>
               </div>
             )}
           </div>
@@ -390,23 +390,34 @@ export function ScanDetailsPage() {
                 {scanResults.length > 0 ? (
                   scanResults.map((result) => {
                     const entry = getScannerLineupEntry(result.source);
+                    const findingsCount = Array.isArray(result.vulnerabilities) ? result.vulnerabilities.length : 0;
+                    const isEmpty = findingsCount === 0;
                     return (
                     <div
                       key={result.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-2"
+                      className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${
+                        isEmpty
+                          ? 'border-amber-500/30 bg-amber-500/10'
+                          : 'border-slate-700/70 bg-slate-900/40'
+                      }`}
                     >
                       <div>
                         <p className="text-sm font-medium text-white">{entry.label}</p>
                         <p className="text-xs text-slate-400">{result.scannerVersion}</p>
                       </div>
-                      <span className="text-xs text-slate-300">
-                        {Array.isArray(result.vulnerabilities) ? result.vulnerabilities.length : 0} findings
+                      <span className={`text-xs font-medium ${isEmpty ? 'text-amber-200' : 'text-slate-300'}`}>
+                        {isEmpty ? 'No findings' : `${findingsCount} findings`}
                       </span>
                     </div>
                     );
                   })
                 ) : (
                   <p className="text-sm text-slate-400">No scanner results yet.</p>
+                )}
+                {scanResults.some((result) => !Array.isArray(result.vulnerabilities) || result.vulnerabilities.length === 0) && (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                    Zero findings may still mean a scanner timed out or failed upstream. Check the scanner logs when a lane returns no results.
+                  </div>
                 )}
               </CardContent>
             </Card>
