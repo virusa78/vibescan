@@ -1,6 +1,10 @@
-import type { PrismaClient, ScanSource } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import type { NormalizedFinding } from '../operations/scans/normalizeFindings.js';
-import type { ScannerCredentialSource, ScannerProviderKind } from '../lib/scanners/providerTypes.js';
+import type {
+  ScannerCredentialSource,
+  ScannerProviderKind,
+} from '../lib/scanners/providerTypes.js';
+import type { ScannerResultSource } from '../lib/scanners/providerSelection.js';
 
 export type ScannerExecutionPrismaClient = Pick<
   PrismaClient,
@@ -11,7 +15,7 @@ export type ScannerExecutionRequest = {
   prisma: ScannerExecutionPrismaClient;
   scanId: string;
   userId: string;
-  source: ScanSource;
+  source: ScannerResultSource;
   providerKind: ScannerProviderKind;
   credentialSource?: ScannerCredentialSource;
   loggerLabel: string;

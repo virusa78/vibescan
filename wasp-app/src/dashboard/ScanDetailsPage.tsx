@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../client/components/u
 import { Badge } from '../client/components/ui/badge';
 import { AlertTriangle, CheckCircle, Clock, Zap, ArrowLeft } from 'lucide-react';
 import { getReport } from 'wasp/client/operations';
+import { ScannerLineupCard } from '../client/components/common/ScannerLineupCard';
+import { getScannerLineupEntry, type ScannerSource } from '../client/utils/scannerLineup';
 
 interface Vulnerability {
   id: string;
@@ -56,16 +58,20 @@ function formatDate(date: Date | string): string {
   return d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
 }
 
+const DEFAULT_SCANNER_SOURCES: ScannerSource[] = ['grype', 'trivy', 'codescoring_johnny', 'owasp'];
+
 export function ScanDetailsPage() {
   const params = useParams<{ scanId?: string }>();
   const scanId = params.scanId || '';
+  const isValidScanId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(scanId);
+  const resolvedScanId = isValidScanId ? scanId : '';
   const navigate = useNavigate();
-  const { scan, isPolling, status, progress, error } = useScanPolling(scanId);
+  const { scan, isPolling, status, progress, error } = useScanPolling(resolvedScanId);
   const scanDetailsQuery = useQuery(
     getScanById,
-    { scanId },
+    { scanId: resolvedScanId },
     {
-      enabled: status === 'completed' && !!scanId,
+      enabled: status === 'completed' && !!resolvedScanId,
       refetchInterval: 3000,
     },
   );
@@ -77,7 +83,7 @@ export function ScanDetailsPage() {
     if (status === 'completed' && !report) {
       const fetchReport = async () => {
         try {
-          const data = await getReport({ scanId });
+          const data = await getReport({ scanId: resolvedScanId });
           setReport(data as any);
         } catch {
           // Keep page usable even if report endpoint is temporarily unavailable.
@@ -86,7 +92,33 @@ export function ScanDetailsPage() {
 
       fetchReport();
     }
-  }, [status, scanId, report]);
+  }, [status, resolvedScanId, report]);
+
+  if (!isValidScanId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-8">
+        <div className="max-w-4xl mx-auto">
+          <Card className="border-red-700 bg-red-900/20">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="text-red-500" size={24} />
+                <CardTitle>Invalid scan link</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-red-400">The scan URL is invalid. Open scan details from Dashboard again.</p>
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+              >
+                Return to Dashboard
+              </button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   // Loading state
   if (!scan && isPolling) {
@@ -162,6 +194,7 @@ export function ScanDetailsPage() {
     const elapsedMs = scan ? Date.now() - new Date(scan.createdAt).getTime() : 0;
     const elapsedSecs = Math.floor(elapsedMs / 1000);
     const estimatedRemaining = Math.max(0, 60 - elapsedSecs);
+    const plannedSources = ((scan?.plannedSources ?? []) as ScannerSource[]);
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-8">
@@ -229,9 +262,12 @@ export function ScanDetailsPage() {
                 <span>Estimated time remaining: ~{estimatedRemaining} seconds</span>
               </div>
 
-              <p className="text-slate-400 text-xs">
-                Scanning for vulnerabilities using dual-scanner pipeline...
-              </p>
+              <ScannerLineupCard
+                sources={plannedSources.length > 0 ? plannedSources : ['grype', 'trivy', 'codescoring_johnny', 'owasp']}
+                title="Planned scanners"
+                subtitle="Each lane runs independently, then findings collapse into one report."
+                className="border-slate-700 bg-slate-800/50"
+              />
             </CardContent>
           </Card>
         </div>
@@ -246,6 +282,16 @@ export function ScanDetailsPage() {
     const scanResults = scanDetails?.scanResults ?? [];
     const scanDeltas = scanDetails?.scanDeltas ?? [];
     const latestDelta = scanDeltas[0];
+    const expectedSources = (scan?.plannedSources?.length ? scan.plannedSources : DEFAULT_SCANNER_SOURCES) as ScannerSource[];
+    const resultSources = new Set(scanResults.map((result) => result.source as ScannerSource));
+    const lineupStatusBySource = expectedSources.reduce<Partial<Record<ScannerSource, 'planned' | 'completed' | 'missing'>>>(
+      (accumulator, source) => {
+        accumulator[source] = resultSources.has(source) ? 'completed' : 'missing';
+        return accumulator;
+      },
+      {},
+    );
+    const missingSources = expectedSources.filter((source) => !resultSources.has(source));
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-8">
@@ -324,26 +370,41 @@ export function ScanDetailsPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mb-8">
+            <ScannerLineupCard
+              sources={expectedSources}
+              statusBySource={lineupStatusBySource}
+              title="Scanner lineup"
+              subtitle={
+                missingSources.length > 0
+                  ? `Missing results: ${missingSources.map((source) => getScannerLineupEntry(source).label).join(', ')}.`
+                  : 'All planned lanes returned results.'
+              }
+              className="border-slate-700 bg-slate-800/50"
+            />
+
             <Card className="border-slate-700 bg-slate-800/50" data-testid="scanner-summary">
               <CardHeader>
                 <CardTitle>Scanner Summary</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {scanResults.length > 0 ? (
-                  scanResults.map((result) => (
+                  scanResults.map((result) => {
+                    const entry = getScannerLineupEntry(result.source);
+                    return (
                     <div
                       key={result.id}
                       className="flex items-center justify-between gap-3 rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-2"
                     >
                       <div>
-                        <p className="text-sm font-medium capitalize text-white">{result.source}</p>
+                        <p className="text-sm font-medium text-white">{entry.label}</p>
                         <p className="text-xs text-slate-400">{result.scannerVersion}</p>
                       </div>
                       <span className="text-xs text-slate-300">
                         {Array.isArray(result.vulnerabilities) ? result.vulnerabilities.length : 0} findings
                       </span>
                     </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <p className="text-sm text-slate-400">No scanner results yet.</p>
                 )}

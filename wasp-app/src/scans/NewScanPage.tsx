@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { ArrowRight, Github, Package, UploadCloud } from "lucide-react";
-import { submitScan, getScans, useQuery } from "wasp/client/operations";
+import { submitScan, getScans, getScannerAccessSettings, useQuery } from "wasp/client/operations";
 import { Alert, AlertDescription } from "../client/components/ui/alert";
 import { Button } from "../client/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
@@ -10,6 +10,8 @@ import { Label } from "../client/components/ui/label";
 import { Skeleton } from "../client/components/ui/skeleton";
 import { Link as WaspRouterLink, routes } from "wasp/client/router";
 import { useAsyncState } from "../client/hooks/useAsyncState";
+import { ScannerLineupCard } from "../client/components/common/ScannerLineupCard";
+import { getPlannedScannerSources, type ScannerAccessPreview } from "../client/utils/scannerLineup";
 
 type ScanInputType = "github" | "sbom" | "source_zip";
 
@@ -56,6 +58,7 @@ export default function NewScanPage() {
   const [inputRef, setInputRef] = useState("");
   const [inputType, setInputType] = useState<ScanInputType>("github");
   const { isLoading: isSubmitting, error, run } = useAsyncState();
+  const { data: scannerAccessData } = useQuery(getScannerAccessSettings);
   const {
     data: recentScans,
     isLoading: isRecentLoading,
@@ -63,6 +66,10 @@ export default function NewScanPage() {
     refetch,
   } = useQuery(getScans);
   const normalizedScans = useMemo(() => recentScans ?? [], [recentScans]);
+  const plannedScannerSources = useMemo(
+    () => getPlannedScannerSources(scannerAccessData as ScannerAccessPreview | null),
+    [scannerAccessData],
+  );
   const activeType = useMemo(
     () => inputTypeOptions.find((option) => option.value === inputType) ?? inputTypeOptions[0],
     [inputType],
@@ -87,7 +94,7 @@ export default function NewScanPage() {
 
         setInputRef("");
         await refetch();
-        navigate(routes.ScanDetailsRoute.build({ scanId: createdScan.id } as any));
+        navigate(routes.ScanDetailsRoute.build({ params: { scanId: createdScan.id } }));
       },
       { errorMessage: "Failed to submit scan." },
     );
@@ -112,6 +119,13 @@ export default function NewScanPage() {
             </AlertDescription>
           </Alert>
         )}
+
+        <ScannerLineupCard
+          sources={plannedScannerSources}
+          title="Parallel scan lanes"
+          subtitle="Every scan fans out across four lanes by default, and Snyk joins when the key is ready."
+          className="border-border/70 mt-8 bg-card/90 shadow-sm"
+        />
 
         <Card className="border-border/70 mt-8 bg-card/90 shadow-sm">
           <CardHeader>
@@ -255,7 +269,7 @@ export default function NewScanPage() {
                   </thead>
                   <tbody>
                     {normalizedScans.map((scan) => (
-                      <tr key={scan.id} className="border-border/50 border-b">
+                      <tr key={scan.id} className="border-border/50 border-b" data-testid="scan-row">
                         <td className="py-3 pr-4">
                           <div className="text-foreground font-medium">
                             {scan.inputRef || scan.id}
@@ -266,7 +280,7 @@ export default function NewScanPage() {
                         </td>
                         <td className="py-3 pr-4 capitalize">{scan.inputType}</td>
                         <td className="py-3 pr-4">
-                          <span className="rounded-full border px-2 py-1 text-xs capitalize">
+                          <span className="rounded-full border px-2 py-1 text-xs capitalize" data-testid="scan-status">
                             {scan.status}
                           </span>
                         </td>

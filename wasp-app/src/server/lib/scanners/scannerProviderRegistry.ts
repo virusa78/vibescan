@@ -1,19 +1,16 @@
 import { codescoringProvider } from './codescoringProvider.js';
 import { grypeProvider } from './grypeProvider.js';
 import { snykProvider } from './snykProvider.js';
-import { syftProvider } from './syftProvider.js';
 import { owaspProvider } from './owaspProvider.js';
-import { dastProvider } from './dastProvider.js';
+import { syftProvider as trivyProvider } from './syftProvider.js';
 import type { ScannerProvider, ScannerProviderKind } from './providerTypes.js';
 
 const scannerProviders: Record<ScannerProviderKind, ScannerProvider | undefined> = {
   grype: grypeProvider,
   'codescoring-johnny': codescoringProvider,
   snyk: snykProvider,
-  syft: syftProvider,
   owasp: owaspProvider,
-  dast: dastProvider,
-  trivy: undefined, // Trivy is implemented in input adapter, not as a standard provider yet
+  trivy: trivyProvider,
 };
 
 export function getScannerProvider(kind: ScannerProviderKind): ScannerProvider {

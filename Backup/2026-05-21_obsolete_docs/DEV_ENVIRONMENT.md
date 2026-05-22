@@ -128,10 +128,13 @@ Requires: Backend running (`wasp start`)
 
 ```bash
 # Seed with 6 months of data
-DEMO_MONTHS=6 RESET_DEMO_DATA=true npx ts-node scripts/fill-mock-data.ts
+DEMO_MONTHS=6 npx ts-node scripts/fill-mock-data.ts
 
 # Seed with 12 months of data
-DEMO_MONTHS=12 RESET_DEMO_DATA=true npx ts-node scripts/fill-mock-data.ts
+DEMO_MONTHS=12 npx ts-node scripts/fill-mock-data.ts
+
+# Force a destructive reseed
+DEMO_MONTHS=6 RESET_DEMO_DATA=true npx ts-node scripts/fill-mock-data.ts
 ```
 
 ## Build & Test Gates

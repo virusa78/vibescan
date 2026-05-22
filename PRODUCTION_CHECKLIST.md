@@ -102,7 +102,7 @@ Deployment readiness verification for VibeScan Phase 5 (Production Release).
 ### ✅ Configuration
 
 - [ ] **Environment Variables**: All required vars documented
-  - [ ] `.env.example` contains all needed vars
+  - [ ] `wasp-app/.env.server.example` contains all needed vars
   - [ ] `PORT=3555` set in `.env.server`
   - [ ] `DATABASE_URL` configured
   - [ ] `REDIS_URL` configured
@@ -110,11 +110,14 @@ Deployment readiness verification for VibeScan Phase 5 (Production Release).
   - [ ] `ENCRYPTION_KEY` set (production value)
   - [ ] `STRIPE_SECRET_KEY` configured
   - [ ] `AWS_*` credentials configured
+  - [ ] `MAIL_PROVIDER` and sender settings configured
+  - [ ] `SMTP_*` or `SENDGRID_API_KEY` configured
 
 - [ ] **Email Configuration**:
   - [ ] Email provider configured (not Dummy)
   - [ ] Sender address valid
   - [ ] Email templates tested
+  - [ ] `docs/EMAIL_SETUP.md` followed
 
 - [ ] **CORS**: Frontend origin allowed
   - [ ] Configured in Wasp server middleware

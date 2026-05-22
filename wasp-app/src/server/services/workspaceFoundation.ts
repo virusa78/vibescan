@@ -163,6 +163,88 @@ function mapWorkspaceSummary(row: WorkspaceMembershipRow): WorkspaceSummary {
   };
 }
 
+async function loadWorkspaceContextFromExistingData(
+  db: Pick<WorkspaceFoundationDatabase, 'user' | 'workspaceMembership'>,
+  userId: string,
+): Promise<WorkspaceContext | null> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      displayName: true,
+      activeWorkspaceId: true,
+    },
+  });
+
+  if (!user) {
+    return null;
+  }
+
+  const memberships = await db.workspaceMembership.findMany({
+    where: { userId },
+    select: {
+      role: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isPersonal: true,
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isPersonal: true,
+            },
+          },
+          team: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isDefault: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (memberships.length === 0) {
+    return null;
+  }
+
+  memberships.sort((left, right) => {
+    if (left.workspace.isPersonal !== right.workspace.isPersonal) {
+      return left.workspace.isPersonal ? -1 : 1;
+    }
+
+    return left.workspace.name.localeCompare(right.workspace.name);
+  });
+
+  const activeMembership =
+    memberships.find((membership) => membership.workspace.id === user.activeWorkspaceId) ??
+    memberships.find((membership) => membership.workspace.isPersonal) ??
+    memberships[0];
+
+  if (!activeMembership) {
+    return null;
+  }
+
+  const personalMembership =
+    memberships.find((membership) => membership.workspace.isPersonal) ?? activeMembership;
+
+  return {
+    activeWorkspace: mapWorkspaceSummary(activeMembership),
+    workspaces: memberships.map(mapWorkspaceSummary),
+    personalOrganizationId: personalMembership.workspace.organization.id,
+    personalWorkspaceId: personalMembership.workspace.id,
+  };
+}
+
 export async function ensureWorkspaceFoundationForUser(
   db: WorkspaceFoundationDatabase,
   userId: string,
@@ -346,87 +428,29 @@ export async function getWorkspaceContextForUser(
   db: WorkspaceFoundationDatabase,
   userId: string,
 ): Promise<WorkspaceContext> {
-  const ensured = await ensureWorkspaceFoundationForUser(db, userId);
-
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      email: true,
-      username: true,
-      displayName: true,
-      activeWorkspaceId: true,
-    },
-  });
-
-  if (!user) {
-    throw new Error(`User ${userId} not found while loading workspace context`);
+  const existingContext = await loadWorkspaceContextFromExistingData(db, userId);
+  if (existingContext) {
+    return existingContext;
   }
 
-  const memberships = await db.workspaceMembership.findMany({
-    where: { userId },
-    select: {
-      role: true,
-      workspace: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          isPersonal: true,
-          organization: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              isPersonal: true,
-            },
-          },
-          team: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              isDefault: true,
-            },
-          },
-        },
-      },
-    },
-  });
+  const ensured = await ensureWorkspaceFoundationForUser(db, userId);
+  const ensuredContext = await loadWorkspaceContextFromExistingData(db, userId);
 
-  if (memberships.length === 0) {
+  if (!ensuredContext) {
     throw new Error(`Workspace membership bootstrap failed for user ${userId}`);
   }
 
-  memberships.sort((left, right) => {
-    if (left.workspace.isPersonal !== right.workspace.isPersonal) {
-      return left.workspace.isPersonal ? -1 : 1;
-    }
-
-    return left.workspace.name.localeCompare(right.workspace.name);
-  });
-
-  const activeMembership =
-    memberships.find((membership) => membership.workspace.id === user.activeWorkspaceId) ??
-    memberships.find((membership) => membership.workspace.id === ensured.workspaceId) ??
-    memberships[0];
-
-  if (!activeMembership) {
-    throw new Error(`Active workspace resolution failed for user ${userId}`);
-  }
-
-  if (user.activeWorkspaceId !== activeMembership.workspace.id) {
+  if (ensuredContext.activeWorkspace.id !== ensured.workspaceId) {
     await db.user.update({
-      where: { id: user.id },
+      where: { id: userId },
       data: {
-        activeWorkspaceId: activeMembership.workspace.id,
+        activeWorkspaceId: ensuredContext.activeWorkspace.id,
       },
     });
   }
 
   return {
-    activeWorkspace: mapWorkspaceSummary(activeMembership),
-    workspaces: memberships.map(mapWorkspaceSummary),
+    ...ensuredContext,
     personalOrganizationId: ensured.organizationId,
     personalWorkspaceId: ensured.workspaceId,
   };

@@ -144,7 +144,7 @@ query myOp {
 - `@prisma/client` lives in `wasp-app/node_modules/`, not at repo root.
 - Prisma enums (ScanSource, PlanTier, etc.) are not named ESM exports in Prisma v5 — use string literals (`'grype'`, `'pro'`) instead of `ScanSource.grype`.
 - Run with: `DATABASE_URL=... node --import tsx scripts/fill-mock-data.ts`
-- Env vars: `DEMO_MONTHS` (default 6), `RESET_DEMO_DATA` (default true)
+- Env vars: `DEMO_MONTHS` (default 6), `RESET_DEMO_DATA` (default false; use `seed:mock-data:reset` for destructive reseed)
 
 ## Conventions
 

@@ -2,8 +2,7 @@
  * Shared queue/job contracts
  */
 
-import type { ScanSource } from '@prisma/client';
-import type { QueueScannerTarget } from '../lib/scanners/providerSelection.js';
+import type { QueueScannerTarget, ScannerResultSource } from '../lib/scanners/providerSelection.js';
 import type { ScannerCredentialSource, ScannerProviderKind } from '../lib/scanners/providerTypes.js';
 
 export const QUEUE_NAMES = {
@@ -14,7 +13,7 @@ export const QUEUE_NAMES = {
 
 export type QueueName = typeof QUEUE_NAMES[keyof typeof QUEUE_NAMES];
 
-export type ScanJobInputType = 'source_zip' | 'sbom_upload' | 'github_app' | 'dast_upload';
+export type ScanJobInputType = 'source_zip' | 'sbom_upload' | 'github_app';
 
 export interface ScanJob {
   scanId: string;
@@ -24,7 +23,7 @@ export interface ScanJob {
   s3Bucket: string;
   provider: ScannerProviderKind;
   queueTarget: QueueScannerTarget;
-  resultSource: ScanSource;
+  resultSource: ScannerResultSource;
   credentialSource: ScannerCredentialSource;
 }
 

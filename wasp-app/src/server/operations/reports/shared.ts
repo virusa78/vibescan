@@ -10,6 +10,7 @@ export type ReportFindingRecord = {
   source: string;
   filePath: string | null;
   status: string;
+  detectedData?: unknown;
 };
 
 export type SeverityBreakdown = {

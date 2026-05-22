@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import {
   registerUser,
   generateTestEmail,
+  submitScanFromForm,
   viewScanDetails,
   verifyFindingsDisplay,
 } from "./helpers";
@@ -38,55 +39,11 @@ test("Source ZIP E2E - Upload and scan source code ZIP", async ({ page }) => {
     
     // Test 3.2: Initiate ZIP upload scan
     console.log("📦 Starting ZIP upload scan");
-    const newScanButton = page
-      .locator('button:has-text("New Scan"), button:has-text("Start Scan")')
-      .first();
-    await newScanButton.click();
-    
-    // Wait for scan form
-    await page.waitForSelector('[data-testid="scan-form"], form', {
-      timeout: 5000,
-    });
-    
-    // Select ZIP upload tab
-    const zipTab = page.locator(
-      'button:has-text("Source Code"), [role="tab"]:has-text("Source Code"), button:has-text("ZIP")'
-    );
-    if (await zipTab.isVisible()) {
-      await zipTab.click();
-      await page.waitForTimeout(500);
-    }
-    
-    // Test 3.3: Upload ZIP file
-    console.log("📤 Uploading ZIP file");
-    
-    // Create a simple ZIP file in memory for testing
-    // For MVP, we'll use the SBOM fixtures if ZIP doesn't exist
     const zipPath = "test/fixtures/app.zip";
-    
-    const fileInput = page.locator('input[type="file"]').first();
-    
-    // Check if file exists, if not skip this test
-    try {
-      await fileInput.setInputFiles(zipPath);
-      console.log("✓ ZIP file selected");
-    } catch {
-      console.log("⚠️ app.zip not found, skipping file upload. Creating fixture...");
-      
-      // For MVP, we'll accept this gracefully
-      // In production, we'd create a real ZIP file
-      return;
-    }
-    
-    // Wait for file to be processed
-    await page.waitForTimeout(1000);
-    
-    // Test 3.4: Submit scan
-    const submitButton = page
-      .locator('button:has-text("Submit"), button:has-text("Start Scan")')
-      .last();
-    await submitButton.click();
+    await submitScanFromForm(page, zipPath, "source_zip");
     console.log("✓ ZIP scan submitted");
+    await page.goto("/dashboard");
+    await page.waitForLoadState("networkidle");
     
     // Test 3.5: Wait for scan completion
     console.log("⏳ Waiting for ZIP scan to complete...");
@@ -176,23 +133,9 @@ test("ZIP Upload - With manifest files", async ({ page }) => {
     await page.waitForLoadState("networkidle");
     
     // Navigate to scan form
-    const newScanButton = page
-      .locator('button:has-text("New Scan"), button:has-text("Start Scan")')
-      .first();
-    await newScanButton.click();
-    
-    // Wait for form
-    await page.waitForSelector('[data-testid="scan-form"], form', {
-      timeout: 5000,
-    });
-    
-    // Select ZIP tab
-    const zipTab = page.locator(
-      'button:has-text("Source Code"), [role="tab"]:has-text("Source Code"), button:has-text("ZIP")'
-    );
-    if (await zipTab.isVisible()) {
-      await zipTab.click();
-    }
+    await page.goto("/new-scan");
+    await page.waitForLoadState("domcontentloaded");
+    await page.getByRole("button", { name: /source zip/i }).click();
     
     console.log("✓ ZIP upload test ready");
     // In production, would upload actual ZIP with manifest

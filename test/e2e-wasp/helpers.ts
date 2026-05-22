@@ -1,9 +1,19 @@
 import { Page, expect } from "@playwright/test";
 
 async function acceptCookiesIfPresent(page: Page): Promise<void> {
-  const acceptAll = page.getByRole("button", { name: /accept all/i });
-  if (await acceptAll.isVisible().catch(() => false)) {
-    await acceptAll.click();
+  const candidates = [
+    page.getByRole("button", { name: /accept all/i }),
+    page.getByRole("button", { name: /accept/i }),
+    page.getByRole("button", { name: /agree/i }),
+    page.getByRole("button", { name: /allow all/i }),
+    page.getByRole("button", { name: /ok/i }),
+  ];
+
+  for (const candidate of candidates) {
+    if (await candidate.isVisible().catch(() => false)) {
+      await candidate.click({ force: true });
+      return;
+    }
   }
 }
 
@@ -56,6 +66,8 @@ export async function registerUser(
       throw new Error(`Signup failed: ${fallbackResponse.status()} ${fallbackResponse.statusText()}`);
     }
   }
+
+  await loginUser(page, email, password);
 }
 
 /**
@@ -91,6 +103,20 @@ export async function loginUser(
   if (!response || !response.ok()) {
     throw new Error(`Login failed: ${response?.status()} ${response?.statusText()}`);
   }
+
+  await page.goto("/dashboard");
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await acceptCookiesIfPresent(page);
+
+  if (page.url().includes("/onboarding")) {
+    const skipOnboardingButton = page.getByRole("button", { name: /skip onboarding for now/i });
+    if (await skipOnboardingButton.isVisible().catch(() => false)) {
+      await skipOnboardingButton.click();
+      await page.waitForURL(/\/dashboard(\/?|$)/, { timeout: 30000 }).catch(() => {});
+    }
+  }
+
+  await page.waitForURL(/\/dashboard(\/?|$)/, { timeout: 30000 }).catch(() => {});
 }
 
 /**
@@ -183,67 +209,66 @@ export async function submitScanFromForm(
 ): Promise<string> {
   await page.goto("/new-scan");
   await page.waitForLoadState("domcontentloaded");
-  await page.waitForSelector("form", { timeout: 10_000 });
+  await acceptCookiesIfPresent(page);
 
-  await page.getByLabel("Input Reference").fill(inputRef);
   const inputTypeLabels: Record<typeof inputType, string> = {
-    github: "GitHub Repository",
-    sbom: "SBOM File",
+    github: "GitHub repository",
+    sbom: "SBOM file",
     source_zip: "Source ZIP",
   };
 
-  const selectTrigger = page.locator("#inputType").first();
-  await selectTrigger.click();
-  const option = page.getByRole("option", { name: inputTypeLabels[inputType] }).first();
-  if (await option.isVisible().catch(() => false)) {
-    await option.click();
-  } else {
-    if (inputType === "sbom") {
-      await page.keyboard.press("ArrowDown");
-    } else if (inputType === "source_zip") {
-      await page.keyboard.press("ArrowDown");
-      await page.keyboard.press("ArrowDown");
-    }
-    await page.keyboard.press("Enter");
-  }
+  const optionButton = page.getByRole("button", { name: new RegExp(inputTypeLabels[inputType], "i") }).first();
+  await optionButton.click();
+  await page.getByLabel("Input Reference").fill(inputRef);
 
   const submitButton = page.getByRole("button", { name: /start scan/i });
+  const submitResponsePromise = page
+    .waitForResponse(
+      (response) =>
+        /\/operations\/submit-scan(?:\?|$)/.test(response.url()) &&
+        response.request().method() === "POST",
+      { timeout: 30_000 }
+    )
+    .catch(() => null);
   await submitButton.click();
 
-  await page.waitForSelector('text=Scan job created.', { timeout: 20_000 });
+  await page.waitForURL(/\/(scans|reports)\/[0-9a-fA-F-]{36}(?:[/?#]|$)/, {
+    timeout: 30_000,
+  }).catch(() => null);
 
-  const openDetailsLink = page.getByRole("link", { name: /open details/i }).first();
-  if (await openDetailsLink.count()) {
-    const href = await openDetailsLink.getAttribute("href");
-    if (!href) {
-      throw new Error("Scan details link missing after submission");
+  const currentUrl = page.url();
+  const urlScanId = currentUrl.match(/\/(?:scans|reports)\/([0-9a-fA-F-]{36})(?:[/?#]|$)/)?.[1] ?? null;
+  if (urlScanId) {
+    return urlScanId;
+  }
+
+  const submitResponse = await submitResponsePromise;
+  if (submitResponse?.ok()) {
+    const submitData = await submitResponse.json().catch(() => null);
+    const responsePayload = submitData?.json ?? submitData;
+    const responseScanId =
+      responsePayload?.id ??
+      responsePayload?.scan?.id ??
+      responsePayload?.scanId ??
+      responsePayload?.json?.id;
+    if (responseScanId) {
+      return responseScanId;
     }
+  }
 
-    const scanUrl = new URL(href, page.url());
-    const scanId = scanUrl.pathname.split("/").filter(Boolean).pop();
-    if (!scanId) {
-      throw new Error(`Unable to parse scan id from ${href}`);
+  const recentScanLink = page.locator('[data-testid="scan-row"] a[href*="/scans/"]').first();
+  if (await recentScanLink.isVisible().catch(() => false)) {
+    const href = await recentScanLink.getAttribute("href");
+    const hrefScanId = href?.match(/\/scans\/([0-9a-fA-F-]{36})(?:[/?#]|$)/)?.[1] ?? null;
+    if (hrefScanId) {
+      return hrefScanId;
     }
-
-    return scanId;
   }
 
-  const rows = page.locator("table tbody tr");
-  await expect(rows.first()).toContainText(inputRef, { timeout: 20_000 });
-
-  const detailsLink = rows.first().getByRole("link", { name: /view details/i }).first();
-  const href = await detailsLink.getAttribute("href");
-  if (!href) {
-    throw new Error("Scan details link missing after submission");
-  }
-
-  const scanUrl = new URL(href, page.url());
-  const scanId = scanUrl.pathname.split("/").filter(Boolean).pop();
-  if (!scanId) {
-    throw new Error(`Unable to parse scan id from ${href}`);
-  }
-
-  return scanId;
+  const submitData = submitResponse ? await submitResponse.json().catch(() => null) : null;
+  throw new Error(
+    `Unable to derive scan id after submission. url=${currentUrl} response=${JSON.stringify(submitData)}`,
+  );
 }
 
 export async function uploadSbomFile(
@@ -260,13 +285,18 @@ export async function viewScanDetails(page: Page, scanIndex: number = 0): Promis
   // Get scan row
   const scanRows = page.locator('[data-testid="scan-row"]');
   if (scanIndex >= (await scanRows.count())) {
-    throw new Error(`Scan at index ${scanIndex} not found`);
+    const fallbackRows = page.locator("table tbody tr");
+    if (scanIndex >= (await fallbackRows.count())) {
+      throw new Error(`Scan at index ${scanIndex} not found`);
+    }
+    await fallbackRows.nth(scanIndex).click();
+    await page.waitForSelector('[data-testid="scan-details"]', { timeout: 10000 });
+    return;
   }
-  
+
   await scanRows.nth(scanIndex).click();
-  
   // Wait for scan details page
-  await page.waitForSelector('[data-testid="scan-details"]', { timeout: 10000 });
+  await page.waitForSelector('[data-testid="scan-status-completed"], [data-testid="scan-status-running"], [data-testid="scan-status-failed"]', { timeout: 10000 });
 }
 
 /**

@@ -4,13 +4,15 @@ import {
 } from './snykRuntime.js';
 import type {
   ScannerHealthState,
+  ScannerExecutionContext,
   ScannerProvider,
   ScannerScanResult,
 } from './providerTypes.js';
 
-async function getSnykHealth(): Promise<ScannerHealthState> {
+async function getSnykHealth(context?: Partial<ScannerExecutionContext>): Promise<ScannerHealthState> {
   const snapshot = getScannerHealthSnapshot().snyk;
-  const hasToken = !!process.env.SNYK_TOKEN?.trim();
+  const contextToken = context?.resolvedCredentials?.values.token?.trim();
+  const hasToken = !!(contextToken || process.env.SNYK_TOKEN?.trim());
 
   return {
     configured: snapshot.configured || hasToken,
@@ -23,8 +25,8 @@ export const snykProvider: ScannerProvider = {
   kind: 'snyk',
   displayName: 'Snyk',
   supportsUserSecrets: true,
-  async getHealth() {
-    return getSnykHealth();
+  async getHealth(context) {
+    return getSnykHealth(context);
   },
   async scanComponents(components, context): Promise<ScannerScanResult> {
     const run = await runSnykScan(

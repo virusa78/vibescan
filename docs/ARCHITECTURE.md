@@ -28,8 +28,8 @@
 | Component | Location | Truth | Notes |
 |-----------|----------|-------|-------|
 | **App code** | `wasp-app/src/` | Wasp DSL + TypeScript | Only source of app code |
-| **Database schema** | `wasp-app/prisma/schema.prisma` | Prisma ORM | Source of truth for data model |
-| **Migrations** | `wasp-app/prisma/migrations/` | Auto-generated | Apply via `wasp db migrate-dev` |
+| **Database schema** | `wasp-app/schema.prisma` | Prisma ORM | Source of truth for data model |
+| **Migrations** | `wasp-app/migrations/` | Auto-generated | Apply via `wasp db migrate-dev` |
 | **Config** | `.env.server`, `.env.local` | Environment files | Env vars override defaults |
 | **Docs** | `docs/`, root `.md` files | Markdown | Must stay synchronized with code |
 | **Tests** | `test/` | Jest + Playwright | Run from root via `npm test` |
@@ -53,9 +53,8 @@ vibescan/                          # Monorepo root (orchestration only)
 │   │   ├── auth/                  # Auth forms & email templates
 │   │   ├── shared/                # Shared types
 │   │   └── payment/               # Stripe integration
-│   ├── prisma/
-│   │   ├── schema.prisma          # Database schema (source of truth)
-│   │   └── migrations/            # Auto-generated migrations
+│   ├── schema.prisma              # Database schema (source of truth)
+│   ├── migrations/                # Auto-generated migrations
 │   ├── package.json               # App dependencies
 │   ├── .env.server                # Backend env vars (PORT=3555)
 │   └── .env.local                 # Local overrides
@@ -70,6 +69,7 @@ vibescan/                          # Monorepo root (orchestration only)
 │   ├── ARCHITECTURE.md            # This file
 │   ├── DEVELOPMENT.md             # Local dev setup
 │   ├── DEPLOYMENT.md              # Deploy guide
+│   ├── EMAIL_SETUP.md             # Mail provider setup
 │   └── ...
 │
 ├── deploy/                        # Infrastructure
@@ -196,6 +196,7 @@ PORT=3555 wasp start           # Frontend: 3000, Backend: 3555
 - `docs/ARCHITECTURE.md` — This file
 - `docs/DEVELOPMENT.md` — Local dev setup
 - `docs/DEPLOYMENT.md` — Deploy guide
+- `docs/EMAIL_SETUP.md` — Mail provider setup
 - `CLAUDE.md` — Developer reference (patterns, commands)
 - `AGENTS.md` — Agent collaboration guide
 - `CONTRIBUTING.md` — Git workflow
@@ -204,8 +205,8 @@ PORT=3555 wasp start           # Frontend: 3000, Backend: 3555
 - `STARTUP.md` — Manual local setup
 
 ### 📦 Archive/Inactive (Not Referenced)
-- `Backup/`, `backup/` — Old backups
-- Legacy markdown files (superseded by current docs)
+- `Backup/` — Old backups and archived notes
+- `Backup/2026-05-21_obsolete_docs/` — archived project notes moved out of the live tree
 - Historical completion reports
 
 ### Rule
@@ -266,7 +267,7 @@ npm run build                   # Verify build works
 - [ ] Define shared DTOs: `src/shared/types/` for operations/webhooks
 - [ ] Reduce `any` gradually in critical paths
 - [ ] Clarify operation/service/worker boundaries
-- [ ] Remove archive artifacts (Backup/, backup/)
+- [ ] Remove archive artifacts from live docs and keep them under `Backup/`
 
 ## References
 

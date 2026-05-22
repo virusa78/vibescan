@@ -258,7 +258,7 @@ async function createSwaggerGenerator(): Promise<SwaggerGenerator> {
   };
   const refParserUrl = refParserModule.default ?? refParserModule;
 
-  if (!refParserUrl.__vibescanResolvePatched) {
+  if (refParserUrl && !refParserUrl.__vibescanResolvePatched && !Object.isFrozen(refParserUrl)) {
     try {
       const originalResolve = refParserUrl.resolve;
       refParserUrl.resolve = function patchedResolve(path1: string, path2?: string) {

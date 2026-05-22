@@ -1,0 +1,7 @@
+.logs/
+wasp-startup.log
+smoke-flow.log
+.wasp.pid
+.tools/
+.cache/
+bin/trivy

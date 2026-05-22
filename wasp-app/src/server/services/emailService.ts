@@ -1,14 +1,6 @@
+import sendgrid from '@sendgrid/mail';
 import nodemailer from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
-
-let sendgrid: any;
-try {
-  // Lazy require to avoid module errors if not installed
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  sendgrid = require('@sendgrid/mail');
-} catch (e) {
-  sendgrid = null;
-}
 
 const fromAddress = process.env.MAIL_FROM_ADDRESS || 'no-reply@example.com';
 const fromName = process.env.MAIL_FROM_NAME;
@@ -24,16 +16,16 @@ export type EmailOptions = {
 export async function sendEmail(opts: EmailOptions) {
   const provider = process.env.MAIL_PROVIDER || 'smtp';
 
-  if (provider === 'sendgrid' && sendgrid && process.env.SENDGRID_API_KEY) {
+  if (provider === 'sendgrid' && process.env.SENDGRID_API_KEY) {
     sendgrid.setApiKey(process.env.SENDGRID_API_KEY);
-    const msg: any = {
+    const msg = {
       to: opts.to,
       from: fromName ? `${fromName} <${fromAddress}>` : fromAddress,
       subject: opts.subject,
-      text: opts.text,
+      text: opts.text ?? opts.html ?? '',
       html: opts.html,
-    };
-    if (replyTo) msg.replyTo = replyTo;
+      replyTo,
+    } as Parameters<typeof sendgrid.send>[0];
     return sendgrid.send(msg);
   }
 
@@ -59,7 +51,7 @@ export async function sendEmail(opts: EmailOptions) {
     text: opts.text,
     html: opts.html,
     replyTo,
-  } as any;
+  };
 
   return transporter.sendMail(mailOptions);
 }

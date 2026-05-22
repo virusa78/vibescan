@@ -246,6 +246,50 @@ export function normalizeTrivyFindings(rawOutput: unknown): NormalizedFinding[] 
     return [];
   }
 
+  if (Array.isArray(rawOutput.Results)) {
+    const findings: NormalizedFinding[] = [];
+
+    for (const result of rawOutput.Results) {
+      if (!isRecord(result) || !Array.isArray(result.Vulnerabilities)) {
+        continue;
+      }
+
+      const target = typeof result.Target === 'string' ? result.Target : undefined;
+      for (const vuln of result.Vulnerabilities) {
+        if (!isRecord(vuln)) continue;
+
+        const pkgName = typeof vuln.PkgName === 'string' ? vuln.PkgName : 'unknown';
+        const installedVersion = typeof vuln.InstalledVersion === 'string' ? vuln.InstalledVersion : 'unknown';
+        const fixedVersion = typeof vuln.FixedVersion === 'string' && vuln.FixedVersion.trim().length > 0
+          ? vuln.FixedVersion
+          : undefined;
+        const severity = parseSeverity(typeof vuln.Severity === 'string' ? vuln.Severity : undefined);
+        const cvss = isRecord(vuln.CVSS) ? (vuln.CVSS as Record<string, any>) : undefined;
+        const cvssScore = parseScore(
+          cvss?.nvd?.V3Score
+          ?? cvss?.redhat?.V3Score
+          ?? cvss?.ghsa?.V3Score,
+        );
+        const title = typeof vuln.Title === 'string' ? vuln.Title : '';
+        const description = typeof vuln.Description === 'string' ? vuln.Description : title;
+
+        findings.push({
+          cveId: typeof vuln.VulnerabilityID === 'string' ? vuln.VulnerabilityID : 'UNKNOWN',
+          severity,
+          package: pkgName,
+          version: installedVersion,
+          fixedVersion,
+          description,
+          cvssScore,
+          source: 'trivy' as const,
+          filePath: target,
+        });
+      }
+    }
+
+    return findings;
+  }
+
   const vulnerabilities = Array.isArray(rawOutput.vulnerabilities) ? rawOutput.vulnerabilities : [];
   const components = Array.isArray(rawOutput.components) ? rawOutput.components : [];
 
@@ -303,6 +347,8 @@ export function normalizeTrivyFindings(rawOutput: unknown): NormalizedFinding[] 
   return findings;
 }
 
+export const normalizeSyftFindings = normalizeTrivyFindings;
+
 /**
  * Normalize OWASP Dependency-Check output to Finding array
  * OWASP generates its own JSON format with vulnerability metadata
@@ -310,6 +356,49 @@ export function normalizeTrivyFindings(rawOutput: unknown): NormalizedFinding[] 
 export function normalizeOwaspFindings(rawOutput: unknown): NormalizedFinding[] {
   if (!isRecord(rawOutput)) {
     return [];
+  }
+
+  if (Array.isArray(rawOutput.dependencies)) {
+    const findings: NormalizedFinding[] = [];
+
+    for (const dependency of rawOutput.dependencies) {
+      if (!isRecord(dependency) || !Array.isArray(dependency.vulnerabilities)) {
+        continue;
+      }
+
+      const dependencyLabel =
+        (typeof dependency.fileName === 'string' && dependency.fileName) ||
+        (typeof dependency.filePath === 'string' && dependency.filePath) ||
+        (typeof dependency.packagePath === 'string' && dependency.packagePath) ||
+        'unknown';
+
+      for (const vuln of dependency.vulnerabilities) {
+        if (!isRecord(vuln)) {
+          continue;
+        }
+
+        const cvss = isRecord(vuln.cvssv3) ? (vuln.cvssv3 as Record<string, any>) : undefined;
+        const score = parseScore(
+          cvss?.baseScore
+          ?? vuln.cvssScore
+          ?? (isRecord(vuln.cvssV3) ? (vuln.cvssV3 as Record<string, any>).baseScore : undefined),
+        );
+
+        findings.push({
+          cveId: (vuln.name as string) || (vuln.vulnerabilityName as string) || (vuln.id as string) || 'UNKNOWN',
+          severity: parseSeverity(vuln.severity as string | undefined),
+          package: dependencyLabel,
+          version: (dependency as any).version || (dependency as any).packageVersion || 'unknown',
+          fixedVersion: (vuln.fixedVersion as string | undefined) || undefined,
+          description: (vuln.description as string | undefined) || (vuln.title as string | undefined) || '',
+          cvssScore: score,
+          source: 'owasp' as const,
+          filePath: dependency.filePath as string | undefined,
+        });
+      }
+    }
+
+    return findings;
   }
 
   const findings: NormalizedFinding[] = [];

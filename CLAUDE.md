@@ -11,7 +11,7 @@ VibeScan is a SaaS vulnerability scanning platform with dual-scanner architectur
 ### ✅ Completed Migration
 - **Primary**: Wasp v0.23+ (full-stack, batteries-included)
 - **All Phases**: Complete (1-9) + Wasp migration done
-- **Legacy Code**: Completely removed from git (backup/ excluded)
+- **Legacy Code**: Completely removed from git (Backup/ holds archived notes)
 - **Architecture**: Wasp-only with 20 operations
 
 ### Service Configuration
@@ -72,9 +72,8 @@ VibeScan is a SaaS vulnerability scanning platform with dual-scanner architectur
 │   │   ├── payment/             # Stripe integration
 │   │   ├── shared/              # Shared types and utils
 │   │   └── env.ts              # Environment validation (Zod)
-│   ├── prisma/                  # Database schema
-│   │   ├── schema.prisma        # Prisma schema (13 tables)
-│   │   └── migrations/          # Auto-generated Prisma migrations
+│   ├── schema.prisma             # Prisma schema (13 tables)
+│   └── migrations/               # Auto-generated Prisma migrations
 │   ├── .env.server             # Server env vars (PORT=3555)
 │   ├── .env.local              # Local overrides
 │   ├── tsconfig.json           # TypeScript config
@@ -100,6 +99,7 @@ VibeScan is a SaaS vulnerability scanning platform with dual-scanner architectur
 ├── CONTRIBUTING.md            # Contribution guidelines
 ├── STARTUP.md                  # Local dev setup
 ├── PRODUCTION_CHECKLIST.md    # Pre-deployment checklist (NEW)
+├── docs/EMAIL_SETUP.md        # Mail provider setup
 └── package.json                # Root package.json (shared deps)
 
 ## Key Implementation Details
@@ -113,7 +113,7 @@ VibeScan is a SaaS vulnerability scanning platform with dual-scanner architectur
 - JWT access tokens (15 min) + refresh tokens (30 days)
 
 **Database** (Prisma):
-- Schema in `wasp-app/prisma/schema.prisma` (13 tables)
+- Schema in `wasp-app/schema.prisma` (13 tables)
 - Tables: User, Scan, Finding, Webhook, ApiKey, ScanResult, etc.
 - Migrations auto-generated, no manual SQL
 - Relationships enforce ownership (userId, organizationId)
@@ -390,7 +390,7 @@ query getScan {
 import { getScan } from 'wasp/client/operations'
 const { data: scan } = await getScan({ id: scanId })
 
-// In server (src/server/operations.ts):
+// In server (src/server/operations/):
 export const getScan = (args, context) => {
   // context.user is authenticated user (Wasp injects it)
   return db.scan.findUnique({ where: { id: args.id } })
@@ -426,7 +426,7 @@ export function MyComponent() {
 
 ### Add a Database Model
 
-1. Update `prisma/schema.prisma`:
+1. Update `schema.prisma`:
    ```prisma
    model MyModel {
      id    String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -439,7 +439,7 @@ export function MyComponent() {
 
 ### Add an Operation
 
-1. Create function in `src/server/operations.ts`:
+1. Create function in `src/server/operations/`:
    ```typescript
    export const myQuery = (args, context) => {
      // context.user, context.entities

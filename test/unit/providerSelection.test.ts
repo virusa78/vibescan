@@ -14,17 +14,32 @@ describe('providerSelection', () => {
     process.env.SNYK_TOKEN = trackedEnv.SNYK_TOKEN;
   });
 
-  it('does not include snyk when the feature flag is disabled', () => {
-    delete process.env.VIBESCAN_ENABLE_SNYK_SCANNER;
-    process.env.SNYK_TOKEN = 'snyk-token';
-
-    const executions = resolvePlannedScannerExecutions('enterprise', {
+  it('returns all scanners for free plans when snyk is not ready', () => {
+    const executions = resolvePlannedScannerExecutions('free', {
       userId: 'user-1',
     });
 
     expect(executions.map((execution) => execution.provider)).toEqual([
       'grype',
+      'trivy',
       'codescoring-johnny',
+      'owasp',
+    ]);
+  });
+
+  it('does not include snyk when the feature flag is disabled', () => {
+    delete process.env.VIBESCAN_ENABLE_SNYK_SCANNER;
+    process.env.SNYK_TOKEN = 'snyk-token';
+
+    const executions = resolvePlannedScannerExecutions('pro', {
+      userId: 'user-1',
+    });
+
+    expect(executions.map((execution) => execution.provider)).toEqual([
+      'grype',
+      'trivy',
+      'codescoring-johnny',
+      'owasp',
     ]);
   });
 
@@ -33,7 +48,7 @@ describe('providerSelection', () => {
     delete process.env.VIBESCAN_SNYK_CREDENTIAL_MODE;
     process.env.SNYK_TOKEN = 'snyk-token';
 
-    const executions = resolvePlannedScannerExecutions('enterprise', {
+    const executions = resolvePlannedScannerExecutions('starter', {
       userId: 'user-1',
       snykReadiness: {
         enabled: true,
@@ -49,6 +64,9 @@ describe('providerSelection', () => {
 
     expect(executions.map((execution) => execution.provider)).toEqual([
       'grype',
+      'trivy',
+      'codescoring-johnny',
+      'owasp',
       'snyk',
     ]);
     expect(snykExecution).toMatchObject({

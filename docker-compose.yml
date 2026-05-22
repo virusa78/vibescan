@@ -67,10 +67,13 @@ services:
       - AWS_S3_FORCE_PATH_STYLE=true
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
       - JWT_SECRET=${JWT_SECRET:-dev-only-secret-change-in-production}
+      - OWASP_DATA_DIRECTORY=/home/nodejs/app/wasp-app/.cache/owasp/data
       - NODE_ENV=development
       - PORT=3555
     ports:
       - "3555:3555"
+    volumes:
+      - ./wasp-app/.cache/owasp:/home/nodejs/app/wasp-app/.cache/owasp
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,4 +1,3 @@
-import { createHash } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { getScannerProvider } from '../lib/scanners/scannerProviderRegistry.js';
 import type { ScannerExecutionContext } from '../lib/scanners/providerTypes.js';
@@ -15,10 +14,10 @@ import { persistCycloneDxRolloutSnapshot } from './cyclonedxRolloutGovernance.js
 import { captureCycloneDxArtifacts } from './cyclonedxArtifactStorage.js';
 import { finalizeScanIfReady, handleScannerFailure } from './scanLifecycleService.js';
 import { resolveCredentialsForProvider } from './scannerCredentialResolver.js';
+import { persistNormalizedFindingsForScan } from './findingPersistenceService.js';
 import type {
   ScannerExecutionRequest,
   ScannerExecutionResult,
-  ScannerFindingForPersistence,
 } from './scannerExecutionTypes.js';
 
 type ScanRecord = {
@@ -33,7 +32,7 @@ type ScanRecord = {
 type CycloneDxScannerId = 'free' | 'enterprise';
 
 function toCycloneDxScannerId(providerKind: ScannerExecutionRequest['providerKind']): CycloneDxScannerId {
-  return providerKind === 'grype' ? 'free' : 'enterprise';
+  return providerKind === 'grype' || providerKind === 'trivy' ? 'free' : 'enterprise';
 }
 
 function toNormalizedComponents(value: unknown): NormalizedComponent[] {
@@ -50,6 +49,12 @@ function toGitHubContext(value: unknown): PersistedGitHubScanContext | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as PersistedGitHubScanContext)
     : null;
+}
+
+function formatHealthSnapshot(
+  health: { configured: boolean; healthy: boolean | null; message?: string | null },
+): string {
+  return `configured=${health.configured} healthy=${health.healthy ?? 'null'}${health.message ? ` message="${health.message}"` : ''}`;
 }
 
 async function loadScanForExecution(
@@ -137,92 +142,13 @@ async function hydrateScanArtifacts(
   };
 }
 
-async function persistFindings(
-  input: ScannerExecutionRequest,
-  findings: ScannerFindingForPersistence[],
-): Promise<void> {
-  for (const finding of findings) {
-    // Fingerprint: CVE + package + version + path (normalized)
-    // Using SHA256 hashing for consistent fixed-length unique keys
-    // This MUST match reimportLogic.ts to enable historical tracking
-    const normalizedPath = finding.filePath ? finding.filePath.replace(/^\.\//, '') : '';
-    const fingerprintKey = `${finding.cveId}|${finding.package}|${finding.version}|${normalizedPath}`;
-    const fingerprint = createHash('sha256').update(fingerprintKey).digest('hex');
-
-    // Get existing finding to track which scanners already reported it
-    const existingFinding = await input.prisma.finding.findUnique({
-      where: {
-        scanId_fingerprint: {
-          scanId: input.scanId,
-          fingerprint,
-        },
-      },
-      select: {
-        source: true,
-        detectedData: true,
-      },
-    });
-
-    // Extract list of scanners that already found this CVE
-    const previousReportedBy = existingFinding?.detectedData
-      && typeof existingFinding.detectedData === 'object'
-      && !Array.isArray(existingFinding.detectedData)
-      && Array.isArray((existingFinding.detectedData as Record<string, unknown>).reportedBy)
-      ? ((existingFinding.detectedData as Record<string, unknown>).reportedBy as string[])
-      : existingFinding?.source
-        ? [existingFinding.source]
-        : [];
-
-    // Add current scanner to the list (deduplicated with Set)
-    const reportedBy = Array.from(new Set([...previousReportedBy, input.source])).sort();
-
-    const detectedData = {
-      ...finding,
-      reportedBy, // Track: ['grype', 'snyk'] if both found it
-    };
-
-    // Upsert: if finding exists, update severity/fixedVersion and add scanner to reportedBy
-    // if new finding, create it with current scanner
-    await input.prisma.finding.upsert({
-      where: {
-        scanId_fingerprint: {
-          scanId: input.scanId,
-          fingerprint,
-        },
-      },
-      create: {
-        scanId: input.scanId,
-        userId: input.userId,
-        fingerprint,
-        cveId: finding.cveId,
-        packageName: finding.package,
-        installedVersion: finding.version,
-        severity: finding.severity.toUpperCase(),
-        cvssScore: finding.cvssScore,
-        fixedVersion: finding.fixedVersion,
-        description: finding.description,
-        source: input.source, // Original scanner that created it
-        detectedData: detectedData as unknown as Prisma.InputJsonValue,
-      },
-      update: {
-        // Update severity/fixedVersion from scanner (may improve over time)
-        severity: finding.severity.toUpperCase(),
-        cvssScore: finding.cvssScore,
-        fixedVersion: finding.fixedVersion,
-        description: finding.description,
-        // Keep reportedBy list updated (add new scanner if not already present)
-        detectedData: detectedData as unknown as Prisma.InputJsonValue,
-      },
-    });
-  }
-}
-
 export async function executeScannerForScan(
   input: ScannerExecutionRequest,
 ): Promise<ScannerExecutionResult> {
   const { prisma, scanId, userId, source, providerKind, loggerLabel } = input;
   const scannerId = toCycloneDxScannerId(providerKind);
   const provider = getScannerProvider(providerKind);
+  const isOwaspScan = providerKind === 'owasp';
 
   const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
   if (!isUuid(scanId)) {
@@ -236,9 +162,15 @@ export async function executeScannerForScan(
 
   try {
     console.log(`[${loggerLabel}] Starting scan ${scanId} for user ${userId} via provider ${providerKind}`);
+    if (isOwaspScan) {
+      console.log(`[${loggerLabel}] OWASP execution entered the worker pipeline`);
+    }
 
     const started = await ensureScanStarted(prisma, scanId, loggerLabel);
     if (!started) {
+      if (isOwaspScan) {
+        console.log(`[${loggerLabel}] OWASP skipped before scan start gate`);
+      }
       return {
         status: 'skipped',
         findingsCount: 0,
@@ -256,10 +188,24 @@ export async function executeScannerForScan(
     if (!scan) {
       throw new Error(`Scan ${scanId} not found`);
     }
+    const githubContext = toGitHubContext(scan.githubContext);
+    if (isOwaspScan) {
+      console.log(`[${loggerLabel}] OWASP scan payload loaded`, {
+        inputType: scan.inputType,
+        inputRef: scan.inputRef,
+        hasGithubContext: Boolean(githubContext),
+      });
+    }
 
     const hydrated = await hydrateScanArtifacts(prisma, scan);
     if (hydrated.components.length === 0) {
       console.log(`[${loggerLabel}] No components to scan for ${scanId}`);
+    }
+    if (isOwaspScan) {
+      console.log(`[${loggerLabel}] OWASP hydration complete`, {
+        components: hydrated.components.length,
+        hasSbomRaw: Boolean(hydrated.sbomRaw),
+      });
     }
 
     const componentDecision = decideComponentsWithCycloneDx({
@@ -282,12 +228,24 @@ export async function executeScannerForScan(
         providerKind,
         input.credentialSource,
       ),
+      githubContext,
     };
 
     let providerRun: any;
     const health = await provider.getHealth(executionContext);
+    console.log(
+      `[${loggerLabel}] Provider ${providerKind} health for scan ${scanId}: ${formatHealthSnapshot(health)}`,
+    );
+    if (isOwaspScan) {
+      console.log(`[${loggerLabel}] OWASP health check result`, health);
+    }
     if (!health.configured || health.healthy === false) {
-      console.warn(`[${loggerLabel}] Skipping provider ${providerKind} for scan ${scanId} - Not healthy: ${health.message}`);
+      console.warn(
+        `[${loggerLabel}] Skipping provider ${providerKind} for scan ${scanId} because it is unavailable: ${formatHealthSnapshot(health)}`,
+      );
+      if (isOwaspScan) {
+        console.warn(`[${loggerLabel}] OWASP skipped before execution because health was not ready`);
+      }
       providerRun = {
         provider: provider.kind,
         rawOutput: { 
@@ -301,6 +259,11 @@ export async function executeScannerForScan(
       };
     } else {
       try {
+        if (isOwaspScan) {
+          console.log(`[${loggerLabel}] OWASP execution starting`, {
+            components: scannerComponents.length,
+          });
+        }
         providerRun = scannerComponents.length > 0
           ? await provider.scanComponents(scannerComponents, executionContext)
           : {
@@ -309,8 +272,18 @@ export async function executeScannerForScan(
               findings: [],
               durationMs: 0,
             };
+        if (isOwaspScan) {
+          console.log(`[${loggerLabel}] OWASP execution returned`, {
+            findings: providerRun.findings.length,
+            durationMs: providerRun.durationMs,
+            scannerVersion: providerRun.scannerVersion ?? 'unknown',
+          });
+        }
       } catch (error) {
         console.error(`[${loggerLabel}] Provider ${providerKind} failed for scan ${scanId}:`, error);
+        if (isOwaspScan) {
+          console.error(`[${loggerLabel}] OWASP execution failed before persistence`, error);
+        }
         providerRun = {
           provider: provider.kind,
           rawOutput: { 
@@ -325,7 +298,7 @@ export async function executeScannerForScan(
     }
 
     console.log(
-      `[${loggerLabel}] Provider ${providerKind} completed for scan ${scanId} in ${providerRun.durationMs}ms`,
+      `[${loggerLabel}] Provider ${providerKind} completed for scan ${scanId} in ${providerRun.durationMs}ms with ${providerRun.findings.length} findings`,
     );
 
     const normalizedFindings = providerRun.findings;
@@ -395,6 +368,9 @@ export async function executeScannerForScan(
         durationMs: providerRun.durationMs,
       },
     });
+    if (isOwaspScan) {
+      console.log(`[${loggerLabel}] OWASP scanResult persisted`, { scanResultId: scanResult.id });
+    }
 
     await persistCycloneDxRolloutSnapshot({
       prisma: prisma as any,
@@ -403,9 +379,20 @@ export async function executeScannerForScan(
       ingestionMeta,
     });
 
-    await persistFindings(input, normalizedFindings);
+    await persistNormalizedFindingsForScan({
+      prisma: input.prisma,
+      scanId: input.scanId,
+      userId: input.userId,
+      source: input.source,
+      findings: normalizedFindings,
+    });
 
     console.log(`[${loggerLabel}] Created ${normalizedFindings.length} findings for scan ${scanId}`);
+    if (isOwaspScan) {
+      console.log(`[${loggerLabel}] OWASP normalization/persistence complete`, {
+        findings: normalizedFindings.length,
+      });
+    }
     await finalizeScanIfReady({
       prisma: prisma as any,
       scanId,
@@ -421,6 +408,9 @@ export async function executeScannerForScan(
     };
   } catch (error) {
     console.error(`[${loggerLabel}] Error in scan ${scanId}:`, error);
+    if (isOwaspScan) {
+      console.error(`[${loggerLabel}] OWASP pipeline failed`, error);
+    }
     const errorMessage = error instanceof Error ? error.message : String(error);
     await handleScannerFailure({
       prisma: prisma as any,

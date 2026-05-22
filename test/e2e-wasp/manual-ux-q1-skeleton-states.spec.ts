@@ -27,7 +27,7 @@ test("UX Q1 skeleton states with delayed API", async ({ page }) => {
   await loginUser(page, email, password);
 
   // New Scan page: delay recent scans query to capture list skeleton.
-  await page.route("**/operations/getScans*", async (route) => {
+  await page.route("**/operations/get-scans*", async (route) => {
     await delay(3500);
     await route.continue();
   });
@@ -40,7 +40,7 @@ test("UX Q1 skeleton states with delayed API", async ({ page }) => {
   const scanId = await submitScanFromForm(page, "https://github.com/lodash/lodash", "github");
 
   // Scan Details page: delay operation query to capture details skeleton.
-  await page.route("**/operations/getScanById*", async (route) => {
+  await page.route("**/operations/get-scan-by-id*", async (route) => {
     await delay(3500);
     await route.continue();
   });

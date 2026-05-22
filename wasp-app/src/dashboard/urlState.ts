@@ -1,8 +1,10 @@
 export type DashboardSortField = 'submitted' | 'target' | 'type' | 'status' | 'findings';
 export type DashboardSortDirection = 'asc' | 'desc';
 export type DashboardStatus = 'pending' | 'scanning' | 'done' | 'error' | 'cancelled';
+export type DashboardSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 const STATUS_VALUES: DashboardStatus[] = ['pending', 'scanning', 'done', 'error', 'cancelled'];
+const SEVERITY_VALUES: DashboardSeverity[] = ['critical', 'high', 'medium', 'low', 'info'];
 const SORT_VALUES: DashboardSortField[] = ['submitted', 'target', 'type', 'status', 'findings'];
 const DIRECTION_VALUES: DashboardSortDirection[] = ['asc', 'desc'];
 
@@ -13,6 +15,7 @@ export type ParsedDashboardSearch = {
   sortField: DashboardSortField;
   sortDirection: DashboardSortDirection;
   statuses: DashboardStatus[];
+  severities: DashboardSeverity[];
   query: string;
   isValid: boolean;
   normalizedSearch: string;
@@ -33,6 +36,7 @@ export function buildDashboardSearch(
   sortField: DashboardSortField,
   sortDirection: DashboardSortDirection,
   statuses: DashboardStatus[],
+  severities: DashboardSeverity[],
   query: string,
 ): string {
   const params = new URLSearchParams();
@@ -41,6 +45,10 @@ export function buildDashboardSearch(
 
   if (statuses.length > 0) {
     params.set('status', statuses.join(','));
+  }
+
+  if (severities.length > 0) {
+    params.set('severity', severities.join(','));
   }
 
   const trimmedQuery = query.trim();
@@ -58,6 +66,7 @@ export function parseDashboardSearch(search: string): ParsedDashboardSearch {
   const rawSort = (params.get('sort') ?? '').trim().toLowerCase();
   const rawDir = (params.get('dir') ?? '').trim().toLowerCase();
   const rawStatusCsv = (params.get('status') ?? '').trim();
+  const rawSeverityCsv = (params.get('severity') ?? '').trim();
   const rawQuery = (params.get('q') ?? '').trim();
 
   const sortField = SORT_VALUES.includes(rawSort as DashboardSortField)
@@ -76,11 +85,20 @@ export function parseDashboardSearch(search: string): ParsedDashboardSearch {
     ),
   );
 
-  const hasUnknownKeys = Array.from(params.keys()).some(
-    (key) => key !== 'sort' && key !== 'dir' && key !== 'status' && key !== 'q',
+  const severities = Array.from(
+    new Set(
+      rawSeverityCsv
+        .split(',')
+        .map((value) => value.trim().toLowerCase())
+        .filter((value): value is DashboardSeverity => SEVERITY_VALUES.includes(value as DashboardSeverity)),
+    ),
   );
 
-  const normalizedSearch = buildDashboardSearch(sortField, sortDirection, statuses, rawQuery);
+  const hasUnknownKeys = Array.from(params.keys()).some(
+    (key) => key !== 'sort' && key !== 'dir' && key !== 'status' && key !== 'severity' && key !== 'q',
+  );
+
+  const normalizedSearch = buildDashboardSearch(sortField, sortDirection, statuses, severities, rawQuery);
   const normalizedRaw = search ? (search.startsWith('?') ? search : `?${search}`) : '';
   const isValid = !hasUnknownKeys && normalizedRaw === normalizedSearch;
 
@@ -88,6 +106,7 @@ export function parseDashboardSearch(search: string): ParsedDashboardSearch {
     sortField,
     sortDirection,
     statuses,
+    severities,
     query: rawQuery,
     isValid,
     normalizedSearch,

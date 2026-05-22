@@ -12,6 +12,7 @@ export interface ScanPollingState {
     id: string;
     status: string;
     planAtSubmission: string;
+    plannedSources: string[];
     createdAt: Date;
     completedAt: Date | null;
     errorMessage: string | null;
@@ -84,6 +85,7 @@ export function useScanPolling(scanId: string) {
           id: scan.id,
           status: scan.status,
           planAtSubmission: scan.planAtSubmission,
+          plannedSources: Array.isArray(scan.plannedSources) ? scan.plannedSources : [],
           createdAt: new Date(scan.createdAt),
           completedAt: scan.completedAt ? new Date(scan.completedAt) : null,
           errorMessage: scan.errorMessage || null,

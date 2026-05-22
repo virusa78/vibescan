@@ -1,7 +1,8 @@
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
 import type { NormalizedFinding } from '../../operations/scans/normalizeFindings.js';
+import type { PersistedGitHubScanContext } from '../../services/githubAppService.js';
 
-export type ScannerProviderKind = 'grype' | 'codescoring-johnny' | 'snyk' | 'owasp' | 'trivy' | 'dast';
+export type ScannerProviderKind = 'grype' | 'codescoring-johnny' | 'snyk' | 'owasp' | 'trivy';
 
 export type ScannerCredentialSource =
   | { mode: 'environment' }
@@ -19,10 +20,11 @@ export type ScannerResolvedCredentials = {
 export type ScannerExecutionContext = {
   scanId: string;
   userId: string;
-  inputType: 'source_zip' | 'sbom_upload' | 'github_app' | 'dast_upload';
+  inputType: 'source_zip' | 'sbom_upload' | 'github_app';
   inputRef: string;
   credentialSource?: ScannerCredentialSource;
   resolvedCredentials?: ScannerResolvedCredentials;
+  githubContext?: PersistedGitHubScanContext | null;
 };
 
 export type ScannerHealthState = {

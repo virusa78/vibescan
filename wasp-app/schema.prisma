@@ -133,6 +133,7 @@ model User {
   createdWorkspaces           Workspace[]                  @relation("WorkspaceCreatedBy")
   activeWorkspace             Workspace?                   @relation("ActiveWorkspace", fields: [activeWorkspaceId], references: [id], onDelete: SetNull)
   quotaLedger                 QuotaLedger[]
+  scannerUsageLedger          ScannerUsageLedger[]
   projectNotificationSettings ProjectNotificationSetting[]
 
   @@index([activeWorkspaceId])
@@ -228,6 +229,7 @@ model Workspace {
   members                     WorkspaceMembership[]
   activeUsers                 User[]                       @relation("ActiveWorkspace")
   scans                       Scan[]
+  scannerUsageLedger          ScannerUsageLedger[]
   apiKeys                     ApiKey[]
   webhooks                    Webhook[]
   projectNotificationSettings ProjectNotificationSetting[]
@@ -350,6 +352,7 @@ model Scan {
   scanResults             ScanResult[]
   findings                Finding[]
   scanDeltas              ScanDelta[]
+  scannerUsageLedger      ScannerUsageLedger[]
   aiFixPrompts            AiFixPrompt[]
   remediationPromptUsages RemediationPromptUsage[]
   securityScores          SecurityScore[]
@@ -708,6 +711,29 @@ model QuotaLedger {
   @@index([workspaceId])
   @@index([createdAt])
   @@map("quota_ledger")
+}
+
+// Ledger for scanner-specific monthly usage and tier-based limits
+model ScannerUsageLedger {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  userId      String @map("user_id") @db.Uuid
+  workspaceId String? @map("workspace_id") @db.Uuid
+  scanId      String @map("scan_id") @db.Uuid
+  provider    String
+  planTier    String @map("plan_tier")
+  periodKey   String @map("period_key")
+  limitApplied Int?  @map("limit_applied")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  scan      Scan      @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider, periodKey, scanId], map: "scanner_usage_ledger_unique")
+  @@index([userId, provider, periodKey], map: "scanner_usage_ledger_usage_idx")
+  @@index([workspaceId], map: "scanner_usage_ledger_workspace_id_idx")
+  @@map("scanner_usage_ledger")
 }
 
 model CycloneDxRolloutSnapshot {

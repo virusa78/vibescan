@@ -334,8 +334,8 @@ export function ScanTable({
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto pb-1">
+            <table className="min-w-[980px] w-full text-sm">
               <thead>
                 <tr className="border-b border-border/30">
                   <th className="py-3 px-4">
@@ -346,7 +346,7 @@ export function ScanTable({
                   <th className="text-left py-3 px-4 text-muted-foreground font-medium">STATUS</th>
                   <th className="text-left py-3 px-4 text-muted-foreground font-medium">FINDINGS</th>
                   <th className="text-left py-3 px-4 text-muted-foreground font-medium">SUBMITTED</th>
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">ACTIONS</th>
+                  <th className="text-left py-3 px-4 text-muted-foreground font-medium min-w-[14rem]">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -403,7 +403,7 @@ export function ScanTable({
                       </th>
                     );
                   })}
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">ACTIONS</th>
+                  <th className="text-left py-3 px-4 text-muted-foreground font-medium min-w-[12rem]">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -418,6 +418,7 @@ export function ScanTable({
                   return (
                     <tr
                       key={scan.id}
+                      data-testid="scan-row"
                       className={`group border-b border-border/20 transition-colors cursor-pointer ${
                         isActive ? 'bg-accent/15' : 'hover:bg-accent/5'
                       }`}
@@ -447,6 +448,7 @@ export function ScanTable({
                       </td>
                       <td className="py-3 px-4">
                         <span
+                          data-testid="scan-status"
                           className={`text-xs px-2 py-1 border rounded font-medium ${statusBadge.color} ${statusBadge.border}`}
                         >
                           {getReadableStatusLabel(scan.status)}
@@ -456,11 +458,11 @@ export function ScanTable({
                         <span className="text-foreground font-medium">{scan.vulnerability_count}</span>
                       </td>
                       <td className="py-3 px-4 text-muted-foreground text-xs">{relativeTime}</td>
-                      <td className="py-3 px-4">
-                        <div className="flex flex-wrap items-center gap-1 opacity-90 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity">
+                      <td className="py-3 px-4 min-w-[12rem]">
+                        <div className="flex flex-wrap items-center gap-1 opacity-90 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                           <button
                             type="button"
-                            className="text-xs px-2 py-1 text-primary hover:bg-primary/10 rounded transition"
+                            className="rounded px-2 py-1 text-[11px] text-primary transition hover:bg-primary/10"
                             onClick={(event) => {
                               event.stopPropagation();
                               handleRowOpen(scan.id);
@@ -471,7 +473,7 @@ export function ScanTable({
                           </button>
                           <button
                             type="button"
-                            className="text-xs px-2 py-1 text-amber-500 hover:bg-amber-500/10 rounded transition disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded px-2 py-1 text-[11px] text-amber-500 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={!canCancel}
                             title={!canCancel ? 'Only pending/scanning scans can be cancelled' : 'Cancel scan'}
                             onClick={(event) => {
@@ -485,7 +487,7 @@ export function ScanTable({
                           </button>
                           <button
                             type="button"
-                            className="text-xs px-2 py-1 text-foreground hover:bg-accent rounded transition disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded px-2 py-1 text-[11px] text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={!canRerun}
                             title={!canRerun ? 'Missing input reference/type for re-run' : 'Re-run scan'}
                             onClick={(event) => {
@@ -499,7 +501,7 @@ export function ScanTable({
                           </button>
                           <button
                             type="button"
-                            className="text-xs px-2 py-1 text-foreground hover:bg-accent rounded transition"
+                            className="rounded px-2 py-1 text-[11px] text-foreground transition hover:bg-accent"
                             onClick={(event) => {
                               event.stopPropagation();
                               void onCopyScanId(scan.id);

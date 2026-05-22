@@ -6,7 +6,7 @@ import crypto from 'crypto';
 const prisma = new PrismaClient();
 
 const NUM_MONTHS = Number(process.env.DEMO_MONTHS || 6);
-const RESET_DEMO_DATA = (process.env.RESET_DEMO_DATA || 'true') === 'true';
+const RESET_DEMO_DATA = (process.env.RESET_DEMO_DATA || 'false') === 'true';
 const CVE_PER_SCAN_MIN = 5;
 const CVE_PER_SCAN_MAX = 20;
 
@@ -117,7 +117,6 @@ function generateVulns(n: number) {
 
 function computeDelta(freeVulns: ReturnType<typeof generateVulns>, entVulns: ReturnType<typeof generateVulns>) {
   const freeIds = new Set(freeVulns.map((v) => v.cve_id));
-  const entIds = new Set(entVulns.map((v) => v.cve_id));
   const enterpriseOnly = entVulns.filter((v) => !freeIds.has(v.cve_id));
   const deltaBySeverity: Record<string, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
   for (const v of enterpriseOnly) {

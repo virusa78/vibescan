@@ -27,6 +27,7 @@ import { toast } from '../client/hooks/use-toast';
 import { isEditableTarget } from '../client/utils/keyboard';
 import { buildPatchSnippet } from './patchSnippet';
 import { resolveCveId, buildGitHubAdvisoryUrl, buildNvdUrl, buildPackageUrl } from './linkHelpers';
+import { ScannerBadges } from './ScannerBadges';
 
 type SeveritySummary = {
   critical?: number;
@@ -616,17 +617,9 @@ export default function ReportsPage() {
                   critical: 'border-l-red-600 bg-red-500/5',
                   high: 'border-l-orange-500 bg-orange-500/5',
                   medium: 'border-l-amber-500 bg-amber-500/5',
-                  low: 'border-l-blue-500 bg-blue-500/5',
+                 low: 'border-l-blue-500 bg-blue-500/5',
                   info: 'border-l-slate-400 bg-slate-500/5',
                   unknown: 'border-l-slate-300',
-                };
-
-                const scannerColors: Record<string, string> = {
-                  grype: 'bg-purple-100 text-purple-700 border-purple-200',
-                  trivy: 'bg-blue-100 text-blue-700 border-blue-200',
-                  snyk: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-                  codescoring_johnny: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-                  owasp: 'bg-amber-100 text-amber-700 border-amber-200',
                 };
 
                 return (
@@ -655,19 +648,7 @@ export default function ReportsPage() {
                             'Unknown CVE'
                           )}
                         </p>
-                        {reportedBy.length > 0 && (
-                          <div className="flex items-center gap-1.5 ml-2">
-                            {reportedBy.map((src) => (
-                              <span
-                                key={src}
-                                title={src}
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase tracking-tighter ${scannerColors[src] || 'bg-slate-100 text-slate-600 border-slate-200'}`}
-                              >
-                                {src === 'codescoring_johnny' ? 'CS' : src.charAt(0).toUpperCase()}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                        <ScannerBadges cveId={cve} reportedBy={reportedBy} />
                       </div>
                       <span className="text-xs px-2 py-1 rounded bg-accent/60 text-foreground font-semibold">
                         {severity.toUpperCase()}

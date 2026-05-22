@@ -14,6 +14,11 @@ This document describes the current deployment model without pretending the loca
   - The container starts the built server with `node .wasp/build/server`
   - Default container port is `3000`
 
+## Environment
+
+- Keep app env examples in sync with `wasp-app/.env.server.example`
+- Add mail provider vars from `docs/EMAIL_SETUP.md` before enabling production email
+
 ## Docker Images
 
 - API image: root `Dockerfile`

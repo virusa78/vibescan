@@ -20,6 +20,7 @@ import {
   type DashboardSortDirection,
   type DashboardSortField,
   type DashboardStatus,
+  type DashboardSeverity,
   buildDashboardSearch,
   normalizeStatusValue,
   parseDashboardSearch,
@@ -88,6 +89,7 @@ interface SavedView {
   sortField: DashboardSortField;
   sortDirection: DashboardSortDirection;
   statuses: DashboardStatus[];
+  severities?: DashboardSeverity[];
   query: string;
 }
 
@@ -150,7 +152,7 @@ export default function DashboardPage() {
 
   const [scans, setScans] = useState<Scan[]>([]);
   const { isLoading, error, run } = useAsyncState(true);
-  const [timeRange, setTimeRange] = useState<DashboardTimeRange>('30d');
+  const [timeRange, setTimeRange] = useState<DashboardTimeRange>('7d');
   const [severity, setSeverity] = useState<SeverityBreakdown>({
     critical: 0,
     high: 0,
@@ -209,6 +211,7 @@ export default function DashboardPage() {
         parsedSearch.sortField,
         parsedSearch.sortDirection,
         parsedSearch.statuses,
+        parsedSearch.severities,
         nextQuery,
       );
 
@@ -223,6 +226,7 @@ export default function DashboardPage() {
     parsedSearch.sortDirection,
     parsedSearch.sortField,
     parsedSearch.statuses,
+    parsedSearch.severities,
     searchInputValue,
   ]);
 
@@ -252,6 +256,7 @@ export default function DashboardPage() {
           limit: 10,
           sort: [{ field: parsedSearch.sortField, direction: parsedSearch.sortDirection }],
           status: parsedSearch.statuses,
+          severity: parsedSearch.severities,
           ...(parsedSearch.query ? { q: parsedSearch.query } : {}),
         });
 
@@ -295,7 +300,7 @@ export default function DashboardPage() {
         },
       },
     );
-  }, [parsedSearch.query, parsedSearch.sortDirection, parsedSearch.sortField, parsedSearch.statuses, refreshTick, run, timeRange]);
+  }, [parsedSearch.query, parsedSearch.sortDirection, parsedSearch.sortField, parsedSearch.statuses, parsedSearch.severities, refreshTick, run, timeRange]);
 
   const metrics = useMemo(() => {
     const completed = scans.filter((scan) => scan.status === 'done');
@@ -376,18 +381,18 @@ export default function DashboardPage() {
   // Trends: bucket recent scans by day and count findings
   const [categories, scansSeries, findingsSeries] = useMemo(() => {
     const now = new Date();
-    const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : Math.max(90, 30);
-    const end = now;
-    const start = timeRange === 'all' ? new Date(0) : new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const rangeDays = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const start = new Date(end.getTime() - (rangeDays - 1) * 24 * 60 * 60 * 1000);
 
     const buckets: Record<string, { scans: number; findings: number }> = {};
     const dayList: string[] = [];
     const cur = new Date(start);
-    while (cur <= end) {
+    while (cur.getTime() <= end.getTime()) {
       const key = cur.toISOString().slice(0, 10);
       buckets[key] = { scans: 0, findings: 0 };
       dayList.push(key);
-      cur.setDate(cur.getDate() + 1);
+      cur.setUTCDate(cur.getUTCDate() + 1);
     }
 
     scans.forEach(s => {
@@ -441,8 +446,8 @@ export default function DashboardPage() {
   ];
 
   const visibleTrendBuckets = useMemo(
-    () => (trends?.buckets ?? []).slice(-12),
-    [trends],
+    () => (trends?.buckets ?? []).slice(timeRange === '7d' ? -7 : -12),
+    [timeRange, trends],
   );
 
   const maxTrendValue = useMemo(() => {
@@ -456,7 +461,7 @@ export default function DashboardPage() {
     // Shift+click still toggles direction like normal click
     const nextDirection: DashboardSortDirection =
       field === parsedSearch.sortField && parsedSearch.sortDirection === 'asc' ? 'desc' : 'asc';
-    const nextSearch = buildDashboardSearch(field, nextDirection, parsedSearch.statuses, parsedSearch.query);
+    const nextSearch = buildDashboardSearch(field, nextDirection, parsedSearch.statuses, parsedSearch.severities, parsedSearch.query);
     navigate({ pathname: location.pathname, search: nextSearch }, { replace: false });
   };
 
@@ -465,7 +470,16 @@ export default function DashboardPage() {
       ? parsedSearch.statuses.filter((value) => value !== status)
       : [...parsedSearch.statuses, status];
 
-    const nextSearch = buildDashboardSearch(parsedSearch.sortField, parsedSearch.sortDirection, nextStatuses, parsedSearch.query);
+    const nextSearch = buildDashboardSearch(parsedSearch.sortField, parsedSearch.sortDirection, nextStatuses, parsedSearch.severities, parsedSearch.query);
+    navigate({ pathname: location.pathname, search: nextSearch }, { replace: false });
+  };
+
+  const handleSeverityClick = (severity: DashboardSeverity) => {
+    const nextSeverities = parsedSearch.severities.includes(severity)
+      ? parsedSearch.severities.filter((value) => value !== severity)
+      : [severity]; // Replace with only this severity
+
+    const nextSearch = buildDashboardSearch(parsedSearch.sortField, parsedSearch.sortDirection, parsedSearch.statuses, nextSeverities, parsedSearch.query);
     navigate({ pathname: location.pathname, search: nextSearch }, { replace: false });
   };
 
@@ -607,6 +621,7 @@ export default function DashboardPage() {
       selectedView.sortField,
       selectedView.sortDirection,
       selectedView.statuses,
+      selectedView.severities ?? [],
       selectedView.query,
     );
     navigate({ pathname: location.pathname, search: nextSearch }, { replace: false });
@@ -657,12 +672,14 @@ export default function DashboardPage() {
 
   return (
     <div className="p-8 lg:p-10">
-      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-foreground text-4xl font-bold tracking-tight mb-2">Dashboard</h1>
-          <p className="text-muted-foreground">Monitor your vulnerability scans and security metrics</p>
+      <div className="mb-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <div className="max-w-2xl">
+          <h1 className="text-foreground mb-2 text-3xl font-bold tracking-tight sm:text-4xl">Dashboard</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">
+            Monitor your vulnerability scans and security metrics
+          </p>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-md border border-border/60 bg-card/40 p-1">
+        <div className="inline-flex w-full flex-wrap items-center gap-2 rounded-md border border-border/60 bg-card/40 p-1 sm:w-auto">
           {(['7d', '30d', 'all'] as DashboardTimeRange[]).map((range) => (
             <button
               key={range}
@@ -781,7 +798,7 @@ export default function DashboardPage() {
             </div>
             <TrendChart categories={categories} series={[{ name: 'Scans', data: scansSeries }, { name: 'Findings', data: findingsSeries }]} loading={isLoading} />
             <div>
-              <SeverityChart data={severity} loading={isLoading} />
+              <SeverityChart data={severity} loading={isLoading} onSeverityClick={handleSeverityClick} />
             </div>
           </div>
         </div>

@@ -2,18 +2,19 @@ import {
   type Prisma,
   type PrismaClient,
   type ScanResult,
-  type ScanSource,
 } from '@prisma/client';
 import { emitWebhookEvent, buildWebhookPayload } from './webhookEventEmitter.js';
-import { resolveExpectedScanSources } from '../lib/scanners/providerSelection.js';
+import { resolveExpectedScanSources, type ScannerResultSource } from '../lib/scanners/providerSelection.js';
 import { syncGitHubCheckRunForScan } from './githubCheckRunService.js';
+
+type LifecycleScanSource = ScannerResultSource | 'dast';
 
 type ScanWithResults = {
   id: string;
   status: string;
   userId: string;
   planAtSubmission: string;
-  plannedSources?: ScanSource[] | null;
+  plannedSources?: LifecycleScanSource[] | null;
   scanResults: Array<Pick<ScanResult, 'source'>>;
 };
 
@@ -31,16 +32,16 @@ type HandleScannerFailureInput = {
   prisma: ScanPrismaClient;
   scanId: string;
   userId: string;
-  scannerId: ScanSource;
+  scannerId: LifecycleScanSource;
   errorMessage: string;
   loggerLabel: string;
 };
 
-function getCompletedScanners(scan: ScanWithResults): ScanSource[] {
-  return scan.scanResults.map((result) => result.source as ScanSource);
+function getCompletedScanners(scan: ScanWithResults): LifecycleScanSource[] {
+  return scan.scanResults.map((result) => result.source as LifecycleScanSource);
 }
 
-function getPlannedSources(scan: ScanWithResults): ScanSource[] | null {
+function getPlannedSources(scan: ScanWithResults): LifecycleScanSource[] | null {
   return Array.isArray(scan.plannedSources) && scan.plannedSources.length > 0
     ? scan.plannedSources
     : null;
@@ -48,7 +49,7 @@ function getPlannedSources(scan: ScanWithResults): ScanSource[] | null {
 
 function buildFailureUpdate(
   scan: ScanWithResults,
-  scannerId: ScanSource,
+  scannerId: LifecycleScanSource,
   errorMessage: string,
 ): Prisma.ScanUpdateInput | null {
   const completedAt = new Date();

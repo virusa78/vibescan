@@ -3,6 +3,10 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WASP_DIR="$ROOT_DIR/wasp-app"
+LOG_DIR="$ROOT_DIR/.logs"
+SCANNER_TOOLS_BIN="$ROOT_DIR/.tools/bin"
+DEV_LOG_FILE="$LOG_DIR/wasp-dev.log"
+DEV_LOG_MAX_BYTES=$((200 * 1024))
 
 usage() {
   cat <<'EOF'
@@ -73,6 +77,102 @@ cleanup_dev_ports() {
   done
 }
 
+ensure_log_dir() {
+  mkdir -p "$LOG_DIR"
+}
+
+archive_dev_log() {
+  local reason="$1"
+  local archive_date="${2:-$(date +%F)}"
+  local timestamp
+  timestamp="$(date +%Y%m%d-%H%M%S)"
+  local archived_file="$LOG_DIR/wasp-dev-${archive_date}-${reason}-${timestamp}.log"
+
+  if [[ -f "$DEV_LOG_FILE" && -s "$DEV_LOG_FILE" ]]; then
+    mv "$DEV_LOG_FILE" "$archived_file"
+  fi
+}
+
+current_log_size() {
+  if [[ -f "$DEV_LOG_FILE" ]]; then
+    wc -c < "$DEV_LOG_FILE" 2>/dev/null || echo 0
+  else
+    echo 0
+  fi
+}
+
+rotate_dev_log_if_needed() {
+  ensure_log_dir
+
+  local current_date
+  current_date="$(date +%F)"
+  local marker_file="$LOG_DIR/wasp-dev.current-date"
+  local previous_date=""
+
+  if [[ -f "$marker_file" ]]; then
+    previous_date="$(cat "$marker_file" 2>/dev/null || true)"
+  fi
+
+  if [[ -f "$DEV_LOG_FILE" && -n "$previous_date" && "$previous_date" != "$current_date" ]]; then
+    archive_dev_log "day" "$previous_date"
+  fi
+
+  printf '%s' "$current_date" > "$marker_file"
+  if (( $(current_log_size) > DEV_LOG_MAX_BYTES )); then
+    archive_dev_log "size"
+  fi
+}
+
+write_rotating_dev_log() {
+  ensure_log_dir
+  local marker_file="$LOG_DIR/wasp-dev.current-date"
+  local current_date=""
+  local line
+  local announced_wasp=0
+  local announced_vite=0
+  local announced_backend=0
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    current_date="$(date +%F)"
+    local previous_date=""
+    if [[ -f "$marker_file" ]]; then
+      previous_date="$(cat "$marker_file" 2>/dev/null || true)"
+    fi
+
+    if [[ "$previous_date" != "$current_date" ]]; then
+      printf '%s' "$current_date" > "$marker_file"
+      if [[ -n "$previous_date" ]]; then
+        archive_dev_log "day" "$previous_date"
+      fi
+    fi
+
+    local line_size
+    line_size=${#line}
+    local current_size
+    current_size="$(current_log_size)"
+    if (( current_size + line_size + 1 > DEV_LOG_MAX_BYTES )); then
+      archive_dev_log "size"
+    fi
+
+    printf '%s\n' "$line" >> "$DEV_LOG_FILE"
+
+    if (( announced_wasp == 0 )) && [[ "$line" == *"🐝 --- Listening for file changes"* ]]; then
+      echo "[run.sh] WASP запущен"
+      announced_wasp=1
+    fi
+
+    if (( announced_vite == 0 )) && [[ "$line" == *"[ Client ]   ➜  Local:"* ]]; then
+      echo "[run.sh] Vite запущен: http://localhost:3000"
+      announced_vite=1
+    fi
+
+    if (( announced_backend == 0 )) && [[ "$line" == *"auth initialized"* ]]; then
+      echo "[run.sh] Backend запущен: http://127.0.0.1:${PORT:-3555}"
+      announced_backend=1
+    fi
+  done
+}
+
 start_infra() {
   docker compose up -d postgres redis minio
   wait_for_container_health vibescan-postgres 120
@@ -101,6 +201,8 @@ start_wasp() {
   local server_ip
   server_ip="$(detect_server_ip)"
 
+  export PATH="$SCANNER_TOOLS_BIN:$PATH"
+  export OWASP_DATA_DIRECTORY="${OWASP_DATA_DIRECTORY:-$WASP_DIR/.cache/owasp/data}"
   export PORT="${PORT:-3555}"
   export WASP_SERVER_URL="${WASP_SERVER_URL:-http://${server_ip}:3555}"
   export WASP_WEB_CLIENT_URL="${WASP_WEB_CLIENT_URL:-http://${server_ip}:3000}"
@@ -109,11 +211,16 @@ start_wasp() {
   export VITE_API_PROXY_TARGET="${VITE_API_PROXY_TARGET:-http://${server_ip}:3555}"
   export SKIP_EMAIL_VERIFICATION_IN_DEV="${SKIP_EMAIL_VERIFICATION_IN_DEV:-true}"
 
+  rotate_dev_log_if_needed
+
+  echo "[run.sh] Запускаю Wasp. Подробные логи: $DEV_LOG_FILE"
+  echo "[run.sh] Ожидание статусов запуска (WASP / Vite / Backend)..."
+
   if [[ ! -f .wasp/out/db/schema.prisma ]]; then
     wasp clean
   fi
 
-  exec wasp start
+  wasp start 2>&1 | write_rotating_dev_log
 }
 
 main() {

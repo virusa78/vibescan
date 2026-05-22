@@ -225,7 +225,7 @@ export default function App() {
     };
 
     add('Navigate', 'Dashboard', '/dashboard', 'home metrics scans', () => navigate(routes.DashboardRoute.to));
-    add('Navigate', 'New Scan', '/new-scan', 'scan submit', () => navigate(routes.NewScanRoute.to));
+    add('Navigate', 'Scans', '/new-scan', 'scan submit', () => navigate(routes.NewScanRoute.to));
     add('Navigate', 'Webhooks', '/webhooks', 'events delivery', () => navigate(routes.WebhooksRoute.to));
     add('Navigate', 'API Keys', '/api-keys', 'tokens auth', () => navigate(routes.ApiKeysRoute.to));
     add('Navigate', 'Settings', '/settings', 'preferences account', () => navigate(routes.SettingsRoute.to));
@@ -248,7 +248,7 @@ export default function App() {
       });
     }
 
-    add('Actions', 'New scan', 'Open submission form', 'create scan', () => navigate(routes.NewScanRoute.to));
+    add('Actions', 'Create Scan', 'Open submission form', 'create scan', () => navigate(routes.NewScanRoute.to));
     add('Actions', 'Toggle theme', 'Light / Dark', 'theme appearance', toggleTheme);
     add('Actions', 'Log out', 'End current session', 'logout sign out', async () => logout());
     add('Actions', 'Create API key', 'Generate and copy once', 'token key', async () => {

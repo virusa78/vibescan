@@ -3,6 +3,7 @@ import {
   ChevronRight,
   LogIn,
   LogOut,
+  UserCircle2,
 } from "lucide-react";
 import { useMemo } from "react";
 import { useLocation } from "react-router";
@@ -151,8 +152,9 @@ export function SidebarNav({
               </Avatar>
               {!collapsed && (
                 <div className="min-w-0">
-                  <div className="text-foreground truncate text-sm font-medium">
-                    {user.username}
+                  <div className="text-foreground flex items-center gap-1 truncate text-sm font-medium">
+                    <UserCircle2 className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{user.username}</span>
                   </div>
                 </div>
               )}

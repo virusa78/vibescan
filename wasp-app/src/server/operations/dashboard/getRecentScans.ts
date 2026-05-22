@@ -24,9 +24,12 @@ export interface SortDescriptor {
   direction: ScanSortDirection;
 }
 
+const severitySchema = z.enum(['critical', 'high', 'medium', 'low', 'info']);
+
 const getRecentScansInputSchema = z.object({
   limit: z.number().min(1).max(50).default(10),
   status: z.array(scanStatusSchema).default([]),
+  severity: z.array(severitySchema).default([]),
   q: z.string().trim().min(1).max(120).optional(),
   sort: z.array(z.object({
     field: sortFieldSchema,
@@ -104,6 +107,7 @@ export async function getRecentScans(
   const filteredWhere = {
     ...baseWhere,
     ...(args.status.length > 0 ? { status: { in: args.status } } : {}),
+    ...(args.severity.length > 0 ? { findings: { some: { severity: { in: args.severity } } } } : {}),
   };
 
   const orderBy = buildOrderBy(args.sort);

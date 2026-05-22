@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import {
   registerUser,
   generateTestEmail,
+  submitScanFromForm,
   waitForScanCompletion,
   viewScanDetails,
   verifyScanPaywall,
@@ -51,36 +52,12 @@ test("GitHub URL E2E - Register with pro plan and scan GitHub repo", async ({
     
     // Test 2.3: Initiate GitHub URL scan
     console.log("🔗 Starting GitHub URL scan");
-    const newScanButton = page
-      .locator('button:has-text("New Scan"), button:has-text("Start Scan")')
-      .first();
-    await newScanButton.click();
-    
-    // Wait for scan form
-    await page.waitForSelector('[data-testid="scan-form"], form', {
-      timeout: 5000,
-    });
-    
-    // Select GitHub URL tab
-    const githubTab = page.locator(
-      'button:has-text("GitHub"), [role="tab"]:has-text("GitHub")'
-    );
-    if (await githubTab.isVisible()) {
-      await githubTab.click();
-      await page.waitForTimeout(500);
-    }
-    
-    // Enter GitHub URL
-    const urlInput = page.locator('input[placeholder*="github"], input[type="url"]').first();
-    await urlInput.fill(githubUrl);
+    await submitScanFromForm(page, githubUrl, "github");
     console.log(`✓ Entered GitHub URL: ${githubUrl}`);
-    
-    // Submit scan
-    const submitButton = page
-      .locator('button:has-text("Submit"), button:has-text("Start Scan")')
-      .last();
-    await submitButton.click();
     console.log("✓ GitHub URL scan submitted");
+
+    await page.goto("/dashboard");
+    await page.waitForLoadState("networkidle");
     
     // Test 2.4: Wait for scan completion with timeout
     console.log("⏳ Waiting for GitHub repo scan to complete...");
@@ -157,34 +134,11 @@ test("GitHub URL - Validation of invalid URLs", async ({ page }) => {
     await page.goto("/dashboard");
     await page.waitForLoadState("networkidle");
     
-    // Click new scan
-    const newScanButton = page
-      .locator('button:has-text("New Scan"), button:has-text("Start Scan")')
-      .first();
-    await newScanButton.click();
-    
-    // Wait for form
-    await page.waitForSelector('[data-testid="scan-form"], form', {
-      timeout: 5000,
-    });
-    
-    // Select GitHub tab
-    const githubTab = page.locator(
-      'button:has-text("GitHub"), [role="tab"]:has-text("GitHub")'
-    );
-    if (await githubTab.isVisible()) {
-      await githubTab.click();
-    }
-    
-    // Try invalid URL
-    const urlInput = page.locator('input[placeholder*="github"], input[type="url"]').first();
-    await urlInput.fill("not-a-valid-url");
-    
-    // Try to submit (should fail)
-    const submitButton = page
-      .locator('button:has-text("Submit"), button:has-text("Start Scan")')
-      .last();
-    await submitButton.click();
+    await page.goto("/new-scan");
+    await page.waitForLoadState("domcontentloaded");
+    await page.getByRole("button", { name: /github repository/i }).click();
+    await page.getByLabel("Input Reference").fill("not-a-valid-url");
+    await page.getByRole("button", { name: /start scan/i }).click();
     
     // Expect error message or validation
     const errorMessage = page.locator('[data-testid="error-message"], .error, .text-red');

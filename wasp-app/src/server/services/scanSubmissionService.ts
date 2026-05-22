@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma, ScanSource } from '@prisma/client';
 import type { Scan } from "wasp/entities";
 import { HttpError, prisma } from "wasp/server";
 import { quotaService } from "./quotaService.js";
@@ -10,9 +10,12 @@ import { orchestrateScan } from "../operations/scans/orchestrator.js";
 import { shouldUseEmbeddedWorkers } from "../config/runtime.js";
 import { getSnykScannerReadiness } from "./scannerReadinessService.js";
 import { resolvePlannedScannerExecutions } from "../lib/scanners/providerSelection.js";
+import { reserveScannerMonthlyUsage } from "./scannerUsageService.js";
 import type { PersistedGitHubScanContext } from './githubAppService';
+import { importDastReportForScan } from './dastImportService.js';
 
 export type ScanInputType = "github" | "sbom" | "source_zip" | "dast";
+const DAST_SOURCE = 'dast' as unknown as ScanSource;
 
 export interface ScanSubmissionResult {
   scan: Scan;
@@ -35,8 +38,10 @@ function internalInputTypeFor(inputType: ScanInputType): ScanJobInputType {
       return "sbom_upload";
     case "source_zip":
       return "source_zip";
-    case "dast":
-      return "dast_upload";
+    default:
+      throw new HttpError(422, "Unsupported scan input type", {
+        detail: `Unsupported scan input type: ${inputType}`,
+      });
   }
 }
 
@@ -59,6 +64,75 @@ export async function submitScanSubmission(
 
   let createdScanId: string | null = null;
   let quotaRemaining = 0;
+
+  if (input.inputType === 'dast') {
+    await prisma.$transaction(async (tx) => {
+      const scan = await tx.scan.create({
+        data: {
+          userId: input.userId,
+          workspaceId: input.workspaceId,
+          inputType: 'dast',
+          inputRef: input.inputRef,
+          githubContext: input.githubContext as Prisma.InputJsonValue | undefined,
+          status: 'pending',
+          planAtSubmission,
+          plannedSources: [DAST_SOURCE],
+        },
+      });
+      createdScanId = scan.id;
+
+      await tx.scanDelta.create({
+        data: {
+          scanId: scan.id,
+          totalFreeCount: 0,
+          totalEnterpriseCount: 0,
+          deltaCount: 0,
+          deltaBySeverity: {},
+          isLocked: false,
+        },
+      });
+
+      const quotaInfo = await quotaService.consumeQuota(input.userId, scan.id, tx as any);
+      quotaRemaining = quotaInfo.remaining;
+    });
+
+    if (!createdScanId) {
+      throw new HttpError(500, "Unable to create scan");
+    }
+
+    try {
+      await importDastReportForScan({
+        prisma,
+        scanId: createdScanId,
+        userId: input.userId,
+        inputRef: input.inputRef,
+        loggerLabel: 'DAST Importer',
+      });
+    } catch (error) {
+      await prisma.scan.update({
+        where: { id: createdScanId },
+        data: {
+          status: "error",
+          errorMessage: `DAST import failed: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      });
+
+      await quotaService.refundQuota(input.userId, createdScanId, "dast_import_failed");
+      throw new HttpError(500, "DAST import failed", {
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    const scan = await prisma.scan.findUnique({
+      where: { id: createdScanId },
+    });
+    if (!scan) {
+      throw new HttpError(500, "Created scan not found");
+    }
+
+    return { scan, quotaRemaining };
+  }
+
   const snykReadiness = await getSnykScannerReadiness(prisma, input.userId);
   const plannedExecutions = resolvePlannedScannerExecutions(planAtSubmission, {
     userId: input.userId,
@@ -99,6 +173,14 @@ export async function submitScanSubmission(
 
     const quotaInfo = await quotaService.consumeQuota(input.userId, scan.id, tx as any);
     quotaRemaining = quotaInfo.remaining;
+
+    await reserveScannerMonthlyUsage(tx as any, {
+      userId: input.userId,
+      workspaceId: input.workspaceId,
+      scanId: scan.id,
+      planTier: planAtSubmission,
+      plannedExecutions,
+    });
   });
 
   if (!createdScanId) {

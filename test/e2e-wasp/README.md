@@ -6,6 +6,17 @@ This directory contains comprehensive E2E tests for the VibeScan MVP, verifying 
 
 ## Test Files
 
+### 0. `ntn-smoke.spec.ts`
+**Test 0: NTN Smoke**
+- User Story: Register → scan → verify core surfaces across dashboard, scan details, report, settings, API keys, webhooks, and pricing
+- Verifies:
+  - Authentication and dashboard entry
+  - New scan form and scanner lineup display
+  - Real scan submission and scan-details completion
+  - Report rendering and severity filters
+  - Settings, API keys, webhooks, and pricing pages load
+  - Non-core interface checks are soft so the smoke only fails on the core path
+
 ### 1. `sbom-upload-e2e.spec.ts`
 **Test 1: SBOM Upload E2E**
 - User Story: Register → Upload SBOM → See results on dashboard
@@ -114,16 +125,13 @@ Sample source code ZIP file with:
 
 ### Prerequisites
 
-1. **Start the Wasp backend:**
-   ```bash
-   cd /home/virus/vibescan/wasp-app
-   PORT=3555 wasp start
-   ```
-   Wait for: `✓ Server running at http://127.0.0.1:3555`
+1. **Auto-start is enabled by default**
+   - The Playwright global setup starts the managed Wasp contour when backend or frontend are not ready.
+   - Set `E2E_AUTO_START=false` if you want to manage the stack manually.
 
-2. **Verify frontend loads:**
-   - Frontend should be available at http://127.0.0.1:3000
-   - Wasp start command handles this automatically
+2. **Verify endpoints if you are debugging manually**
+   - Backend: http://127.0.0.1:3555
+   - Frontend: http://127.0.0.1:3000
 
 ### Run All E2E Tests
 
@@ -132,6 +140,9 @@ cd /home/virus/vibescan
 
 # Run all E2E tests
 npm run test:e2e
+
+# Run the resilient NTN smoke only
+npm run test:e2e:ntn
 
 # Override endpoints explicitly
 API_URL=http://127.0.0.1:3555 FRONTEND_URL=http://127.0.0.1:3000 npm run test:e2e
@@ -157,6 +168,7 @@ npx playwright show-report
 1. **Playwright global setup** runs first
    - Checks backend connectivity
    - Checks frontend connectivity
+   - Auto-starts the managed Wasp contour if either endpoint is not ready and `E2E_AUTO_START` is not disabled
 
 2. **Each test:**
    - Creates unique test user (email + password)

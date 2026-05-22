@@ -21,6 +21,7 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WASP_DIR="$ROOT_DIR/wasp-app"
+SCANNER_TOOLS_BIN="$ROOT_DIR/.tools/bin"
 
 # Colors for output
 RED='\033[0;31m'
@@ -174,8 +175,8 @@ seed_database() {
     exit 1
   fi
   
-  # Run seed script
-  RESET_DEMO_DATA=true DEMO_MONTHS=6 npx ts-node scripts/fill-mock-data.ts
+  # Run non-destructive seed by default; use the reset script only when explicitly needed.
+  npm run seed:mock-data
   
   log_success "Database seeded with demo users and scan history"
 }
@@ -200,6 +201,8 @@ start_wasp() {
   log_info "Starting Wasp development server..."
   
   cd "$WASP_DIR"
+  export PATH="$SCANNER_TOOLS_BIN:$PATH"
+  export OWASP_DATA_DIRECTORY="${OWASP_DATA_DIRECTORY:-$WASP_DIR/.cache/owasp/data}"
   
   # Start in background
   PORT=3555 wasp start >>"$ROOT_DIR/wasp-startup.log" 2>&1 &

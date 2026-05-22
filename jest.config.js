@@ -18,6 +18,7 @@ const config = {
         '/dist/',
         '/.wasp/',
         '/\\.tmp-wasp/',
+        '/vibescan-master-base/',
     ],
     // For Wasp projects, run tests via wasp test command
     // This config is kept for reference but not actively used

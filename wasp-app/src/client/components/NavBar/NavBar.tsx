@@ -15,10 +15,10 @@ import { UserDropdown } from "../../../user/UserDropdown";
 import { UserMenuItems } from "../../../user/UserMenuItems";
 import { WorkspaceSwitcher } from "../../../user/WorkspaceSwitcher";
 import { useIsLandingPage } from "../../hooks/useIsLandingPage";
-import logo from "../../static/logo.webp";
 import { cn } from "../../utils";
 import DarkModeSwitcher from "../DarkModeSwitcher";
 import { Announcement } from "./Announcement";
+import Logo from "../common/Logo";
 
 export interface NavigationItem {
   name: string;
@@ -254,12 +254,10 @@ function renderNavigationItems(
 }
 
 const NavLogo = ({ isScrolled }: { isScrolled: boolean }) => (
-  <img
+  <Logo
     className={cn("transition-all duration-500", {
       "size-8": !isScrolled,
       "size-7": isScrolled,
     })}
-    src={logo}
-    alt="Your SaaS App"
   />
 );

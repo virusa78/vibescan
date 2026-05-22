@@ -7,8 +7,9 @@ describe('navigation split', () => {
   test('keeps product nav separate from user menu', () => {
     expect(appNavigationLabels).toEqual([
       'Dashboard',
-      'New Scan',
+      'Scans',
       'API Keys',
+      'Settings',
     ]);
 
     expect(userMenuLabels).toEqual(['User Settings']);

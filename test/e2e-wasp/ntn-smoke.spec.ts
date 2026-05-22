@@ -62,7 +62,7 @@ test("NTN smoke - full surface coverage with soft non-core checks", async ({ pag
     }, issues);
 
     await softCheck("sidebar navigation", async () => {
-      await expect(page.getByRole("link", { name: /new scan/i })).toBeVisible();
+      await expect(page.getByRole("link", { name: /scans/i })).toBeVisible();
       await expect(page.getByRole("link", { name: /api keys/i })).toBeVisible();
       await expect(page.getByRole("link", { name: /settings/i })).toBeVisible();
       await expect(page.getByRole("link", { name: /webhooks/i })).toBeVisible();
@@ -73,8 +73,8 @@ test("NTN smoke - full surface coverage with soft non-core checks", async ({ pag
     await page.goto("/new-scan");
     await expect(page).toHaveURL(/\/new-scan(\/?|$)/);
 
-    await softCheck("new scan heading", async () => {
-      await expect(page.getByRole("heading", { name: /new scan/i })).toBeVisible();
+    await softCheck("scans heading", async () => {
+      await expect(page.getByRole("heading", { name: /scans?/i })).toBeVisible();
     }, issues);
 
     await softCheck("parallel lineup card", async () => {

@@ -244,7 +244,7 @@ export async function loadScanArtifacts(
     }
     case 'dast': {
       // DAST doesn't have components in the SCA sense. Return an empty array.
-      // The dastProvider will read the inputRef directly.
+      // The DAST importer reads the inputRef directly.
       return {
         components: [],
         sbomRaw: {},

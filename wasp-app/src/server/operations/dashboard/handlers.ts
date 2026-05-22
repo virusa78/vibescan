@@ -27,10 +27,12 @@ type DashboardTimeRange = '7d' | '30d' | 'all';
 type DashboardScanStatus = 'pending' | 'scanning' | 'done' | 'error' | 'cancelled';
 type DashboardSortField = 'submitted' | 'target' | 'type' | 'status' | 'findings';
 type DashboardSortDirection = 'asc' | 'desc';
+type DashboardSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 const allowedStatuses = new Set<DashboardScanStatus>(['pending', 'scanning', 'done', 'error', 'cancelled']);
 const allowedSortFields = new Set<DashboardSortField>(['submitted', 'target', 'type', 'status', 'findings']);
 const allowedSortDirections = new Set<DashboardSortDirection>(['asc', 'desc']);
+const allowedSeverities = new Set<DashboardSeverity>(['critical', 'high', 'medium', 'low', 'info']);
 
 function normalizeTimeRange(value: string | string[] | undefined): DashboardTimeRange {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -93,6 +95,22 @@ function normalizeSort(
   return parsed.length > 0 ? parsed : [{ field: 'submitted', direction: 'desc' }];
 }
 
+function normalizeSeverities(value: string | string[] | undefined): DashboardSeverity[] {
+  if (!value) {
+    return [];
+  }
+
+  const raw = Array.isArray(value) ? value : [value];
+  return Array.from(
+    new Set(
+      raw
+        .flatMap((item) => item.split(','))
+        .map((item) => item.trim())
+        .filter((item): item is DashboardSeverity => allowedSeverities.has(item as DashboardSeverity)),
+    ),
+  );
+}
+
 export async function getDashboardMetricsApiHandler(
   request: HandlerRequest,
   response: Response,
@@ -117,6 +135,7 @@ export async function getRecentScansApiHandler(
   try {
     const limitParam = request.query.limit as string | string[] | undefined;
     const statusParam = request.query.status as string | string[] | undefined;
+    const severityParam = request.query.severity as string | string[] | undefined;
     const searchParam = request.query.q as string | string[] | undefined;
     const sortParam = request.query.sort as string | string[] | undefined;
 
@@ -125,6 +144,7 @@ export async function getRecentScansApiHandler(
     const args: GetRecentScansInput = {
       limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 50) : 10,
       status: normalizeStatuses(statusParam),
+      severity: normalizeSeverities(severityParam),
       sort: normalizeSort(sortParam),
       ...((Array.isArray(searchParam) ? searchParam[0] : searchParam)?.trim()
         ? { q: (Array.isArray(searchParam) ? searchParam[0] : searchParam)?.trim() }

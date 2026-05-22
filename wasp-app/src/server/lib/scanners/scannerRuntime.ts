@@ -2,7 +2,7 @@ import { execFileSync } from 'child_process';
 import { statSync } from 'fs';
 import { basename, dirname, resolve } from 'path';
 
-type ScannerTool = 'syft' | 'grype';
+type ScannerTool = 'syft' | 'grype' | 'trivy';
 
 interface ScannerExecutionPlan {
   tool: ScannerTool;
@@ -27,6 +27,19 @@ function defaultExecutor(command: string, args: string[], timeoutMs: number): st
     timeout: timeoutMs,
     stdio: 'pipe',
   });
+}
+
+export function isToolAvailable(tool: ScannerTool): boolean {
+  try {
+    execFileSync(tool, ['--version'], {
+      encoding: 'utf8',
+      timeout: 5000,
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isMissingExecutable(error: unknown, executable: string): boolean {
@@ -146,6 +159,24 @@ export function runGrypeCycloneDxScan(
       dockerImage: process.env.VIBESCAN_GRYPE_IMAGE ?? 'anchore/grype:latest',
       localArgs: [`sbom:${resolve(sbomPath)}`, '-o', 'json'],
       dockerArgs: ['grype', `sbom:${resolve(sbomPath)}`, '-o', 'json'],
+    },
+    executor,
+  );
+}
+
+export function runTrivySbomScan(
+  sbomPath: string,
+  timeoutMs: number,
+  executor: typeof defaultExecutor = defaultExecutor,
+): string {
+  return runScannerTool(
+    {
+      tool: 'trivy',
+      targetPath: sbomPath,
+      timeoutMs,
+      dockerImage: process.env.VIBESCAN_TRIVY_IMAGE ?? 'aquasec/trivy:latest',
+      localArgs: ['sbom', '--scanners', 'vuln', '--format', 'json', resolve(sbomPath)],
+      dockerArgs: ['trivy', 'sbom', '--scanners', 'vuln', '--format', 'json', resolve(sbomPath)],
     },
     executor,
   );

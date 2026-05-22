@@ -69,15 +69,15 @@ function getDateRangeStart(
   earliestScanCreatedAt: Date | null,
 ): Date {
   if (timeRange === '7d') {
-    return startOfUtcDay(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+    return startOfUtcDay(new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000));
   }
   if (timeRange === '30d') {
-    return startOfUtcDay(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+    return startOfUtcDay(new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000));
   }
   if (earliestScanCreatedAt) {
     return startOfUtcWeek(earliestScanCreatedAt);
   }
-  return startOfUtcDay(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+  return startOfUtcDay(new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000));
 }
 
 export async function getTrendSeries(

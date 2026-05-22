@@ -60,10 +60,10 @@ export function AppShell({
   }, [location.pathname]);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <aside
         className={cn(
-          "bg-background/80 border-border flex shrink-0 flex-col border-r backdrop-blur-lg",
+          "bg-background/80 border-border flex h-full shrink-0 flex-col border-r backdrop-blur-lg",
           collapsed ? "w-[4.5rem]" : "w-72",
         )}
       >
@@ -79,7 +79,7 @@ export function AppShell({
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar workspaceLabel={activeWorkspaceLabel} />
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );

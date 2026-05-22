@@ -1,4 +1,3 @@
-import type { ScanSource } from '@prisma/client';
 import type {
   ScannerCredentialSource,
   ScannerProviderKind,
@@ -6,15 +5,16 @@ import type {
 import type { SnykScannerReadiness } from '../../services/scannerReadinessService.js';
 
 export type QueueScannerTarget = 'free' | 'enterprise';
+export type ScannerResultSource = 'grype' | 'trivy' | 'codescoring_johnny' | 'owasp' | 'snyk';
 
 export type PlannedScannerExecution = {
   provider: ScannerProviderKind;
   queueTarget: QueueScannerTarget;
-  resultSource: ScanSource;
+  resultSource: ScannerResultSource;
   credentialSource: ScannerCredentialSource;
 };
 
-const FREE_PLAN_EXECUTIONS: PlannedScannerExecution[] = [
+const BASE_PLAN_EXECUTIONS: PlannedScannerExecution[] = [
   {
     provider: 'grype',
     queueTarget: 'free',
@@ -22,15 +22,11 @@ const FREE_PLAN_EXECUTIONS: PlannedScannerExecution[] = [
     credentialSource: { mode: 'environment' },
   },
   {
-    provider: 'syft',
+    provider: 'trivy',
     queueTarget: 'free',
-    resultSource: 'syft',
+    resultSource: 'trivy',
     credentialSource: { mode: 'environment' },
   },
-];
-
-const ENTERPRISE_PLAN_EXECUTIONS: PlannedScannerExecution[] = [
-  ...FREE_PLAN_EXECUTIONS,
   {
     provider: 'codescoring-johnny',
     queueTarget: 'enterprise',
@@ -48,7 +44,6 @@ const ENTERPRISE_PLAN_EXECUTIONS: PlannedScannerExecution[] = [
 export type ScannerPlanningContext = {
   userId?: string;
   snykReadiness?: SnykScannerReadiness | null;
-  inputType?: string;
 };
 
 function buildSnykExecution(credentialSource: ScannerCredentialSource): PlannedScannerExecution {
@@ -64,33 +59,13 @@ export function resolvePlannedScannerExecutions(
   planAtSubmission: string,
   context?: ScannerPlanningContext,
 ): PlannedScannerExecution[] {
-  if (context?.inputType === 'dast_upload' || context?.inputType === 'dast') {
-    return [
-      {
-        provider: 'dast',
-        queueTarget: 'free', // Could be either, but 'free' handles non-enterprise jobs too
-        resultSource: 'dast',
-        credentialSource: { mode: 'environment' },
-      },
-    ];
+  const executions = [...BASE_PLAN_EXECUTIONS];
+
+  if (context?.snykReadiness?.enabled && context.snykReadiness.ready && context.snykReadiness.credentialSource) {
+    executions.push(buildSnykExecution(context.snykReadiness.credentialSource));
   }
 
-  if (planAtSubmission === 'enterprise') {
-    if (!context?.snykReadiness?.enabled) {
-      return ENTERPRISE_PLAN_EXECUTIONS;
-    }
-
-    if (!context.snykReadiness.ready || !context.snykReadiness.credentialSource) {
-      return FREE_PLAN_EXECUTIONS;
-    }
-
-    return [
-      ...FREE_PLAN_EXECUTIONS,
-      buildSnykExecution(context.snykReadiness.credentialSource),
-    ];
-  }
-
-  return FREE_PLAN_EXECUTIONS;
+  return executions;
 }
 
 export function resolveQueueScannerTargets(
@@ -103,6 +78,6 @@ export function resolveQueueScannerTargets(
 export function resolveExpectedScanSources(
   planAtSubmission: string,
   context?: ScannerPlanningContext,
-): ScanSource[] {
+): ScannerResultSource[] {
   return resolvePlannedScannerExecutions(planAtSubmission, context).map((execution) => execution.resultSource);
 }

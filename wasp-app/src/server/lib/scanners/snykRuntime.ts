@@ -161,7 +161,7 @@ function buildSshShellCommand(commandTemplate: string, remoteBomPath: string, cr
   }
 
   return [
-    'set -euo pipefail',
+    'set -eu',
     ...exports,
     `trap 'rm -f "$VIBESCAN_BOM_PATH"' EXIT`,
     'cat > "$VIBESCAN_BOM_PATH"',
@@ -180,7 +180,7 @@ function runSnykLocally(
     'sh',
     [
       '-lc',
-      `set -euo pipefail; trap 'rm -f "$VIBESCAN_BOM_PATH"' EXIT; cat > "$VIBESCAN_BOM_PATH"; ${config.commandTemplate}`,
+      `set -eu; trap 'rm -f "$VIBESCAN_BOM_PATH"' EXIT; cat > "$VIBESCAN_BOM_PATH"; ${config.commandTemplate}`,
       'sh',
     ],
     bomJson,

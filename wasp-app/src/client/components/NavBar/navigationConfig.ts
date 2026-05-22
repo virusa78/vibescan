@@ -1,6 +1,6 @@
 export const appNavigationLabels = [
   "Dashboard",
-  "New Scan",
+  "Scans",
   "API Keys",
   "Settings",
 ] as const;

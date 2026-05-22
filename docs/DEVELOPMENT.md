@@ -10,11 +10,26 @@ The easiest way to start VibeScan:
 ./run.sh
 ```
 
+### Scanner tooling
+
+Use the scanner bootstrap script to install or update the local lanes used by the backend:
+
+```bash
+./scripts/install-scanner-tooling.sh update
+```
+
+It manages Grype, Trivy, Snyk, and the OWASP Dependency-Check data cache. The OWASP database is stored under `.cache/owasp/` so it survives restarts and container rebuilds.
+The runtime path is `wasp-app/.cache/owasp/` because Wasp starts from `wasp-app/`.
+
 This will:
 1. Start Docker services (PostgreSQL, Redis, MinIO)
 2. Configure the Wasp client with the current host IP
 3. Start the Wasp dev stack (backend + frontend)
 4. Display access URLs and demo credentials
+5. Write rotating dev-server logs to `.logs/wasp-dev.log` with daily rotation and a 200 KB cap per active file
+
+For the current repo map and archive boundaries, see `docs/ARCHITECTURE.md`.
+For mail provider setup, see `docs/EMAIL_SETUP.md`.
 
 ### Option 2: Manual Start
 
@@ -119,6 +134,9 @@ docker compose up -d
 
 # View logs
 docker compose logs -f
+
+# Wasp dev server logs
+tail -f .logs/wasp-dev.log
 
 # Stop services
 docker compose down
@@ -318,7 +336,7 @@ docker compose logs -f vibescan-redis
 ### Frontend Logs
 ```bash
 # If using start script
-tail -f /tmp/vibescan-frontend.log
+tail -f .logs/wasp-dev.log
 
 # Otherwise, logs are in terminal
 ```

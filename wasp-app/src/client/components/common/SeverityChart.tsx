@@ -13,12 +13,13 @@ interface SeverityChartProps {
     total: number;
   };
   loading?: boolean;
+  onSeverityClick?: (severity: 'critical' | 'high' | 'medium' | 'low' | 'info') => void;
 }
 
 /**
  * Vulnerability severity distribution chart
  */
-export function SeverityChart({ data, loading = false }: SeverityChartProps) {
+export function SeverityChart({ data, loading = false, onSeverityClick }: SeverityChartProps) {
   const chartOptions = {
     chart: {
       type: 'donut' as const,
@@ -95,22 +96,34 @@ export function SeverityChart({ data, loading = false }: SeverityChartProps) {
               width="100%"
             />
             <div className="grid grid-cols-2 gap-3 w-full mt-4 text-sm">
-              <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3">
+              <button
+                onClick={() => onSeverityClick?.('critical')}
+                className="rounded-md border border-red-500/30 bg-red-500/10 p-3 hover:bg-red-500/20 transition-colors cursor-pointer text-left"
+              >
                 <p className="text-xs text-muted-foreground">CRITICAL</p>
                 <p className="text-xl font-bold text-red-500">{data.critical}</p>
-              </div>
-              <div className="rounded-md border border-orange-500/30 bg-orange-500/10 p-3">
+              </button>
+              <button
+                onClick={() => onSeverityClick?.('high')}
+                className="rounded-md border border-orange-500/30 bg-orange-500/10 p-3 hover:bg-orange-500/20 transition-colors cursor-pointer text-left"
+              >
                 <p className="text-xs text-muted-foreground">HIGH</p>
                 <p className="text-xl font-bold text-orange-500">{data.high}</p>
-              </div>
-              <div className="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3">
+              </button>
+              <button
+                onClick={() => onSeverityClick?.('medium')}
+                className="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3 hover:bg-yellow-500/20 transition-colors cursor-pointer text-left"
+              >
                 <p className="text-xs text-muted-foreground">MEDIUM</p>
                 <p className="text-xl font-bold text-yellow-500">{data.medium}</p>
-              </div>
-              <div className="rounded-md border border-green-500/30 bg-green-500/10 p-3">
+              </button>
+              <button
+                onClick={() => onSeverityClick?.('low')}
+                className="rounded-md border border-green-500/30 bg-green-500/10 p-3 hover:bg-green-500/20 transition-colors cursor-pointer text-left"
+              >
                 <p className="text-xs text-muted-foreground">LOW</p>
                 <p className="text-xl font-bold text-green-500">{data.low}</p>
-              </div>
+              </button>
             </div>
           </div>
         )}

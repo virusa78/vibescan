@@ -1,71 +1,33 @@
 import { FullConfig } from "@playwright/test";
-
-function getBackendBaseUrl(): string {
-  return (
-    process.env.API_URL ||
-    process.env.WASP_SERVER_URL ||
-    "http://127.0.0.1:3555"
-  ).replace(/\/$/, "");
-}
-
-function getFrontendBaseUrl(): string {
-  return (
-    process.env.FRONTEND_URL ||
-    process.env.WASP_WEB_CLIENT_URL ||
-    "http://127.0.0.1:3000"
-  ).replace(/\/$/, "");
-}
+import {
+  ensureManagedContourStarted,
+  isBackendReady,
+  isFrontendReady,
+  waitForManagedContourReady,
+} from "./managed-contour";
 
 /**
- * Global setup for Playwright E2E tests
- * - Clears browser cache
- * - Verifies backend is running
+ * Global setup for Playwright E2E tests.
+ * Verifies the managed Wasp contour is available and auto-starts it when needed.
  */
 async function globalSetup(_config: FullConfig) {
-  // Verify backend is accessible
-  const maxRetries = 30;
-  let isBackendReady = false;
-  
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const response = await fetch(`${getBackendBaseUrl()}/health`, {
-        method: "GET",
-      }).catch(() => null);
+  const backendReady = await isBackendReady();
+  const frontendReady = await isFrontendReady();
 
-      if (response && response.ok) {
-        isBackendReady = true;
-        console.log("✓ Backend is ready");
-        break;
-      }
-    } catch {
-      // Backend not ready yet
-    }
-    
-    if (i < maxRetries - 1) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
+  if (backendReady && frontendReady) {
+    console.log("✓ Backend is ready");
+    console.log("✓ Frontend is ready");
+    return;
   }
-  
-  if (!isBackendReady) {
-    console.warn(
-      "⚠ Backend may not be ready. Make sure to run: ./run.sh"
-    );
+
+  const started = await ensureManagedContourStarted();
+  if (started) {
+    console.log("✓ Managed Wasp contour started for E2E");
   }
-  
-  // Test frontend connectivity
-  try {
-    const frontendUrl = getFrontendBaseUrl();
-    const response = await fetch(`${frontendUrl}/login`);
-    if (response.ok) {
-      console.log(`✓ Frontend is ready at ${frontendUrl}`);
-    }
-  } catch {
-    console.warn(
-      `⚠ Frontend may not be ready at ${
-        getFrontendBaseUrl()
-      }`
-    );
-  }
+
+  await waitForManagedContourReady();
+  console.log("✓ Backend is ready");
+  console.log("✓ Frontend is ready");
 }
 
 export default globalSetup;

@@ -1,4 +1,4 @@
-import type { Scan, ScanDelta, ScanResult } from "wasp/entities";
+import type { Scan } from "wasp/entities";
 import { HttpError } from "wasp/server";
 import type { GetScanById, GetScans, SubmitScan } from "wasp/server/operations";
 import * as z from "zod";
@@ -16,22 +16,22 @@ const submitScanInputSchema = z.object({
 });
 
 const getScanByIdSchema = z.object({
-  scanId: z.string().uuid("Invalid scan ID format"),
+  scanId: z.string().trim().uuid("Invalid scan ID format"),
 });
 
 type SubmitScanInput = z.infer<typeof submitScanInputSchema>;
 type GetScanByIdInput = z.infer<typeof getScanByIdSchema>;
 
 export type ScanWithDetails = Scan & {
-  scanResults: ScanResult[];
-  scanDeltas: ScanDelta[];
+  scanResults: Array<Record<string, any>>;
+  scanDeltas: Array<Record<string, any>>;
 };
 
 export const submitScan: SubmitScan<SubmitScanInput, Scan> = async (
   rawArgs,
   context,
 ) => {
-  const user = await requireWorkspaceScopedUser(context.user);
+  const user = await requireWorkspaceScopedUser(context.user as any);
 
   const args = ensureArgsSchemaOrThrowHttpError(submitScanInputSchema, rawArgs);
   const result = await submitScanSubmission({
@@ -45,7 +45,7 @@ export const submitScan: SubmitScan<SubmitScanInput, Scan> = async (
 };
 
 export const getScans: GetScans<void, Scan[]> = async (_args, context) => {
-  const user = await requireWorkspaceScopedUser(context.user);
+  const user = await requireWorkspaceScopedUser(context.user as any);
 
   const scans = await context.entities.Scan.findMany({
     where: buildWorkspaceOrLegacyOwnerWhere(user),
@@ -60,7 +60,7 @@ export const getScanById: GetScanById<GetScanByIdInput, ScanWithDetails> = async
   rawArgs,
   context,
 ) => {
-  const user = await requireWorkspaceScopedUser(context.user);
+  const user = await requireWorkspaceScopedUser(context.user as any);
 
   const args = ensureArgsSchemaOrThrowHttpError(getScanByIdSchema, rawArgs);
 

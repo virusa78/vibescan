@@ -6,13 +6,14 @@ import {
 
 describe('dashboard url state', () => {
   test('builds and parses full search state including q', () => {
-    const search = buildDashboardSearch('submitted', 'desc', ['scanning', 'done'], 'lodash');
+    const search = buildDashboardSearch('submitted', 'desc', ['scanning', 'done'], [], 'lodash');
     expect(search).toBe('?sort=submitted&dir=desc&status=scanning%2Cdone&q=lodash');
 
     const parsed = parseDashboardSearch(search);
     expect(parsed.sortField).toBe('submitted');
     expect(parsed.sortDirection).toBe('desc');
     expect(parsed.statuses).toEqual(['scanning', 'done']);
+    expect(parsed.severities).toEqual([]);
     expect(parsed.query).toBe('lodash');
     expect(parsed.isValid).toBe(true);
   });
@@ -22,6 +23,7 @@ describe('dashboard url state', () => {
     expect(parsed.sortField).toBe('submitted');
     expect(parsed.sortDirection).toBe('desc');
     expect(parsed.statuses).toEqual(['scanning']);
+    expect(parsed.severities).toEqual([]);
     expect(parsed.query).toBe('cve-1234');
     expect(parsed.isValid).toBe(false);
     expect(parsed.normalizedSearch).toBe('?sort=submitted&dir=desc&status=scanning&q=cve-1234');
@@ -32,7 +34,23 @@ describe('dashboard url state', () => {
     expect(parsed.sortField).toBe('target');
     expect(parsed.sortDirection).toBe('asc');
     expect(parsed.statuses).toEqual(['done', 'error', 'scanning']);
+    expect(parsed.severities).toEqual([]);
     expect(parsed.query).toBe('');
     expect(parsed.normalizedSearch).toBe('?sort=target&dir=asc&status=done%2Cerror%2Cscanning');
+  });
+
+  test('parses severity filter correctly', () => {
+    const search = buildDashboardSearch('submitted', 'desc', [], ['critical', 'high'], '');
+    expect(search).toBe('?sort=submitted&dir=desc&severity=critical%2Chigh');
+
+    const parsed = parseDashboardSearch(search);
+    expect(parsed.severities).toEqual(['critical', 'high']);
+    expect(parsed.isValid).toBe(true);
+  });
+
+  test('handles invalid severities gracefully', () => {
+    const parsed = parseDashboardSearch('?sort=submitted&dir=desc&severity=critical,invalid,high');
+    expect(parsed.severities).toEqual(['critical', 'high']);
+    expect(parsed.isValid).toBe(false);
   });
 });

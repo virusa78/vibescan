@@ -8,8 +8,7 @@ import { writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
 import { resolve } from 'path';
 import { tmpdir } from 'os';
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
-import { normalizeSyftFindings } from '../../operations/scans/normalizeFindings.js';
-import type { NormalizedFinding } from '../../operations/scans/normalizeFindings.js';
+import { normalizeTrivyFindings, type NormalizedFinding } from '../../operations/scans/normalizeFindings.js';
 
 export interface SyftComponent {
   name: string;
@@ -142,7 +141,7 @@ export async function scanWithSyftDetailed(
     const syftOutput = await executeSyftCli(tempDir);
 
     // Normalize Syft output to standard Finding format
-    const findings = normalizeSyftFindings(syftOutput);
+    const findings = normalizeTrivyFindings(syftOutput);
 
     // Get Syft version
     let syftVersion: string | undefined;
