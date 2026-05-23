@@ -40,8 +40,21 @@ cd wasp-app && wasp build
 - `docs/ARCHITECTURE.md` — repo layout and active/archive boundaries
 - `docs/DEVELOPMENT.md` — local development
 - `docs/DEPLOYMENT.md` — deployment model
+- `docs/DEPLOYMENT_DIGITALOCEAN.md` — DigitalOcean production plan
 - `docs/EMAIL_SETUP.md` — mail provider configuration
 - `docs/GITHUB_APP_VALIDATION_RUNBOOK.md` — live GitHub App verification
+- `deployment-scripts/` — DigitalOcean deployment entrypoints and operator docs
+- `deployment-scripts/INDEX.md` — quick navigation map for the deployment module
+- `deployment-scripts/README.md` — human-friendly usage guide for the deployment scripts
+- `deployment-scripts/AGENTS.md` — agent-facing contract for modifying the scripts
+- `npm run deploy:digitalocean:menu` — explicit interactive DigitalOcean menu
+- `npm run deploy:digitalocean:provision` — one-shot infrastructure bootstrap
+- `npm run deploy:digitalocean:status` — headless deployment status
+- `npm run deploy:digitalocean:update` — DOKS update flow
+- `npm run deploy:digitalocean:full` — full DOKS deploy flow
+- `npm run deploy:digitalocean:bootstrap` — interactive DigitalOcean menu
+- `npm run deploy:digitalocean:migrate` — headless DOKS migration/update flow
+- `.github/workflows/vibescan-ci-gate.yml` — reusable consumer-repo CI gate
 - `PRODUCTION_CHECKLIST.md` — release readiness
 - `STARTUP.md` — startup shortcuts
 - `CONTRIBUTING.md` — contribution workflow

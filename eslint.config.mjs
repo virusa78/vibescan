@@ -28,6 +28,7 @@ export default [
                 project: [
                     './tsconfig.json',
                     './tsconfig.test.json',
+                    './tsconfig.deployment-scripts.json',
                     './wasp-app/tsconfig.json',
                     './wasp-app/tsconfig.eslint.json',
                 ],
