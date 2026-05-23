@@ -5,3 +5,5 @@ smoke-flow.log
 .tools/
 .cache/
 bin/trivy
+test-results/
+.vibescan/

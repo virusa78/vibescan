@@ -833,18 +833,24 @@ const checkJob = setInterval(async () => {
 const response = await fetch('/.../reports/ci-decision', {
   headers: {
     'Authorization': `Bearer YOUR_API_KEY`,
-    'X-Scan-ID': 'scan-123'
   }
 })
 
-const { decision, severity } = await response.json()
+const {
+  decision,
+  reason,
+  blockingIssues,
+  blockingIssuesBySource,
+  effectiveThreshold,
+  scanUrl,
+  reportUrl,
+} = await response.json()
 ```
 
 **Parameters**:
 ```typescript
 {
   scanId: string
-  // OR via X-Scan-ID header in API calls
 }
 ```
 
@@ -852,17 +858,19 @@ const { decision, severity } = await response.json()
 ```typescript
 {
   decision: 'pass' | 'fail'
-  severity: string
-  message: string
-  criticalCount: number
-  highCount: number
-  failThreshold: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+  reason: string
+  blockingIssues: number
+  blockingIssuesBySource: Record<string, number>
+  effectiveThreshold: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+  scanUrl: string
+  reportUrl: string
 }
 ```
 
 **Decision Logic**:
-- `fail`: If any critical/high findings (configurable by plan)
-- `pass`: All findings below fail threshold
+- `fail`: If findings meet or exceed the linked GitHub installation threshold
+- `pass`: All findings are below the linked threshold
+- `default threshold`: `CRITICAL` when no installation policy matches the scan
 
 **Error Codes**:
 - `401`: Unauthorized

@@ -98,7 +98,7 @@
  * /api/v1/reports/{scanId}/ci-decision:
  *   get:
  *     summary: Get CI pass/fail decision
- *     description: Evaluate the scan for CI gating based on critical findings.
+ *     description: Evaluate the scan for CI gating using the linked GitHub installation severity threshold.
  *     operationId: getCIDecision
  *     tags:
  *       - Reports

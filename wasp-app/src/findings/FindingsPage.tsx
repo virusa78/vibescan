@@ -148,8 +148,9 @@ function formatDate(value?: string | null): string {
 }
 
 function StatusBadge({ status }: { status: FindingStatus }) {
-  const variant = status === 'active' ? 'destructive' : status === 'mitigated' ? 'secondary' : 'outline';
-  return <Badge variant={variant as any} className="capitalize">{status}</Badge>;
+  const variant: 'default' | 'secondary' | 'destructive' | 'outline' =
+    status === 'active' ? 'destructive' : status === 'mitigated' ? 'secondary' : 'outline';
+  return <Badge variant={variant} className="capitalize">{status}</Badge>;
 }
 
 function SlaBadge({ state, dueAt }: { state: ProjectFindingRow['slaState']; dueAt?: string | null }) {
@@ -175,7 +176,7 @@ export default function FindingsPage() {
   const [sortField, setSortField] = useState<SortField>('severity');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
-  const [selectedFinding, setSelectedFinding] = useState<ProjectFindingRow | null>(null);
+  const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
 
   useEffect(() => {
     setExpandedProjects(new Set());
@@ -200,6 +201,21 @@ export default function FindingsPage() {
   const groups = Array.isArray(data?.groups) ? (data.groups as FindingsGroup[]) : [];
   const projectOptions = Array.isArray(data?.projectOptions) ? (data.projectOptions as ProjectOption[]) : [];
   const summary = data?.summary ?? { active: 0, criticalHigh: 0, overdueSla: 0, newlySeen: 0, mitigated: 0 };
+  const selectedFinding = useMemo(
+    () => findings.find((finding) => finding.id === selectedFindingId) ?? null,
+    [findings, selectedFindingId],
+  );
+
+  useEffect(() => {
+    if (!selectedFindingId) {
+      return;
+    }
+
+    const refreshedFinding = findings.find((finding) => finding.id === selectedFindingId) ?? null;
+    if (!refreshedFinding) {
+      setSelectedFindingId(null);
+    }
+  }, [findings, selectedFindingId]);
 
   const runAction = async (action: 'accept' | 'snooze' | 'reject' | 'reopen', finding: ProjectFindingRow) => {
     const payload = {
@@ -398,7 +414,7 @@ export default function FindingsPage() {
                   <button
                     key={finding.id}
                     type="button"
-                    onClick={() => setSelectedFinding(finding)}
+                    onClick={() => setSelectedFindingId(finding.id)}
                     className="grid w-full grid-cols-[minmax(240px,1.3fr)_minmax(170px,0.9fr)_minmax(180px,1fr)_120px_120px_130px_110px_130px] gap-3 border-b px-4 py-3 text-left text-sm hover:bg-muted/30"
                   >
                     <span className="min-w-0 border-l-4 pl-3">
@@ -424,7 +440,7 @@ export default function FindingsPage() {
         </section>
       </div>
 
-      <Sheet open={!!selectedFinding} onOpenChange={(open) => !open && setSelectedFinding(null)}>
+      <Sheet open={!!selectedFinding} onOpenChange={(open) => !open && setSelectedFindingId(null)}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
           {selectedFinding ? (
             <>
@@ -433,10 +449,25 @@ export default function FindingsPage() {
                 <SheetDescription>{selectedFinding.project.name} · {selectedFinding.packageName}@{selectedFinding.installedVersion}</SheetDescription>
               </SheetHeader>
               <div className="mt-6 space-y-6">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline" className={`border-l-4 ${severityClasses[selectedFinding.severity]}`}>{selectedFinding.severity}</Badge>
-                  <StatusBadge status={selectedFinding.status} />
-                  <SlaBadge state={selectedFinding.slaState} dueAt={selectedFinding.slaDueAt} />
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                    <span className="block text-[11px] uppercase tracking-wide text-muted-foreground">Status</span>
+                    <div className="mt-1">
+                      <StatusBadge status={selectedFinding.status} />
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                    <span className="block text-[11px] uppercase tracking-wide text-muted-foreground">Severity</span>
+                    <div className="mt-1">
+                      <Badge variant="outline" className={`border-l-4 ${severityClasses[selectedFinding.severity]}`}>{selectedFinding.severity}</Badge>
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                    <span className="block text-[11px] uppercase tracking-wide text-muted-foreground">SLA</span>
+                    <div className="mt-1">
+                      <SlaBadge state={selectedFinding.slaState} dueAt={selectedFinding.slaDueAt} />
+                    </div>
+                  </div>
                 </div>
                 <p className="text-sm text-muted-foreground">{selectedFinding.description || 'No description available.'}</p>
                 <div className="grid gap-3 text-sm sm:grid-cols-2">

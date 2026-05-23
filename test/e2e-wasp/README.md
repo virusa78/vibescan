@@ -40,6 +40,16 @@ This directory contains comprehensive E2E tests for the VibeScan MVP, verifying 
   - Delta calculation between scanners
   - Performance metrics
 
+### 2b. `github-ci-decision-screenshots.spec.ts`
+**Test 2b: CI Decision Screenshots**
+- User Story: Register → seed a completed GitHub-style scan → inspect the CI decision in the report UI
+- Verifies:
+  - Dashboard loads with the seeded scan row
+  - Scan details page renders from a completed scan
+  - Report page shows the CI Decision card and threshold line
+  - Multiple screenshots are captured for later visual review
+  - Deterministic seeded data keeps the screenshots stable without waiting for workers
+
 ### 3. `zip-upload-e2e.spec.ts`
 **Test 3: Source ZIP E2E**
 - User Story: Upload ZIP file → Extract components → See results
@@ -180,6 +190,7 @@ npx playwright show-report
    - HTML report in `playwright-report/`
    - Screenshots captured on failure
    - Console errors logged
+   - Local e2e screenshots and other artifacts land in `test-results/`; clear that directory only when you want a fresh run before another e2e pass
 
 ## Validation Points (All Tests)
 
@@ -211,6 +222,7 @@ test/e2e-wasp/
 ├── global-setup.ts                 # Playwright global setup
 ├── sbom-upload-e2e.spec.ts         # Test 1: SBOM upload
 ├── github-url-e2e.spec.ts          # Test 2: GitHub URL
+├── github-ci-decision-screenshots.spec.ts # Test 2b: CI decision screenshots
 ├── zip-upload-e2e.spec.ts          # Test 3: ZIP upload
 ├── complete-happy-path.spec.ts    # Test 4: Complete flow
 └── settings-api-keys-webhooks-billing.spec.ts # Test 5: Settings + admin flows

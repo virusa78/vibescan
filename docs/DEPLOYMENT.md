@@ -2,6 +2,8 @@
 
 This document describes the current deployment model without pretending the local dev flow and the container flow are the same thing.
 
+For a concrete DigitalOcean production plan, see [docs/DEPLOYMENT_DIGITALOCEAN.md](./DEPLOYMENT_DIGITALOCEAN.md).
+
 ## Runtime Modes
 
 - Local development:

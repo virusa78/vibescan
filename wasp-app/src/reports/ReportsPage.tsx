@@ -70,7 +70,14 @@ type ReportResponse = {
 type CiDecision = {
   decision: 'pass' | 'fail';
   reason: string;
+  blockingIssues: number;
+  blockingIssuesBySource: Record<string, number>;
+  effectiveThreshold: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  scanUrl: string;
+  reportUrl: string;
+  policySource: 'github_installation' | 'default';
   criticalIssues: number;
+  criticalIssuesBySource: Record<string, number>;
 };
 
 type FixableFilter = 'all' | 'fixable' | 'unfixable';
@@ -121,8 +128,8 @@ export default function ReportsPage() {
         ]);
 
         setSummary(summaryRes);
-        setReport(reportRes as any);
-        setCiDecision(ciRes);
+        setReport(reportRes as ReportResponse);
+        setCiDecision(ciRes as CiDecision);
       },
       { errorMessage: 'Failed to load report data.' },
     );
@@ -503,6 +510,14 @@ export default function ReportsPage() {
             <p className={`text-2xl font-bold ${ciDecision?.decision === 'pass' ? 'text-emerald-500' : 'text-red-500'}`}>
               {(ciDecision?.decision ?? 'unknown').toUpperCase()}
             </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {ciDecision?.reason ?? 'CI decision unavailable'}
+            </p>
+            {ciDecision?.effectiveThreshold && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Threshold: {ciDecision.effectiveThreshold} {ciDecision.policySource === 'github_installation' ? '(installation policy)' : '(default policy)'}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

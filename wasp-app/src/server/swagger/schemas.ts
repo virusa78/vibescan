@@ -587,13 +587,43 @@ export const schemas = {
         description: "CI gate result",
       },
       reason: { type: "string", description: "Human-readable result message" },
+      blockingIssues: {
+        type: "integer",
+        description: "Number of findings at or above the effective threshold",
+      },
+      blockingIssuesBySource: {
+        type: "object",
+        additionalProperties: { type: "integer" },
+        description: "Blocking findings grouped by source",
+      },
+      effectiveThreshold: {
+        type: "string",
+        enum: ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+        description: "Threshold applied to the scan",
+      },
+      scanUrl: {
+        type: "string",
+        format: "uri",
+        description: "Link to the scan details page",
+      },
+      reportUrl: {
+        type: "string",
+        format: "uri",
+        description: "Link to the report page",
+      },
+      policySource: {
+        type: "string",
+        enum: ["github_installation", "default"],
+        description: "Where the effective threshold came from",
+      },
       criticalIssues: {
         type: "integer",
-        description: "Number of critical vulnerabilities",
+        description: "Backward-compatible alias for blockingIssues",
       },
       criticalIssuesBySource: {
         type: "object",
         additionalProperties: { type: "integer" },
+        description: "Backward-compatible alias for blockingIssuesBySource",
       },
     },
   },

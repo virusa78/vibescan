@@ -307,4 +307,69 @@ describe('githubWebhookApiHandler', () => {
       delivery_id: 'delivery-pr',
     });
   });
+
+  it('ignores fork pull requests', async () => {
+    verifyGitHubWebhookSignatureMock.mockReturnValue(true);
+    getMappedGithubInstallationByInstallationIdMock
+      .mockResolvedValueOnce({
+        githubInstallationId: BigInt(123),
+        workspaceId: 'workspace-1',
+        repositorySelection: 'selected',
+        reposScope: ['acme/api'],
+        triggerOnPush: true,
+        triggerOnPr: true,
+        targetBranches: ['main'],
+      })
+      .mockResolvedValueOnce({
+        githubInstallationId: BigInt(123),
+        workspaceId: 'workspace-1',
+        repositorySelection: 'selected',
+        reposScope: ['acme/api'],
+        triggerOnPush: true,
+        triggerOnPr: true,
+        targetBranches: ['main'],
+      });
+
+    const request = {
+      headers: {
+        'x-hub-signature-256': 'sha256=ok',
+        'x-github-event': 'pull_request',
+        'x-github-delivery': 'delivery-fork',
+      },
+      body: {
+        installation: { id: 123 },
+        action: 'opened',
+        number: 7,
+        repository: {
+          id: 10,
+          full_name: 'acme/api',
+          html_url: 'https://github.com/acme/api',
+          default_branch: 'main',
+          private: true,
+        },
+        pull_request: {
+          head: {
+            ref: 'feature-x',
+            sha: 'def456',
+            repo: { full_name: 'someone/forked-repo' },
+          },
+          base: {
+            ref: 'main',
+          },
+        },
+      },
+    };
+    const response = createResponse();
+
+    await githubWebhookApiHandler(request as never, response as never, {} as never);
+
+    expect(response.status).toHaveBeenCalledWith(202);
+    expect(response.json).toHaveBeenCalledWith({
+      status: 'ignored',
+      reason: 'fork_pr_not_supported_yet',
+      scan_id: undefined,
+      delivery_id: 'delivery-fork',
+    });
+    expect(submitGitHubScanMock).not.toHaveBeenCalled();
+  });
 });

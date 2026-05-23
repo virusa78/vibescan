@@ -1,0 +1,53 @@
+name: VibeScan CI Gate
+
+on:
+  workflow_call:
+    inputs:
+      api_base_url:
+        description: Base URL for the VibeScan API
+        required: false
+        type: string
+        default: https://app.vibescan.app
+      repository_url:
+        description: GitHub repository URL to scan
+        required: true
+        type: string
+      poll_interval_ms:
+        description: Poll interval while waiting for scan completion
+        required: false
+        type: number
+        default: 5000
+      timeout_ms:
+        description: Maximum time to wait for scan completion
+        required: false
+        type: number
+        default: 1200000
+    secrets:
+      vibescan_api_key:
+        required: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run VibeScan gate
+        env:
+          VIBESCAN_API_BASE_URL: ${{ inputs.api_base_url }}
+          VIBESCAN_API_KEY: ${{ secrets.vibescan_api_key }}
+          VIBESCAN_REPOSITORY_URL: ${{ inputs.repository_url }}
+          VIBESCAN_POLL_INTERVAL_MS: ${{ inputs.poll_interval_ms }}
+          VIBESCAN_TIMEOUT_MS: ${{ inputs.timeout_ms }}
+        run: node --import tsx scripts/vibescan-ci-gate-run.ts
