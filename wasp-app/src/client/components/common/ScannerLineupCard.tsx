@@ -10,7 +10,13 @@ import {
 } from '../../utils/scannerStatusVocabulary';
 import { CheckCircle2, Circle, Clock, XCircle, Check } from 'lucide-react';
 import type { ScannerLineupStatus } from '../../../dashboard/scanLineupStatus';
-import { getScannerBadgeClass, getScannerCardClass, getScannerDotClass, getScannerSelectionAriaLabel } from '../../utils/scannerColors';
+import {
+  getScannerBadgeClass,
+  getScannerCardClass,
+  getScannerDotClass,
+  getScannerLetter,
+  getScannerSelectionAriaLabel,
+} from '../../utils/scannerColors';
 
 interface ScannerLineupCardProps {
   sources: ScannerSource[];
@@ -121,6 +127,52 @@ export function ScannerLineupCard({
                   ? 'rounded-xl border p-3 border-red-500/30 bg-red-500/10 text-red-700'
                   : `rounded-xl border p-3 ${scannerCardClass}`;
 
+            if (selectionMode) {
+              const selectionCardClass = !selectable
+                ? 'rounded-xl border border-slate-500/40 bg-slate-500/10 p-3 text-slate-600 dark:text-slate-300 opacity-70'
+                : selected
+                  ? `rounded-xl border p-3 text-left transition shadow-sm ${scannerCardClass}`
+                  : 'rounded-xl border border-border/70 bg-background p-3 text-left transition hover:border-primary/40 hover:bg-accent/40';
+
+              return (
+                <button
+                  key={source}
+                  type="button"
+                  onClick={() => selectable && onToggleSource?.(source)}
+                  disabled={!selectable}
+                  aria-pressed={selected}
+                  aria-label={getScannerSelectionAriaLabel({ scanner: entry.source, selected })}
+                  title={`${entry.label}${disabledReason ? ` — ${disabledReason}` : ''}`}
+                  className={selectionCardClass}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs font-semibold ${scannerBadgeClass}`}>
+                          {getScannerLetter(entry.source)}
+                        </span>
+                        <span className="truncate text-sm font-semibold">{entry.label}</span>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 opacity-80">{entry.description}</p>
+                      {disabledReason ? (
+                        <p className="mt-1 text-xs leading-5 opacity-80">{disabledReason}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge variant="outline" className={`inline-flex items-center gap-1 whitespace-nowrap text-[10px] uppercase tracking-wide ${statusClassName}`}>
+                        <StatusIcon className="size-3" aria-hidden="true" />
+                        <span>{statusLabel}</span>
+                      </Badge>
+                      <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full border ${selected ? 'bg-primary text-primary-foreground border-primary' : `border ${getScannerDotClass(entry.source)}`}`}>
+                        {selected ? <Check className="h-3 w-3" /> : null}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[10px] uppercase tracking-wide opacity-70">{entry.source}</p>
+                </button>
+              );
+            }
+
             return (
               <div
                 key={source}
@@ -129,31 +181,8 @@ export function ScannerLineupCard({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      {selectionMode ? (
-                        // Clickable colored dot + check interaction instead of a checkbox
-                        <button
-                          type="button"
-                          onClick={() => selectable && onToggleSource?.(source)}
-                          disabled={!selectable}
-                          aria-pressed={selected}
-                          aria-label={getScannerSelectionAriaLabel({ scanner: entry.source, selected })}
-                          title={`${entry.label}${disabledReason ? ` — ${disabledReason}` : ''}`}
-                          className={`flex items-center justify-center h-8 w-8 rounded-full transition ${selectable ? 'hover:scale-105' : 'opacity-50 cursor-not-allowed'}`}
-                        >
-                          {selected ? (
-                            <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-primary text-white">
-                              <Check className="h-4 w-4" />
-                            </span>
-                          ) : (
-                            <span className={`inline-block h-3 w-3 rounded-full border ${getScannerDotClass(entry.source)}`} aria-hidden />
-                          )}
-                        </button>
-                      ) : null}
                       <span className="truncate text-sm font-semibold">{entry.label}</span>
                     </div>
-                    {selectionMode && disabledReason ? (
-                      <p className="mt-2 text-xs leading-5 opacity-80">{disabledReason}</p>
-                    ) : null}
                   </div>
                   <Badge variant="outline" className={`inline-flex items-center gap-1 whitespace-nowrap text-[10px] uppercase tracking-wide ${statusClassName}`}>
                     <StatusIcon className="size-3" aria-hidden="true" />
