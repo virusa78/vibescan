@@ -149,10 +149,10 @@ export function ScannerLineupCard({
                   aria-pressed={selected}
                   aria-label={getScannerSelectionAriaLabel({ scanner: entry.source, selected })}
                   title={`${entry.label}${disabledReason ? ` — ${disabledReason}` : ''}`}
-                  className={`group flex items-stretch gap-0 overflow-hidden ${selectionCardClass}`}
+                  className={`group flex items-start gap-0 overflow-hidden ${selectionCardClass}`}
                 >
-                  {/* left color stripe */}
-                  <span className={`w-1 ${stripeClass} mr-3 hidden sm:block`} aria-hidden="true" />
+                  {/* left color stripe: thicker when selected */}
+                  <span className={`${selected ? 'w-4 md:w-5' : 'w-3 md:w-4'} ${stripeClass} mr-3 hidden sm:block rounded-r-sm`} aria-hidden="true" />
 
                   <div className="flex flex-1 items-start justify-between gap-3 p-3">
                     <div className="min-w-0">
@@ -161,8 +161,8 @@ export function ScannerLineupCard({
                           {getScannerLetter(entry.source)}
                         </span>
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-foreground">{entry.label}</div>
-                          <p className="mt-1 text-xs leading-5 text-muted-foreground truncate">{entry.description}</p>
+                          <div className="text-sm font-semibold text-foreground">{entry.label}</div>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">{entry.description}</p>
                           {disabledReason ? (
                             <p className="mt-1 text-xs leading-5 text-muted-foreground">{disabledReason}</p>
                           ) : null}
