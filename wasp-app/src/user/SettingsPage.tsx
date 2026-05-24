@@ -39,6 +39,7 @@ import {
   getScannerHealthLabel,
 } from "../client/utils/scannerStatusVocabulary";
 import { getBillingPlanLabel, getBillingStateLabel } from "../client/utils/productVocabulary";
+import { getScannerBadgeClass, getScannerFullName } from "../client/utils/scannerColors";
 
 type NotificationSettingsResponse = {
   project_key?: string;
@@ -252,8 +253,6 @@ export default function SettingsPage() {
   const snykApiKeyPreview = scannerAccess?.snyk_api_key_preview ?? null;
   const snykCredentialSource = scannerAccess?.snyk_credential_source ?? null;
   const snykReadyReason = scannerAccess?.snyk_ready_reason ?? null;
-  const johnnyChoice = scannerChoices.find((choice) => choice.source === "codescoring_johnny") ?? null;
-  const snykChoice = scannerChoices.find((choice) => choice.source === "snyk") ?? null;
 
   useEffect(() => {
     if (user) {
@@ -764,13 +763,26 @@ export default function SettingsPage() {
           )}
 
           <div className="space-y-4 rounded-md border border-border/60 p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={johnnyChoice?.status === "available" ? "default" : johnnyChoice?.status === "cooling_down" ? "secondary" : "outline"}>
-                Johnny: {getScannerAvailabilityLabel(johnnyChoice?.status)}
-              </Badge>
-              <Badge variant={snykChoice?.status === "available" ? "default" : "outline"}>
-                Snyk: {getScannerAvailabilityLabel(snykChoice?.status)}
-              </Badge>
+            <div className="flex flex-wrap items-center gap-2" role="list">
+              {scannerChoices.map((choice) => {
+                const cls = getScannerBadgeClass(choice.source);
+                return (
+                  <div key={choice.source} role="listitem" className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center justify-center h-8 w-8 rounded-md text-[12px] font-semibold ${cls}`}
+                      title={getScannerFullName(choice.source)}
+                      aria-label={`${getScannerFullName(choice.source)}: ${getScannerAvailabilityLabel(choice.status)}`}
+                      tabIndex={0}
+                    >
+                      {choice.source.charAt(0).toUpperCase()}
+                    </span>
+                    <div className="text-sm">
+                      <div className="font-medium">{getScannerFullName(choice.source)}</div>
+                      <div className="text-xs text-muted-foreground">{getScannerAvailabilityLabel(choice.status)}</div>
+                    </div>
+                  </div>
+                );
+              })}
               {snykCredentialSource && (
                 <Badge variant="outline">Credential source: {snykCredentialSource}</Badge>
               )}

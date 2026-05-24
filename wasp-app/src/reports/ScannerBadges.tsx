@@ -5,6 +5,7 @@
 
 import { Badge } from '../client/components/ui/badge';
 import { Link as ExternalLink } from '../client/components/common/VibeUI';
+import { getScannerConfig } from '../client/utils/scannerColors';
 
 interface ScannerBadgesProps {
   cveId: string;
@@ -12,23 +13,30 @@ interface ScannerBadgesProps {
   _count?: number; // Reserved for future use (multi-scan aggregation)
 }
 
-import { SCANNER_CONFIG } from '../client/utils/scannerColors';
-
 // Backwards-compatible mapping for ScannerBadges: add dbUrl and hover classes here
 const LOCAL_DB_URL = (cveId: string) => `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cveId)}`;
 
 function getLocalConfig(scanner: string) {
-  const cfg = SCANNER_CONFIG[scanner] ?? {
+  const cfg = getScannerConfig(scanner);
+
+  const dbUrl = scanner === 'snyk'
+    ? (cveId: string) => `https://snyk.io/vulnerability/${encodeURIComponent(cveId)}`
+    : (cveId: string) => LOCAL_DB_URL(cveId);
+
+  return {
+    ...cfg,
+    dbUrl,
+  };
+}
+
+function getFallbackConfig(scanner: string) {
+  return {
     letter: scanner.charAt(0).toUpperCase(),
     fullName: scanner,
     bgColor: 'bg-slate-600',
     textColor: 'text-white',
     borderColor: 'border-slate-700',
     hoverBg: 'hover:bg-slate-700',
-  };
-
-  return {
-    ...cfg,
     dbUrl: (cveId: string) => LOCAL_DB_URL(cveId),
   };
 }
@@ -50,15 +58,7 @@ export function ScannerBadges({ cveId, reportedBy = [], _count }: ScannerBadgesP
       )}
 
       {uniqueScanners.map((scanner) => {
-        const config = SCANNER_CONFIG[scanner] || {
-          letter: scanner.charAt(0).toUpperCase(),
-          bgColor: 'bg-slate-600',
-          textColor: 'text-white',
-          borderColor: 'border-slate-700',
-          hoverBg: 'hover:bg-slate-700',
-          fullName: scanner,
-          dbUrl: (cveId) => `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cveId)}`,
-        };
+        const config = getLocalConfig(scanner) ?? getFallbackConfig(scanner);
 
         return (
           <div
@@ -77,7 +77,7 @@ export function ScannerBadges({ cveId, reportedBy = [], _count }: ScannerBadgesP
                 rounded-lg font-bold text-sm md:text-base
                 border-2 ${config.borderColor}
                 ${config.bgColor} ${config.textColor}
-                ${config.hoverBg}
+                ${config.hoverBg ?? ''}
                 transition-all duration-200
                 shadow-md hover:shadow-lg
                 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-foreground
@@ -91,7 +91,7 @@ export function ScannerBadges({ cveId, reportedBy = [], _count }: ScannerBadgesP
             <div
               className="
                 absolute bottom-full left-1/2 -translate-x-1/2 mb-2
-                invisible group-hover:visible
+                invisible group-hover:visible group-focus-within:visible
                 bg-foreground text-background
                 px-2 py-1 rounded text-xs font-medium whitespace-nowrap
                 z-10 pointer-events-none

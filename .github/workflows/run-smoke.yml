@@ -1,0 +1,74 @@
+name: Run smoke check
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  run-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Wasp CLI
+        run: |
+          curl -s https://get.wasp-lang.dev/linux | sh
+          echo "$HOME/.wasp/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Wasp
+        run: wasp --version
+
+      - name: Start stack via run.sh
+        run: |
+          chmod +x ./run.sh
+          nohup ./run.sh > /tmp/run-smoke.log 2>&1 &
+          echo $! > /tmp/run-smoke.pid
+
+      - name: Wait for backend/frontend readiness
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 120); do
+            if curl -sS http://127.0.0.1:3555/ >/dev/null 2>&1 && curl -sS http://127.0.0.1:3000/ >/dev/null 2>&1; then
+              echo "Backend and frontend are reachable."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Services did not become ready in time."
+          tail -n 200 /tmp/run-smoke.log || true
+          exit 1
+
+      - name: Check container health
+        run: |
+          docker ps
+          docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' vibescan-postgres
+          docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' vibescan-redis
+          docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' vibescan-minio
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          tail -n 300 /tmp/run-smoke.log || true
+          docker compose logs --tail 200 || true
+
+      - name: Stop stack
+        if: always()
+        run: |
+          ./run.sh --stop || true
+          if [ -f /tmp/run-smoke.pid ]; then
+            kill "$(cat /tmp/run-smoke.pid)" 2>/dev/null || true
+          fi

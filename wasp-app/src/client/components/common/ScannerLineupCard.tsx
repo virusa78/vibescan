@@ -10,7 +10,7 @@ import {
 } from '../../utils/scannerStatusVocabulary';
 import { CheckCircle2, Circle, Clock, XCircle, Check } from 'lucide-react';
 import type { ScannerLineupStatus } from '../../../dashboard/scanLineupStatus';
-import { getScannerBadgeClass, getScannerCardClass, getScannerDotClass, getScannerFullName } from '../../utils/scannerColors';
+import { getScannerBadgeClass, getScannerCardClass, getScannerDotClass, getScannerSelectionAriaLabel } from '../../utils/scannerColors';
 
 interface ScannerLineupCardProps {
   sources: ScannerSource[];
@@ -136,7 +136,8 @@ export function ScannerLineupCard({
                           onClick={() => selectable && onToggleSource?.(source)}
                           disabled={!selectable}
                           aria-pressed={selected}
-                          aria-label={`${selected ? 'Deselect' : 'Select'} ${entry.label}`}
+                          aria-label={getScannerSelectionAriaLabel({ scanner: entry.source, selected })}
+                          title={`${entry.label}${disabledReason ? ` — ${disabledReason}` : ''}`}
                           className={`flex items-center justify-center h-8 w-8 rounded-full transition ${selectable ? 'hover:scale-105' : 'opacity-50 cursor-not-allowed'}`}
                         >
                           {selected ? (
@@ -144,7 +145,7 @@ export function ScannerLineupCard({
                               <Check className="h-4 w-4" />
                             </span>
                           ) : (
-                            <span className={`inline-block h-3 w-3 rounded-full ${getScannerDotClass(entry.source)}`} aria-hidden />
+                            <span className={`inline-block h-3 w-3 rounded-full border ${getScannerDotClass(entry.source)}`} aria-hidden />
                           )}
                         </button>
                       ) : null}

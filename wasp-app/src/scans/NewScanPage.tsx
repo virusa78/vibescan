@@ -12,6 +12,7 @@ import { Link as WaspRouterLink, routes } from "wasp/client/router";
 import { useAsyncState } from "../client/hooks/useAsyncState";
 import { ScannerLineupCard } from "../client/components/common/ScannerLineupCard";
 import { getPlannedScannerSources, getScannerLineupEntry, type ScannerAccessPreview, type ScannerSource } from "../client/utils/scannerLineup";
+import { getScannerBadgeClass, getScannerFullName, getScannerLetter } from "../client/utils/scannerColors";
 import { developerSecurityTitle, scanInputTypeLabels } from "../client/utils/productVocabulary";
 
 type ScanInputType = "github" | "sbom" | "source_zip";
@@ -401,6 +402,7 @@ export default function NewScanPage() {
                   <thead>
                     <tr className="border-border/60 border-b text-left">
                       <th className="py-2 pr-4 font-medium">Input</th>
+                      <th className="py-2 pr-4 font-medium">Scanners</th>
                       <th className="py-2 pr-4 font-medium">Type</th>
                       <th className="py-2 pr-4 font-medium">Status</th>
                       <th className="py-2 pr-4 font-medium">Created</th>
@@ -416,6 +418,25 @@ export default function NewScanPage() {
                           </div>
                           <div className="text-muted-foreground text-xs">
                             {scan.id}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <div className="flex flex-wrap gap-1.5">
+                            {(Array.isArray((scan as { plannedSources?: ScannerSource[] }).plannedSources)
+                              && (scan as { plannedSources?: ScannerSource[] }).plannedSources!.length > 0
+                              ? (scan as { plannedSources?: ScannerSource[] }).plannedSources!
+                              : ["grype" as ScannerSource]
+                            ).map((source) => (
+                              <span
+                                key={`${scan.id}-${source}`}
+                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${getScannerBadgeClass(source)}`}
+                                title={getScannerFullName(source)}
+                                aria-label={`${getScannerFullName(source)} scanner`}
+                              >
+                                <span className="font-semibold">{getScannerLetter(source)}</span>
+                                <span>{getScannerLineupEntry(source).label}</span>
+                              </span>
+                            ))}
                           </div>
                         </td>
                         <td className="py-3 pr-4 capitalize">{scan.inputType}</td>

@@ -3,6 +3,7 @@ import {
   scannerHealthLabels,
   scannerResultLabels,
 } from './productVocabulary';
+import { getScannerBadgeClass, type ScannerKey } from './scannerColors';
 
 export type ScannerAvailabilityStatus = "available" | "cooling_down" | "unavailable";
 
@@ -45,4 +46,8 @@ export function getScannerHealthLabel(healthy: boolean | null): string {
   }
 
   return scannerHealthLabels.unknown;
+}
+
+export function getScannerColorClasses(scanner: ScannerKey): string {
+  return getScannerBadgeClass(scanner);
 }
