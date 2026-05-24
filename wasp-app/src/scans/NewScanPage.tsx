@@ -146,6 +146,12 @@ export default function NewScanPage() {
     [scannerChoices],
   );
   const scannerSources = useMemo(() => scannerChoices.map((choice) => choice.source), [scannerChoices]);
+
+  // recommended scanners for the current inputType (use planned sources as recommendation)
+  const recommendedBySource = useMemo(() => {
+    const planned = getPlannedScannerSources(scannerAccessData as ScannerAccessPreview | null);
+    return Object.fromEntries(planned.map((s) => [s, true]));
+  }, [scannerAccessData]);
   const activeType = useMemo(
     () => inputTypeOptions.find((option) => option.value === inputType) ?? inputTypeOptions[0],
     [inputType],
@@ -239,6 +245,7 @@ export default function NewScanPage() {
           selectedBySource={Object.fromEntries(selectedScannerSources.map((scanner) => [scanner, true])) as Partial<Record<ScannerSource, boolean>>}
           selectableBySource={Object.fromEntries(scannerChoices.map((choice) => [choice.source, choice.selectable])) as Partial<Record<ScannerSource, boolean>>}
           disabledReasonBySource={Object.fromEntries(scannerChoices.map((choice) => [choice.source, choice.disabled_reason])) as Partial<Record<ScannerSource, string | null>>}
+          recommendedBySource={recommendedBySource as Partial<Record<ScannerSource, boolean>>}
           onToggleSource={(scanner) => {
             const choice = scannerChoiceMap.get(scanner);
             if (!choice?.selectable) {
