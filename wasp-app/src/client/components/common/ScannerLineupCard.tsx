@@ -25,6 +25,8 @@ interface ScannerLineupCardProps {
   selectedBySource?: Partial<Record<ScannerSource, boolean>>;
   selectableBySource?: Partial<Record<ScannerSource, boolean>>;
   disabledReasonBySource?: Partial<Record<ScannerSource, string | null>>;
+  // which sources are recommended for the current input type (used to highlight stripe)
+  recommendedBySource?: Partial<Record<ScannerSource, boolean>>;
   onToggleSource?: (source: ScannerSource) => void;
   title?: string;
   subtitle?: string;
@@ -38,6 +40,7 @@ export function ScannerLineupCard({
   selectedBySource,
   selectableBySource,
   disabledReasonBySource,
+  recommendedBySource,
   onToggleSource,
   title = 'Parallel scanners',
   subtitle = 'The backend fans this scan out across independent lanes.',
@@ -137,7 +140,10 @@ export function ScannerLineupCard({
 
               // use explicit config for stripe color
               const scannerConfig = getScannerConfig(entry.source);
-              const stripeClass = scannerConfig?.bgColor ?? 'bg-slate-200';
+              const recommended = recommendedBySource?.[entry.source] ?? false;
+              const baseStripe = scannerConfig?.bgColor ?? 'bg-slate-200';
+              const stripeEnhance = recommended ? 'ring-2 ring-offset-1 ring-primary/20' : '';
+              const stripeClass = `${baseStripe} ${stripeEnhance}`;
 
               // compact, consistent card: small colored stripe on the left, content on the right
               return (
