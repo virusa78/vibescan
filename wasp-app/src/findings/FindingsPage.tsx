@@ -177,6 +177,10 @@ export default function FindingsPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<{
+    findingId: string;
+    action: 'accept' | 'snooze' | 'reject' | 'reopen';
+  } | null>(null);
 
   useEffect(() => {
     setExpandedProjects(new Set());
@@ -218,6 +222,10 @@ export default function FindingsPage() {
   }, [findings, selectedFindingId]);
 
   const runAction = async (action: 'accept' | 'snooze' | 'reject' | 'reopen', finding: ProjectFindingRow) => {
+    if (pendingAction) {
+      return;
+    }
+
     const payload = {
       projectFindingId: finding.id,
       reason: action === 'snooze' ? 'Temporarily deferred from Findings triage' : `Marked ${action} from Findings triage`,
@@ -225,11 +233,19 @@ export default function FindingsPage() {
         ? { expiresAt: new Date(Date.now() + 14 * 86_400_000).toISOString() }
         : {}),
     };
-    if (action === 'accept') await acceptProjectFinding(payload);
-    if (action === 'snooze') await snoozeProjectFinding(payload);
-    if (action === 'reject') await rejectProjectFinding(payload);
-    if (action === 'reopen') await reopenProjectFinding(payload);
-    await refetch();
+    setPendingAction({ findingId: finding.id, action });
+
+    try {
+      if (action === 'accept') await acceptProjectFinding(payload);
+      if (action === 'snooze') await snoozeProjectFinding(payload);
+      if (action === 'reject') await rejectProjectFinding(payload);
+      if (action === 'reopen') await reopenProjectFinding(payload);
+      await refetch();
+    } finally {
+      setPendingAction((current) => (
+        current?.findingId === finding.id && current.action === action ? null : current
+      ));
+    }
   };
 
   return (
@@ -319,7 +335,7 @@ export default function FindingsPage() {
             <SelectContent>
               <SelectItem value="all">All findings</SelectItem>
               <SelectItem value="fixable">Fixable only</SelectItem>
-              <SelectItem value="unfixed">Unfixed only</SelectItem>
+              <SelectItem value="unfixable">Unfixed only</SelectItem>
             </SelectContent>
           </Select>
           <Select value={age} onValueChange={setAge}>
@@ -478,15 +494,54 @@ export default function FindingsPage() {
                   <div><span className="text-muted-foreground">Fixed version</span><br />{selectedFinding.fixedVersion || 'Not available'}</div>
                   <div><span className="text-muted-foreground">Scanners</span><br /><ScannerBadges cveId={selectedFinding.cveId} reportedBy={selectedFinding.reportedBy} /></div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => runAction('accept', selectedFinding)}>Accept</Button>
-                  <Button size="sm" variant="outline" onClick={() => runAction('snooze', selectedFinding)}>Snooze</Button>
-                  <Button size="sm" variant="outline" onClick={() => runAction('reject', selectedFinding)}>Reject</Button>
-                  <Button size="sm" variant="outline" onClick={() => runAction('reopen', selectedFinding)}>Reopen</Button>
+              <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => runAction('accept', selectedFinding)}
+                    disabled={pendingAction !== null}
+                  >
+                    {pendingAction?.findingId === selectedFinding.id && pendingAction.action === 'accept'
+                      ? 'Accepting...'
+                      : 'Accept'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => runAction('snooze', selectedFinding)}
+                    disabled={pendingAction !== null}
+                  >
+                    {pendingAction?.findingId === selectedFinding.id && pendingAction.action === 'snooze'
+                      ? 'Snoozing...'
+                      : 'Snooze'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => runAction('reject', selectedFinding)}
+                    disabled={pendingAction !== null}
+                  >
+                    {pendingAction?.findingId === selectedFinding.id && pendingAction.action === 'reject'
+                      ? 'Rejecting...'
+                      : 'Reject'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => runAction('reopen', selectedFinding)}
+                    disabled={pendingAction !== null}
+                  >
+                    {pendingAction?.findingId === selectedFinding.id && pendingAction.action === 'reopen'
+                      ? 'Reopening...'
+                      : 'Reopen'}
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(`${selectedFinding.cveId} ${selectedFinding.packageName}@${selectedFinding.installedVersion}`)}>
                     <Copy className="size-4" /> Copy
                   </Button>
                 </div>
+                {pendingAction?.findingId === selectedFinding.id && (
+                  <div className="text-xs text-muted-foreground">Updating finding status...</div>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {selectedFinding.latestScan ? (
                     <>

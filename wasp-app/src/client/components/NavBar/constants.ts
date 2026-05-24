@@ -1,4 +1,13 @@
-import { LayoutDashboard, PlusCircle, Key, FileText, Newspaper, Settings, ShieldAlert } from "lucide-react";
+import {
+  LayoutDashboard,
+  PlusCircle,
+  Key,
+  FileText,
+  Newspaper,
+  Settings,
+  ShieldAlert,
+  CreditCard,
+} from "lucide-react";
 import { routes } from "wasp/client/router";
 import { BlogUrl, DocsUrl } from "../../../shared/common";
 import type { NavigationItem } from "./NavBar";
@@ -8,8 +17,9 @@ const appNavigationSource: NavigationItem[] = [
   { name: appNavigationLabels[0], to: routes.DashboardRoute.to, icon: LayoutDashboard },
   { name: appNavigationLabels[1], to: routes.NewScanRoute.to, icon: PlusCircle },
   { name: appNavigationLabels[2], to: routes.FindingsRoute.to, icon: ShieldAlert },
-  { name: appNavigationLabels[3], to: routes.ApiKeysRoute.to, icon: Key },
-  { name: appNavigationLabels[4], to: routes.SettingsRoute.to, icon: Settings },
+  { name: appNavigationLabels[3], to: routes.BillingPageRoute.to, icon: CreditCard },
+  { name: appNavigationLabels[4], to: routes.ApiKeysRoute.to, icon: Key },
+  { name: appNavigationLabels[5], to: routes.SettingsRoute.to, icon: Settings },
 ];
 
 const staticNavigationItems: NavigationItem[] = [

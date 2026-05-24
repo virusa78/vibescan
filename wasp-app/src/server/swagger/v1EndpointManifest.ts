@@ -86,6 +86,11 @@ export const v1EndpointManifest: V1EndpointManifestEntry[] = [
   { method: 'post', path: '/api/v1/settings/notifications', operationId: 'updateNotificationSettings', requiresRequestBody: true, sourceFile: settingsDocs },
   { method: 'get', path: '/api/v1/settings/scanner-access', operationId: 'getScannerAccessSettings', requiresRequestBody: false, sourceFile: settingsDocs },
   { method: 'post', path: '/api/v1/settings/scanner-access', operationId: 'updateScannerAccessSettings', requiresRequestBody: true, sourceFile: settingsDocs },
+  { method: 'get', path: '/api/v1/settings/zoho', operationId: 'getZohoIntegrationStatus', requiresRequestBody: false, sourceFile: settingsDocs },
+  { method: 'post', path: '/api/v1/settings/zoho/connect', operationId: 'connectZoho', requiresRequestBody: true, sourceFile: settingsDocs },
+  { method: 'delete', path: '/api/v1/settings/zoho', operationId: 'disconnectZoho', requiresRequestBody: false, sourceFile: settingsDocs },
+  { method: 'post', path: '/api/v1/settings/zoho/test', operationId: 'testZohoConnection', requiresRequestBody: false, sourceFile: settingsDocs },
+  { method: 'post', path: '/api/v1/settings/zoho/resync', operationId: 'resyncZohoWorkspace', requiresRequestBody: false, sourceFile: settingsDocs },
 
   { method: 'get', path: '/api/v1/workspaces', operationId: 'listWorkspaces', requiresRequestBody: false, sourceFile: workspacesDocs },
   { method: 'get', path: '/api/v1/workspaces/current', operationId: 'getWorkspaceContext', requiresRequestBody: false, sourceFile: workspacesDocs },

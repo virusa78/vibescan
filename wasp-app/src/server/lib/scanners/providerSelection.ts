@@ -56,13 +56,18 @@ function buildSnykExecution(credentialSource: ScannerCredentialSource): PlannedS
 }
 
 export function resolvePlannedScannerExecutions(
-  planAtSubmission: string,
+  _planAtSubmission: string,
   context?: ScannerPlanningContext,
+  selectedSources?: ScannerResultSource[],
 ): PlannedScannerExecution[] {
-  const executions = [...BASE_PLAN_EXECUTIONS];
+  const selectedSet = selectedSources === undefined ? null : new Set(selectedSources);
+  const executions = BASE_PLAN_EXECUTIONS.filter((execution) => !selectedSet || selectedSet.has(execution.resultSource));
 
   if (context?.snykReadiness?.enabled && context.snykReadiness.ready && context.snykReadiness.credentialSource) {
-    executions.push(buildSnykExecution(context.snykReadiness.credentialSource));
+    const snykExecution = buildSnykExecution(context.snykReadiness.credentialSource);
+    if (!selectedSet || selectedSet.has(snykExecution.resultSource)) {
+      executions.push(snykExecution);
+    }
   }
 
   return executions;
@@ -71,13 +76,15 @@ export function resolvePlannedScannerExecutions(
 export function resolveQueueScannerTargets(
   planAtSubmission: string,
   context?: ScannerPlanningContext,
+  selectedSources?: ScannerResultSource[],
 ): QueueScannerTarget[] {
-  return resolvePlannedScannerExecutions(planAtSubmission, context).map((execution) => execution.queueTarget);
+  return resolvePlannedScannerExecutions(planAtSubmission, context, selectedSources).map((execution) => execution.queueTarget);
 }
 
 export function resolveExpectedScanSources(
   planAtSubmission: string,
   context?: ScannerPlanningContext,
+  selectedSources?: ScannerResultSource[],
 ): ScannerResultSource[] {
-  return resolvePlannedScannerExecutions(planAtSubmission, context).map((execution) => execution.resultSource);
+  return resolvePlannedScannerExecutions(planAtSubmission, context, selectedSources).map((execution) => execution.resultSource);
 }

@@ -57,6 +57,13 @@ export const serverCoreEnvValidationSchema = z.object({
   SNYK_SSH_PORT: z.preprocess(emptyStringToUndefined, z.coerce.number().int().positive().optional()),
   SNYK_SSH_IDENTITY_FILE: optionalStringSchema,
   SNYK_SSH_REMOTE_TMP_DIR: optionalStringSchema,
+  ZOHO_CLIENT_ID: optionalStringSchema,
+  ZOHO_CLIENT_SECRET: optionalStringSchema,
+  ZOHO_REDIRECT_URI: optionalStringSchema,
+  ZOHO_ACCOUNTS_BASE_URL: optionalUrlSchema,
+  ZOHO_API_BASE_URL: optionalUrlSchema,
+  ZOHO_RECONCILIATION_INTERVAL_MS: z.preprocess(emptyStringToUndefined, z.coerce.number().int().positive().optional()),
+  ZOHO_STALE_SYNC_THRESHOLD_MS: z.preprocess(emptyStringToUndefined, z.coerce.number().int().positive().optional()),
 });
 
 export function getJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
@@ -97,4 +104,32 @@ export function getRedisHost(env: NodeJS.ProcessEnv = process.env): string {
 
 export function getRedisPort(env: NodeJS.ProcessEnv = process.env): number {
   return redisPortSchema.parse(env.REDIS_PORT);
+}
+
+export function getZohoClientId(env: NodeJS.ProcessEnv = process.env): string | null {
+  return optionalStringSchema.parse(env.ZOHO_CLIENT_ID) ?? null;
+}
+
+export function getZohoClientSecret(env: NodeJS.ProcessEnv = process.env): string | null {
+  return optionalStringSchema.parse(env.ZOHO_CLIENT_SECRET) ?? null;
+}
+
+export function getZohoRedirectUri(env: NodeJS.ProcessEnv = process.env): string | null {
+  return optionalStringSchema.parse(env.ZOHO_REDIRECT_URI) ?? null;
+}
+
+export function getZohoAccountsBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
+  return optionalUrlSchema.parse(env.ZOHO_ACCOUNTS_BASE_URL) || 'https://accounts.zoho.com';
+}
+
+export function getZohoApiBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
+  return optionalUrlSchema.parse(env.ZOHO_API_BASE_URL) || 'https://www.zohoapis.com';
+}
+
+export function getZohoReconciliationIntervalMs(env: NodeJS.ProcessEnv = process.env): number {
+  return z.coerce.number().int().positive().default(15 * 60 * 1000).parse(env.ZOHO_RECONCILIATION_INTERVAL_MS);
+}
+
+export function getZohoStaleSyncThresholdMs(env: NodeJS.ProcessEnv = process.env): number {
+  return z.coerce.number().int().positive().default(6 * 60 * 60 * 1000).parse(env.ZOHO_STALE_SYNC_THRESHOLD_MS);
 }

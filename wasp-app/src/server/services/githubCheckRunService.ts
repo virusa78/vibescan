@@ -17,7 +17,7 @@ function toGitHubContext(value: unknown): PersistedGitHubScanContext | null {
 }
 
 function buildScanDetailsUrl(scanId: string): string {
-  return `${getFrontendBaseUrl()}/scans/${scanId}`;
+  return `${getFrontendBaseUrl()}/reports/${scanId}`;
 }
 
 function buildCheckRunSummary(input: {

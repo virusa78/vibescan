@@ -6,12 +6,14 @@
 import { Queue, Worker, type Job } from 'bullmq';
 import { getRedisConnectionConfig } from '../config/runtime.js';
 import { webhookDeliveryWorker } from '../workers/webhookDeliveryWorker.js';
+import { zohoIntegrationWorker } from '../workers/zohoIntegrationWorker.js';
 import { scannerWorkerDefinitions } from '../workers/scannerWorkerRouting.js';
 import {
   QUEUE_NAMES,
   type QueueWorkerStatus,
   type ScanJob,
   type WebhookDeliveryJob,
+  type ZohoSyncJob,
 } from './jobContract.js';
 import { SCAN_JOB_RETRY_CONFIG } from '../utils/retryPolicy.js';
 
@@ -61,6 +63,7 @@ export const webhookDeliveryQueue = new Queue<WebhookDeliveryJob>(QUEUE_NAMES.WE
 let freeWorker: Worker<ScanJob> | null = null;
 let enterpriseWorker: Worker<ScanJob> | null = null;
 let webhookWorker: Worker<WebhookDeliveryJob> | null = null;
+let zohoWorker: Worker<ZohoSyncJob> | null = null;
 let workersInitialized = false;
 
 function logCompletedJob(label: string, job: Job | undefined): void {
@@ -127,6 +130,19 @@ export async function initializeWorkers() {
       logFailedJob('Webhook Delivery', job, error);
     });
 
+    zohoWorker = new Worker(QUEUE_NAMES.ZOHO_SYNC, zohoIntegrationWorker, {
+      connection: redisConfig,
+      concurrency: 2,
+    });
+
+    zohoWorker.on('completed', (job) => {
+      logCompletedJob('Zoho Sync', job);
+    });
+
+    zohoWorker.on('failed', (job, error) => {
+      logFailedJob('Zoho Sync', job, error);
+    });
+
     // Set up dead-letter queue for failed scan jobs
     freeWorker.on('failed', async (job) => {
       if (job && job.attemptsMade >= SCAN_JOB_RETRY_CONFIG.maxAttempts) {
@@ -145,7 +161,7 @@ export async function initializeWorkers() {
     });
 
     console.log(
-      `✅ Workers initialized: free_scan (20 concurrent), enterprise_scan (3 concurrent), webhook_delivery (10 concurrent)`,
+      `✅ Workers initialized: free_scan (20 concurrent), enterprise_scan (3 concurrent), webhook_delivery (10 concurrent), zoho_sync (2 concurrent)`,
     );
     console.log(
       `✅ Retry policy: ${SCAN_JOB_RETRY_CONFIG.maxAttempts} attempts, ${SCAN_JOB_RETRY_CONFIG.delayMs}ms exponential backoff`,
@@ -167,6 +183,9 @@ export async function closeWorkers() {
   if (webhookWorker) {
     await webhookWorker.close();
   }
+  if (zohoWorker) {
+    await zohoWorker.close();
+  }
 
   workersInitialized = false;
 }
@@ -184,6 +203,10 @@ export function getWorkerStatus(): QueueWorkerStatus {
     webhook: {
       isRunning: webhookWorker?.isRunning() || false,
       isPaused: webhookWorker?.isPaused() || false,
+    },
+    zoho: {
+      isRunning: zohoWorker?.isRunning() || false,
+      isPaused: zohoWorker?.isPaused() || false,
     },
   };
 }

@@ -28,6 +28,7 @@ interface SubmissionInput {
   workspaceId: string;
   inputType: ScanInputType;
   inputRef: string;
+  selectedSources?: Array<'grype' | 'trivy' | 'codescoring_johnny' | 'owasp' | 'snyk'>;
   githubContext?: PersistedGitHubScanContext | null;
 }
 
@@ -145,7 +146,13 @@ export async function submitScanSubmission(
   const plannedExecutions = resolvePlannedScannerExecutions(planAtSubmission, {
     userId: input.userId,
     snykReadiness,
-  });
+  }, input.selectedSources);
+
+  if (plannedExecutions.length === 0) {
+    throw new HttpError(422, "At least one scanner lane must be selected", {
+      detail: 'Select at least one scanner lane before starting the scan.',
+    });
+  }
 
   if (planAtSubmission === "enterprise" && snykReadiness.enabled && !snykReadiness.ready) {
     throw new HttpError(422, "Snyk scanner is enabled but not ready", {

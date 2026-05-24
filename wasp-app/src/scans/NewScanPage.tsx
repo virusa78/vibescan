@@ -1,19 +1,71 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { ArrowRight, Github, Package, UploadCloud } from "lucide-react";
 import { submitScan, getScans, getScannerAccessSettings, useQuery } from "wasp/client/operations";
 import { Alert, AlertDescription } from "../client/components/ui/alert";
 import { Button } from "../client/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../client/components/ui/card";
 import { Input } from "../client/components/ui/input";
 import { Label } from "../client/components/ui/label";
 import { Skeleton } from "../client/components/ui/skeleton";
 import { Link as WaspRouterLink, routes } from "wasp/client/router";
 import { useAsyncState } from "../client/hooks/useAsyncState";
 import { ScannerLineupCard } from "../client/components/common/ScannerLineupCard";
-import { getPlannedScannerSources, type ScannerAccessPreview } from "../client/utils/scannerLineup";
+import { getPlannedScannerSources, getScannerLineupEntry, type ScannerAccessPreview, type ScannerSource } from "../client/utils/scannerLineup";
+import { developerSecurityTitle, scanInputTypeLabels } from "../client/utils/productVocabulary";
 
 type ScanInputType = "github" | "sbom" | "source_zip";
+
+type ScannerChoice = {
+  source: ScannerSource;
+  label: string;
+  description: string;
+  selectable: boolean;
+  selected_by_default: boolean;
+  status: "available" | "cooling_down" | "unavailable";
+  disabled_reason: string | null;
+  cooldown_reset_at: string | null;
+  usage?: {
+    used: number;
+    limit: number;
+    remaining: number;
+    reset_at: string | null;
+  };
+};
+
+type ScannerAccessResponse = ScannerAccessPreview & {
+  snyk_enabled: boolean;
+  snyk_api_key_attached: boolean;
+  snyk_api_key_preview: string | null;
+  snyk_ready: boolean;
+  snyk_ready_reason: string | null;
+  snyk_credential_source: "environment" | "user-secret" | null;
+  scanner_health: {
+    johnny: {
+      kind: "johnny";
+      configured: boolean;
+      healthy: boolean | null;
+      checkedAt: string | null;
+      healthyAt: string | null;
+      host: string | null;
+      probeDirectory: string | null;
+      probeCommand: string | null;
+      error: string | null;
+    };
+    snyk: {
+      kind: "snyk";
+      configured: boolean;
+      healthy: boolean | null;
+      checkedAt: string | null;
+      healthyAt: string | null;
+      host: string | null;
+      probeDirectory: string | null;
+      probeCommand: string | null;
+      error: string | null;
+    };
+  };
+  scanner_choices?: ScannerChoice[];
+};
 
 const inputTypeOptions: Array<{
   value: ScanInputType;
@@ -25,7 +77,7 @@ const inputTypeOptions: Array<{
 }> = [
   {
     value: "github",
-    title: "GitHub repository",
+    title: scanInputTypeLabels.github,
     description: "Paste a repository URL to clone and scan a live codebase quickly.",
     placeholder: "https://github.com/owner/repository",
     hint: "Best default path for most users. Use a full repository URL.",
@@ -33,7 +85,7 @@ const inputTypeOptions: Array<{
   },
   {
     value: "sbom",
-    title: "SBOM file",
+    title: scanInputTypeLabels.sbom,
     description: "Use a prepared CycloneDX or similar dependency manifest.",
     placeholder: "/path/to/bom.json",
     hint: "Best when CI already produces an SBOM and you want fast dependency analysis.",
@@ -41,7 +93,7 @@ const inputTypeOptions: Array<{
   },
   {
     value: "source_zip",
-    title: "Source ZIP",
+    title: scanInputTypeLabels.source_zip,
     description: "Reference a source archive when GitHub access is not available.",
     placeholder: "/path/to/project.zip",
     hint: "Best for offline packages, ad-hoc snapshots, or vendor source drops.",
@@ -57,6 +109,8 @@ export default function NewScanPage() {
   const requestedType = queryParams.get("type");
   const [inputRef, setInputRef] = useState("");
   const [inputType, setInputType] = useState<ScanInputType>("github");
+  const [selectedScannerSources, setSelectedScannerSources] = useState<ScannerSource[]>([]);
+  const selectionInitializedRef = useRef(false);
   const { isLoading: isSubmitting, error, run } = useAsyncState();
   const { data: scannerAccessData } = useQuery(getScannerAccessSettings);
   const {
@@ -66,14 +120,49 @@ export default function NewScanPage() {
     refetch,
   } = useQuery(getScans);
   const normalizedScans = useMemo(() => recentScans ?? [], [recentScans]);
-  const plannedScannerSources = useMemo(
-    () => getPlannedScannerSources(scannerAccessData as ScannerAccessPreview | null),
-    [scannerAccessData],
+  const scannerChoices = useMemo<ScannerChoice[]>(() => {
+    const access = scannerAccessData as ScannerAccessResponse | null;
+    if (Array.isArray(access?.scanner_choices) && access.scanner_choices.length > 0) {
+      return access.scanner_choices;
+    }
+
+    return getPlannedScannerSources(scannerAccessData as ScannerAccessPreview | null).map((source) => {
+      const entry = getScannerLineupEntry(source);
+      return {
+        source,
+        label: entry.label,
+        description: entry.description,
+        selectable: true,
+        selected_by_default: true,
+        status: "available",
+        disabled_reason: null,
+        cooldown_reset_at: null,
+      };
+    });
+  }, [scannerAccessData]);
+  const scannerChoiceMap = useMemo(
+    () => new Map(scannerChoices.map((choice) => [choice.source, choice])),
+    [scannerChoices],
   );
+  const scannerSources = useMemo(() => scannerChoices.map((choice) => choice.source), [scannerChoices]);
   const activeType = useMemo(
     () => inputTypeOptions.find((option) => option.value === inputType) ?? inputTypeOptions[0],
     [inputType],
   );
+  const selectedCount = selectedScannerSources.length;
+  const allSelectableScannerSources = useMemo(
+    () => scannerChoices.filter((choice) => choice.selectable).map((choice) => choice.source),
+    [scannerChoices],
+  );
+  const johnnyChoice = useMemo(
+    () => scannerChoices.find((choice) => choice.source === "codescoring_johnny") ?? null,
+    [scannerChoices],
+  );
+  const scannerLaneSubtitle = johnnyChoice?.status === "cooling_down"
+    ? `Johnny is on cooldown. ${johnnyChoice.disabled_reason ?? "It will unlock again later."}`
+    : johnnyChoice?.status === "unavailable"
+      ? `Johnny is unavailable. ${johnnyChoice.disabled_reason ?? "Check scanner access settings."}`
+      : "Pick the lanes you want to run. You can mix free and enterprise scanners per scan.";
 
   useEffect(() => {
     if (requestedType === "github" || requestedType === "sbom" || requestedType === "source_zip") {
@@ -81,16 +170,39 @@ export default function NewScanPage() {
     }
   }, [requestedType]);
 
+  useEffect(() => {
+    if (selectionInitializedRef.current || scannerChoices.length === 0) {
+      return;
+    }
+
+    setSelectedScannerSources(scannerChoices.filter((choice) => choice.selectable && choice.selected_by_default).map((choice) => choice.source));
+    selectionInitializedRef.current = true;
+  }, [scannerChoices]);
+
+  useEffect(() => {
+    setSelectedScannerSources((current) => {
+      const next = current.filter((source) => scannerChoiceMap.get(source)?.selectable);
+      return next.length === current.length ? current : next;
+    });
+  }, [scannerChoiceMap]);
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     await run(
       async () => {
+        if (selectedScannerSources.length === 0) {
+          throw new Error("Select at least one scanner lane.");
+        }
+
         const normalized = inputRef.trim();
 
-        const createdScan = await submitScan({
+        const submitArgs = {
           inputRef: normalized,
           inputType,
-        });
+          selectedSources: selectedScannerSources,
+        } satisfies Parameters<typeof submitScan>[0] & { selectedSources: ScannerSource[] };
+
+        const createdScan = await submitScan(submitArgs);
 
         setInputRef("");
         await refetch();
@@ -108,7 +220,7 @@ export default function NewScanPage() {
             New <span className="text-primary">Scan</span>
           </h2>
           <p className="text-muted-foreground mt-4">
-            Choose the input you already have and queue the fastest useful scan for this workspace.
+            Pick an input source and the lanes you want to run. This is the same {developerSecurityTitle.toLowerCase()} used across the rest of the product.
           </p>
         </div>
 
@@ -121,15 +233,43 @@ export default function NewScanPage() {
         )}
 
         <ScannerLineupCard
-          sources={plannedScannerSources}
+          sources={scannerSources}
+          selectionMode
+          selectedBySource={Object.fromEntries(selectedScannerSources.map((scanner) => [scanner, true])) as Partial<Record<ScannerSource, boolean>>}
+          selectableBySource={Object.fromEntries(scannerChoices.map((choice) => [choice.source, choice.selectable])) as Partial<Record<ScannerSource, boolean>>}
+          disabledReasonBySource={Object.fromEntries(scannerChoices.map((choice) => [choice.source, choice.disabled_reason])) as Partial<Record<ScannerSource, string | null>>}
+          onToggleSource={(scanner) => {
+            const choice = scannerChoiceMap.get(scanner);
+            if (!choice?.selectable) {
+              return;
+            }
+
+            setSelectedScannerSources((current) => (
+              current.includes(scanner)
+                ? current.filter((source) => source !== scanner)
+                : [...current, scanner]
+            ));
+          }}
           title="Parallel scan lanes"
-          subtitle="Every scan fans out across four lanes by default, and Snyk joins when the key is ready."
+          subtitle={scannerLaneSubtitle}
           className="border-border/70 mt-8 bg-card/90 shadow-sm"
         />
 
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+            <span>{selectedCount === 0 ? "Choose at least one lane to continue." : `${selectedCount} of ${scannerChoices.length} lanes selected.`}</span>
+          <span>
+            {allSelectableScannerSources.length === scannerChoices.length
+              ? "All available lanes are selectable."
+              : "Some lanes are locked right now."}
+          </span>
+        </div>
+
         <Card className="border-border/70 mt-8 bg-card/90 shadow-sm">
           <CardHeader>
-            <CardTitle>Choose your input type</CardTitle>
+            <CardTitle>Choose an input source</CardTitle>
+            <CardDescription>
+              Use the source you already have, then run the scanners that make sense for that input.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid gap-4 lg:grid-cols-3">
@@ -174,7 +314,7 @@ export default function NewScanPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="inputRef">Input Reference</Label>
+                <Label htmlFor="inputRef">Source reference</Label>
                 <Input
                   id="inputRef"
                   value={inputRef}
@@ -182,12 +322,12 @@ export default function NewScanPage() {
                   placeholder={activeType.placeholder}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Use the exact repository URL or file reference your environment understands. We keep the field flexible so you can move fast.
+                  Paste the exact repository URL, SBOM path, or archive path your environment can resolve.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Button type="submit" disabled={isSubmitting || inputRef.trim().length === 0}>
-                  {isSubmitting ? "Submitting..." : "Start scan"}
+                <Button type="submit" disabled={isSubmitting || inputRef.trim().length === 0 || selectedCount === 0}>
+                  {isSubmitting ? "Starting..." : "Run scan"}
                   {!isSubmitting && <ArrowRight className="ml-2 h-4 w-4" />}
                 </Button>
                 <Button
@@ -195,7 +335,7 @@ export default function NewScanPage() {
                   variant="outline"
                   onClick={() => navigate(routes.OnboardingRoute.to)}
                 >
-                  Open guided setup
+                  Use guided setup
                 </Button>
               </div>
             </form>
@@ -204,7 +344,7 @@ export default function NewScanPage() {
 
         <Card className="border-border/70 mt-8 bg-card/90 shadow-sm">
           <CardHeader>
-            <CardTitle>Quick guidance</CardTitle>
+            <CardTitle>Best fit by input</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-3">
             <div className="rounded-lg border border-border/60 p-4">
@@ -230,7 +370,7 @@ export default function NewScanPage() {
 
         <Card className="border-border/70 mt-8 bg-card/90 shadow-sm">
           <CardHeader>
-            <CardTitle>Recent Scans</CardTitle>
+            <CardTitle>Recent scans</CardTitle>
           </CardHeader>
           <CardContent>
             {isRecentLoading && (

@@ -224,10 +224,14 @@ export default function App() {
     add('Navigate', 'Dashboard', '/dashboard', 'home metrics scans', () => navigate(routes.DashboardRoute.to));
     add('Navigate', 'Scans', '/new-scan', 'scan submit', () => navigate(routes.NewScanRoute.to));
     add('Navigate', 'Findings', '/findings', 'cve vulnerabilities project triage', () => navigate(routes.FindingsRoute.to));
+    add('Navigate', 'Billing', '/billing', 'plan usage portal upgrade', () => navigate(routes.BillingPageRoute.to));
     add('Navigate', 'Webhooks', '/webhooks', 'events delivery', () => navigate(routes.WebhooksRoute.to));
     add('Navigate', 'API Keys', '/api-keys', 'tokens auth', () => navigate(routes.ApiKeysRoute.to));
     add('Navigate', 'Settings', '/settings', 'preferences account', () => navigate(routes.SettingsRoute.to));
     add('Navigate', 'Pricing', '/pricing', 'billing plans', () => navigate(routes.PricingPageRoute.to));
+    if (user?.isAdmin) {
+      add('Navigate', 'Admin Console', '/admin', 'internal ops users workspaces scans', () => navigate(routes.AdminPageRoute.to));
+    }
 
     for (const scan of paletteScans) {
       const scanLabel = scan.inputRef || scan.id;
@@ -267,7 +271,7 @@ export default function App() {
 
     items.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
     return items.slice(0, 30);
-  }, [navigate, paletteQuery, paletteScans]);
+  }, [navigate, paletteQuery, paletteScans, user]);
 
   useEffect(() => {
     setPaletteIndex(0);

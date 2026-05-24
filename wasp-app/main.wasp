@@ -154,6 +154,12 @@ page SettingsPage {
   component: import SettingsPage from "@src/user/SettingsPage"
 }
 
+route BillingPageRoute { path: "/billing", to: BillingPage }
+page BillingPage {
+  authRequired: true,
+  component: import BillingPage from "@src/billing/BillingPage"
+}
+
 route ApiKeysRoute { path: "/api-keys", to: ApiKeysPage }
 page ApiKeysPage {
   authRequired: true,
@@ -182,6 +188,12 @@ route WebhooksRoute { path: "/webhooks", to: WebhooksPage }
 page WebhooksPage {
   authRequired: true,
   component: import WebhooksPage from "@src/webhooks/WebhooksPage"
+}
+
+route AdminPageRoute { path: "/admin", to: AdminPage }
+page AdminPage {
+  authRequired: true,
+  component: import AdminPage from "@src/admin/AdminPage"
 }
 
 query getPaginatedUsers {
@@ -621,6 +633,12 @@ query getGithubAppSetup {
   auth: true
 }
 
+query getAdminConsoleOverview {
+  fn: import { getAdminConsoleOverview } from "@src/server/operations/admin",
+  entities: [User, Workspace, WorkspaceMembership, Organization, Scan, ScanResult, Finding],
+  auth: true
+}
+
 action linkGithubInstallation {
   fn: import { linkGithubInstallation } from "@src/server/operations/githubOperations",
   entities: [User, GithubInstallation, Workspace, WorkspaceMembership, Organization],
@@ -660,6 +678,36 @@ query getScannerAccessSettings {
 action updateScannerAccessSettings {
   fn: import { updateScannerAccessSettings } from "@src/server/operations/settingsOperations",
   entities: [User],
+  auth: true
+}
+
+query getZohoIntegrationStatus {
+  fn: import { getZohoIntegrationStatus } from "@src/server/operations/zohoOperations",
+  entities: [User, Workspace, WorkspaceMembership, Organization, ZohoIntegration],
+  auth: true
+}
+
+action connectZoho {
+  fn: import { connectZoho } from "@src/server/operations/zohoOperations",
+  entities: [User, Workspace, WorkspaceMembership, Organization, ZohoIntegration],
+  auth: true
+}
+
+action disconnectZoho {
+  fn: import { disconnectZoho } from "@src/server/operations/zohoOperations",
+  entities: [User, Workspace, WorkspaceMembership, Organization, ZohoIntegration],
+  auth: true
+}
+
+action testZohoConnection {
+  fn: import { testZohoConnection } from "@src/server/operations/zohoOperations",
+  entities: [User, Workspace, WorkspaceMembership, Organization, ZohoIntegration],
+  auth: true
+}
+
+action resyncZohoWorkspace {
+  fn: import { resyncZohoWorkspace } from "@src/server/operations/zohoOperations",
+  entities: [User, Workspace, WorkspaceMembership, Organization, ZohoIntegration],
   auth: true
 }
 //#endregion Settings
@@ -711,6 +759,36 @@ api updateGithubInstallationSettingsApi {
   fn: import { updateGithubInstallationSettingsApiHandler } from "@src/server/operations/github",
   entities: [User, GithubInstallation, Workspace, WorkspaceMembership, Organization],
   httpRoute: (POST, "/api/v1/github/installations/:installationId/settings")
+}
+
+api getZohoIntegrationStatusApi {
+  fn: import { getZohoIntegrationStatusApiHandler } from "@src/server/operations/zoho",
+  entities: [User, Workspace, WorkspaceMembership, Organization, ZohoIntegration],
+  httpRoute: (GET, "/api/v1/settings/zoho")
+}
+
+api connectZohoApi {
+  fn: import { connectZohoApiHandler } from "@src/server/operations/zoho",
+  entities: [User, Workspace, WorkspaceMembership, Organization, ZohoIntegration],
+  httpRoute: (POST, "/api/v1/settings/zoho/connect")
+}
+
+api disconnectZohoApi {
+  fn: import { disconnectZohoApiHandler } from "@src/server/operations/zoho",
+  entities: [User, Workspace, WorkspaceMembership, Organization, ZohoIntegration],
+  httpRoute: (DELETE, "/api/v1/settings/zoho")
+}
+
+api testZohoConnectionApi {
+  fn: import { testZohoConnectionApiHandler } from "@src/server/operations/zoho",
+  entities: [User, Workspace, WorkspaceMembership, Organization, ZohoIntegration],
+  httpRoute: (POST, "/api/v1/settings/zoho/test")
+}
+
+api resyncZohoWorkspaceApi {
+  fn: import { resyncZohoWorkspaceApiHandler } from "@src/server/operations/zoho",
+  entities: [User, Workspace, WorkspaceMembership, Organization, ZohoIntegration],
+  httpRoute: (POST, "/api/v1/settings/zoho/resync")
 }
 //#endregion Workspace/Onboarding/GitHub API
 

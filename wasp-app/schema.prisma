@@ -89,6 +89,21 @@ enum CycloneDxRolloutStatus {
   rollback_active
 }
 
+enum ZohoConnectionStatus {
+  disconnected
+  connected
+  syncing
+  error
+}
+
+enum ZohoSyncStatus {
+  idle
+  queued
+  running
+  succeeded
+  failed
+}
+
 enum PlanTier {
   free_trial
   starter
@@ -268,6 +283,7 @@ model Workspace {
   webhooks                    Webhook[]
   projectNotificationSettings ProjectNotificationSetting[]
   githubInstallations         GithubInstallation[]
+  zohoIntegration             ZohoIntegration?
   quotaLedger                 QuotaLedger[]
 
   @@unique([organizationId, slug], map: "workspaces_organization_slug_unique")
@@ -275,6 +291,40 @@ model Workspace {
   @@index([teamId], map: "workspaces_team_id_idx")
   @@index([createdByUserId], map: "workspaces_created_by_user_id_idx")
   @@map("workspaces")
+}
+
+model ZohoIntegration {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspaceId String @unique @map("workspace_id") @db.Uuid
+  connectedByUserId String? @map("connected_by_user_id") @db.Uuid
+  connectionStatus ZohoConnectionStatus @default(disconnected) @map("connection_status")
+  syncStatus ZohoSyncStatus @default(idle) @map("sync_status")
+  accountsDomain String? @map("accounts_domain")
+  apiDomain String? @map("api_domain")
+  zohoOrganizationId String? @map("zoho_organization_id")
+  zohoAccountId String? @map("zoho_account_id")
+  zohoContactId String? @map("zoho_contact_id")
+  accessTokenEncrypted String? @map("access_token_encrypted")
+  refreshTokenEncrypted String? @map("refresh_token_encrypted")
+  accessTokenExpiresAt DateTime? @map("access_token_expires_at")
+  syncCursor String? @map("sync_cursor")
+  syncState Json @default("{}") @map("sync_state")
+  lastSyncAt DateTime? @map("last_sync_at")
+  lastSyncAttemptAt DateTime? @map("last_sync_attempt_at")
+  lastErrorAt DateTime? @map("last_error_at")
+  lastErrorCode String? @map("last_error_code")
+  lastErrorMessage String? @map("last_error_message")
+  lastPayloadHash String? @map("last_payload_hash")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connectedByUser User? @relation(fields: [connectedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId], map: "zoho_integrations_workspace_id_idx")
+  @@index([connectionStatus], map: "zoho_integrations_connection_status_idx")
+  @@map("zoho_integrations")
 }
 
 model WorkspaceMembership {

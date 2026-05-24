@@ -10,6 +10,9 @@
 - GitHub App backend core
 - GitHub settings UI and check-run lifecycle
 - Hardening, tests, docs, and OpenAPI alignment
+- Developer-security product vocabulary and theme
+- Billing shell, plan/entitlement visibility, and billing portal flow
+- Internal admin console for support and operations
 
 ## Source Of Truth
 - Активное приложение: `wasp-app/`
@@ -79,6 +82,21 @@
 - push/PR triggers, target branches, severity threshold can be edited
 - queued/in-progress/completed/failure check-run updates are wired
 - GitHub checks link back to `/scans/:scanId`
+
+### Developer Security / Billing / Admin Track
+- canonical product vocabulary registry added for scans, billing states, admin roles, and action verbs
+- shared scan and billing labels now flow through landing, pricing, scan submission, scan details, settings, and navigation
+- `/billing` added as the in-app billing shell with current plan, usage/limits, and portal/upgrade actions
+- `/admin` added as an internal ops console with user, workspace, subscription, scan, and worker-health views
+- plan/entitlement language now hides Stripe behind product-facing copy rather than provider jargon
+
+### Zoho CRM Discovery Track
+- discovery status: no direct `zoho` references found in the current codebase
+- the reusable webhook surface already exists (`/webhooks`, webhook CRUD, delivery replay/test, and public machine-facing webhook APIs)
+- the closest integration touchpoints today are the generic webhook domain, the payment webhook handler, and the GitHub webhook ingress
+- next step is to define whether Zoho CRM is an inbound event source, an outbound sync target, or both
+- next step is to map Zoho objects to VibeScan workspace entities before any code is added
+- next step is to decide whether Zoho auth should live beside the existing Stripe/GitHub provider integrations or as a new connector domain
 
 ## PR Status
 

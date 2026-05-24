@@ -75,7 +75,7 @@ describe('syncGitHubCheckRunForScan', () => {
         name: 'VibeScan',
         head_sha: 'abc123',
         status: 'queued',
-        details_url: 'https://app.vibescan.example/scans/scan-1',
+        details_url: 'https://app.vibescan.example/reports/scan-1',
       }),
     );
     expect(prisma.scan.update).toHaveBeenCalledWith({
@@ -130,7 +130,7 @@ describe('syncGitHubCheckRunForScan', () => {
       expect.objectContaining({
         status: 'completed',
         conclusion: 'success',
-        details_url: 'https://app.vibescan.example/scans/scan-2',
+        details_url: 'https://app.vibescan.example/reports/scan-2',
         output: expect.objectContaining({
           title: 'VibeScan completed',
         }),

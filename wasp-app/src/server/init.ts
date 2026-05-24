@@ -6,6 +6,7 @@
 import { initializeWorkers, closeWorkers } from './queues/index';
 import { startScanTimeoutSweeper, stopScanTimeoutSweeper } from './services/scanTimeoutService.js';
 import { startScannerHealthMonitor, stopScannerHealthMonitor } from './services/scannerHealthMonitor.js';
+import { startZohoReconciliationSweeper, stopZohoReconciliationSweeper } from './services/zohoIntegrationService.js';
 import { shouldUseEmbeddedWorkers } from './config/runtime.js';
 
 let initialized = false;
@@ -26,6 +27,7 @@ export async function initializeServer() {
     }
     startScanTimeoutSweeper();
     startScannerHealthMonitor();
+    startZohoReconciliationSweeper();
 
     initialized = true;
     console.log('✅ Server initialization complete');
@@ -49,6 +51,7 @@ export async function shutdownServer() {
     }
     await stopScanTimeoutSweeper();
     stopScannerHealthMonitor();
+    await stopZohoReconciliationSweeper();
 
     initialized = false;
     console.log('✅ Server shutdown complete');

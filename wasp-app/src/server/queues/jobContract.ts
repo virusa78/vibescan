@@ -9,6 +9,7 @@ export const QUEUE_NAMES = {
   FREE_SCAN: 'free_scan_queue',
   ENTERPRISE_SCAN: 'enterprise_scan_queue',
   WEBHOOK_DELIVERY: 'webhook_delivery_queue',
+  ZOHO_SYNC: 'zoho_sync_queue',
 } as const;
 
 export type QueueName = typeof QUEUE_NAMES[keyof typeof QUEUE_NAMES];
@@ -39,6 +40,12 @@ export interface WebhookDeliveryJob {
   attemptNumber: number;
 }
 
+export interface ZohoSyncJob {
+  workspaceId: string;
+  reason: 'connect' | 'manual_resync' | 'reconciliation' | 'retry' | 'startup';
+  requestedByUserId?: string | null;
+}
+
 export interface WorkerStatusSnapshot {
   isRunning: boolean;
   isPaused: boolean;
@@ -48,4 +55,5 @@ export interface QueueWorkerStatus {
   free: WorkerStatusSnapshot;
   enterprise: WorkerStatusSnapshot;
   webhook: WorkerStatusSnapshot;
+  zoho: WorkerStatusSnapshot;
 }

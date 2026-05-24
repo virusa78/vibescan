@@ -8,10 +8,17 @@ import { getScanById, useQuery } from 'wasp/client/operations';
 import { useScanPolling } from '../client/hooks/useScanPolling';
 import { Card, CardContent, CardHeader, CardTitle } from '../client/components/ui/card';
 import { Badge } from '../client/components/ui/badge';
-import { AlertTriangle, CheckCircle, Clock, Zap, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle, CheckCircle2, Clock, XCircle, Zap } from 'lucide-react';
 import { getReport } from 'wasp/client/operations';
 import { ScannerLineupCard } from '../client/components/common/ScannerLineupCard';
 import { getScannerLineupEntry, type ScannerSource } from '../client/utils/scannerLineup';
+import {
+  getScannerLineupStatus,
+  getScannerResultDetail,
+  getScannerResultSummary,
+  type ScannerLineupStatus,
+} from './scanLineupStatus';
+import { getBillingPlanLabel } from '../client/utils/productVocabulary';
 
 interface Vulnerability {
   id: string;
@@ -43,6 +50,14 @@ interface Report {
   delta_count: number;
   vulnerabilities?: Vulnerability[];
 }
+
+type ScanResultRow = {
+  id: string;
+  source: string;
+  vulnerabilities?: unknown;
+  rawOutput?: unknown;
+  scannerVersion?: string;
+};
 
 function getSeverityColor(severity: string): string {
   const sev = (severity || '').toLowerCase();
@@ -84,7 +99,7 @@ export function ScanDetailsPage() {
       const fetchReport = async () => {
         try {
           const data = await getReport({ scanId: resolvedScanId });
-          setReport(data as any);
+          setReport(data as Report);
         } catch {
           // Keep page usable even if report endpoint is temporarily unavailable.
         }
@@ -237,7 +252,7 @@ export function ScanDetailsPage() {
                   </div>
                   <div>
                     <p className="text-slate-400 text-xs uppercase">Plan</p>
-                    <p className="text-white font-medium">{scan.planAtSubmission}</p>
+                    <p className="text-white font-medium">{getBillingPlanLabel(scan.planAtSubmission as any)}</p>
                   </div>
                 </div>
               )}
@@ -264,8 +279,8 @@ export function ScanDetailsPage() {
 
               <ScannerLineupCard
                 sources={plannedSources.length > 0 ? plannedSources : ['grype', 'trivy', 'codescoring_johnny', 'owasp']}
-                title="Planned scanners"
-                subtitle="Each lane runs independently, then findings collapse into one report."
+                title="Queued scanners"
+                subtitle="Each lane runs independently, then the results roll into one report."
                 className="border-slate-700 bg-slate-800/50"
               />
             </CardContent>
@@ -279,19 +294,36 @@ export function ScanDetailsPage() {
   if (status === 'completed' && report) {
     const totalVulnerabilities = report.total_free + report.total_enterprise;
     const scanDetails = scanDetailsQuery.data;
-    const scanResults = scanDetails?.scanResults ?? [];
+    const scanResults = (scanDetails?.scanResults ?? []) as ScanResultRow[];
     const scanDeltas = scanDetails?.scanDeltas ?? [];
     const latestDelta = scanDeltas[0];
     const expectedSources = (scan?.plannedSources?.length ? scan.plannedSources : DEFAULT_SCANNER_SOURCES) as ScannerSource[];
-    const resultSources = new Set(scanResults.map((result) => result.source as ScannerSource));
-    const lineupStatusBySource = expectedSources.reduce<Partial<Record<ScannerSource, 'planned' | 'completed' | 'missing'>>>(
+    const resultBySource = new Map(scanResults.map((result) => [result.source as ScannerSource, result]));
+    const lineupStatusBySource = expectedSources.reduce<Partial<Record<ScannerSource, ScannerLineupStatus>>>(
       (accumulator, source) => {
-        accumulator[source] = resultSources.has(source) ? 'completed' : 'missing';
+        accumulator[source] = getScannerLineupStatus(resultBySource.get(source));
         return accumulator;
       },
       {},
     );
-    const missingSources = expectedSources.filter((source) => !resultSources.has(source));
+    const missingSources = expectedSources.filter((source) => !resultBySource.has(source));
+    const failedSources = expectedSources.filter((source) => lineupStatusBySource[source] === 'failed');
+    const successfulSources = expectedSources.filter((source) => lineupStatusBySource[source] === 'completed');
+    const allExpectedResultsFinished = missingSources.length === 0 && failedSources.length === 0;
+    const allSuccessfulResultsEmpty = allExpectedResultsFinished
+      && successfulSources.length > 0
+      && successfulSources.every((source) => {
+        const result = resultBySource.get(source);
+        return Array.isArray(result?.vulnerabilities) && result.vulnerabilities.length === 0;
+      });
+
+    const scannerSummarySubtitle = failedSources.length > 0
+      ? `Failed lanes: ${failedSources.map((source) => getScannerLineupEntry(source).label).join(', ')}.`
+      : missingSources.length > 0
+        ? `Not run: ${missingSources.map((source) => getScannerLineupEntry(source).label).join(', ')}.`
+        : allSuccessfulResultsEmpty
+          ? 'Zero findings confirmed. Every completed lane returned an empty result set.'
+          : 'All queued lanes returned results.';
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-8">
@@ -320,7 +352,7 @@ export function ScanDetailsPage() {
             </div>
             {scan && (
               <div className="sm:text-right">
-                <p className="text-slate-400 text-sm">Completed</p>
+                <p className="text-slate-400 text-sm">Done</p>
                 <p className="font-medium text-white">{formatDate(scan.completedAt || new Date())}</p>
               </div>
             )}
@@ -374,11 +406,7 @@ export function ScanDetailsPage() {
               sources={expectedSources}
               statusBySource={lineupStatusBySource}
               title="Scanner lineup"
-              subtitle={
-                missingSources.length > 0
-                  ? `Missing results: ${missingSources.map((source) => getScannerLineupEntry(source).label).join(', ')}.`
-                  : 'All planned lanes returned results.'
-              }
+              subtitle={scannerSummarySubtitle}
               className="border-slate-700 bg-slate-800/50"
             />
 
@@ -390,34 +418,44 @@ export function ScanDetailsPage() {
                 {scanResults.length > 0 ? (
                   scanResults.map((result) => {
                     const entry = getScannerLineupEntry(result.source);
-                    const findingsCount = Array.isArray(result.vulnerabilities) ? result.vulnerabilities.length : 0;
-                    const isEmpty = findingsCount === 0;
+                    const findingsSummary = getScannerResultSummary(result);
+                    const findingsDetail = getScannerResultDetail(result);
+                    const isFailed = findingsSummary === 'Failed';
+                    const isEmpty = findingsSummary === '0 findings';
+                    const StatusIcon = isFailed ? XCircle : isEmpty ? CheckCircle2 : CheckCircle;
+                    const borderClass = isFailed
+                      ? 'border-red-500/30 bg-red-500/10'
+                      : isEmpty
+                        ? 'border-emerald-500/30 bg-emerald-500/10'
+                        : 'border-slate-700/70 bg-slate-900/40';
+                    const summaryClass = isFailed
+                      ? 'text-red-200'
+                      : isEmpty
+                        ? 'text-emerald-200'
+                        : 'text-slate-300';
                     return (
-                    <div
-                      key={result.id}
-                      className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${
-                        isEmpty
-                          ? 'border-amber-500/30 bg-amber-500/10'
-                          : 'border-slate-700/70 bg-slate-900/40'
-                      }`}
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-white">{entry.label}</p>
-                        <p className="text-xs text-slate-400">{result.scannerVersion}</p>
+                      <div
+                        key={result.id}
+                        className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 ${borderClass}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <StatusIcon className={`size-4 shrink-0 ${summaryClass}`} />
+                            <p className="truncate text-sm font-medium text-white">{entry.label}</p>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-400">{result.scannerVersion}</p>
+                          {findingsDetail ? (
+                            <p className="mt-1 text-xs text-slate-400">{findingsDetail}</p>
+                          ) : null}
+                        </div>
+                        <span className={`shrink-0 text-xs font-medium ${summaryClass}`}>
+                          {findingsSummary}
+                        </span>
                       </div>
-                      <span className={`text-xs font-medium ${isEmpty ? 'text-amber-200' : 'text-slate-300'}`}>
-                        {isEmpty ? 'No findings' : `${findingsCount} findings`}
-                      </span>
-                    </div>
                     );
                   })
                 ) : (
                   <p className="text-sm text-slate-400">No scanner results yet.</p>
-                )}
-                {scanResults.some((result) => !Array.isArray(result.vulnerabilities) || result.vulnerabilities.length === 0) && (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                    Zero findings may still mean a scanner timed out or failed upstream. Check the scanner logs when a lane returns no results.
-                  </div>
                 )}
               </CardContent>
             </Card>

@@ -35,6 +35,12 @@ export const prisma = {
         findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         findUnique: jest.fn() as jest.MockedFunction<() => Promise<any>>,
     },
+    projectFinding: {
+        count: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        findUnique: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        create: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+    },
     projectNotificationSetting: {
         findUnique: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         upsert: jest.fn() as jest.MockedFunction<() => Promise<any>>,
@@ -57,6 +63,13 @@ export const prisma = {
         findFirst: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         create: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         findUnique: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        count: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+    },
+    zohoIntegration: {
+        findUnique: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        upsert: jest.fn() as jest.MockedFunction<() => Promise<any>>,
     },
     workspaceMembership: {
         findFirst: jest.fn() as jest.MockedFunction<() => Promise<any>>,
@@ -69,8 +82,14 @@ export const prisma = {
         findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         count: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         update: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        groupBy: jest.fn() as jest.MockedFunction<() => Promise<any>>,
     },
     scanDelta: {
+        findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+    },
+    scannerUsageLedger: {
+        count: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        create: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
     },
     user: {
@@ -78,6 +97,8 @@ export const prisma = {
         update: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         create: jest.fn() as jest.MockedFunction<() => Promise<any>>,
         delete: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        findMany: jest.fn() as jest.MockedFunction<() => Promise<any>>,
+        count: jest.fn() as jest.MockedFunction<() => Promise<any>>,
     },
     quotaLedger: {
         create: jest.fn() as jest.MockedFunction<() => Promise<any>>,

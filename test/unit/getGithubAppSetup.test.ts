@@ -33,6 +33,8 @@ describe('getGithubAppSetup', () => {
       callback_url: 'https://app.vibescan.example/settings',
       webhook_url: 'https://api.vibescan.example/github/webhook',
       manual_linking_required: true,
+      missing_fields: [],
+      setup_message: 'GitHub App is configured and ready to install.',
     });
   });
 
@@ -47,5 +49,11 @@ describe('getGithubAppSetup', () => {
     expect(result.configured).toBe(false);
     expect(result.app_id).toBeNull();
     expect(result.install_url).toBeNull();
+    expect(result.missing_fields).toEqual([
+      'GITHUB_APP_ID',
+      'GITHUB_APP_PRIVATE_KEY',
+      'GITHUB_APP_WEBHOOK_SECRET',
+    ]);
+    expect(result.setup_message).toContain('GITHUB_APP_ID');
   });
 });

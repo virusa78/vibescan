@@ -173,4 +173,127 @@
  *         description: User not authenticated
  *       404:
  *         description: User not found
+ *
+ * /api/v1/settings/zoho:
+ *   get:
+ *     summary: Get Zoho CRM integration status
+ *     description: Retrieve the active workspace Zoho CRM connection, sync health, and last sync metadata.
+ *     operationId: getZohoIntegrationStatus
+ *     tags:
+ *       - Settings
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Zoho integration status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ZohoIntegrationStatusResponse'
+ *       401:
+ *         description: User not authenticated
+ *       403:
+ *         description: Workspace admin required
+ *
+ *   delete:
+ *     summary: Disconnect Zoho CRM
+ *     description: Revoke the stored Zoho refresh token and clear the workspace connection state.
+ *     operationId: disconnectZoho
+ *     tags:
+ *       - Settings
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Zoho integration disconnected successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ZohoIntegrationStatusResponse'
+ *       401:
+ *         description: User not authenticated
+ *       403:
+ *         description: Workspace admin required
+ *
+ * /api/v1/settings/zoho/connect:
+ *   post:
+ *     summary: Connect Zoho CRM
+ *     description: Exchange a Zoho authorization code or refresh token and store the encrypted CRM credentials for the active workspace.
+ *     operationId: connectZoho
+ *     tags:
+ *       - Settings
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ConnectZohoRequest'
+ *     responses:
+ *       200:
+ *         description: Zoho integration connected successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ZohoIntegrationStatusResponse'
+ *       400:
+ *         description: Invalid input or validation error
+ *       401:
+ *         description: User not authenticated
+ *       403:
+ *         description: Workspace admin required
+ *       422:
+ *         description: Zoho OAuth env is missing or invalid
+ *
+ * /api/v1/settings/zoho/test:
+ *   post:
+ *     summary: Test Zoho CRM connection
+ *     description: Refresh the stored token if needed and validate the connection against Zoho CRM org metadata.
+ *     operationId: testZohoConnection
+ *     tags:
+ *       - Settings
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Zoho connection validated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ZohoIntegrationStatusResponse'
+ *       401:
+ *         description: User not authenticated
+ *       403:
+ *         description: Workspace admin required
+ *       422:
+ *         description: Zoho integration is not connected
+ *
+ * /api/v1/settings/zoho/resync:
+ *   post:
+ *     summary: Queue a Zoho CRM resync
+ *     description: Enqueue an asynchronous workspace sync job that upserts the Zoho Account and Contact summary records.
+ *     operationId: resyncZohoWorkspace
+ *     tags:
+ *       - Settings
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     responses:
+ *       202:
+ *         description: Zoho workspace sync queued
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ZohoResyncResponse'
+ *       401:
+ *         description: User not authenticated
+ *       403:
+ *         description: Workspace admin required
+ *       422:
+ *         description: Zoho integration is not connected
  */

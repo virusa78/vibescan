@@ -10,7 +10,7 @@ export default function CheckoutResultPage() {
 
   useEffect(() => {
     const accountPageRedirectTimeoutId = setTimeout(() => {
-      navigate("/account");
+      navigate("/billing");
     }, ACCOUNT_PAGE_REDIRECT_DELAY_MS);
 
     return () => {
@@ -19,7 +19,7 @@ export default function CheckoutResultPage() {
   }, []);
 
   if (status !== "success" && status !== "canceled") {
-    return <Navigate to="/account" />;
+    return <Navigate to="/billing" />;
   }
 
   return (
@@ -30,7 +30,7 @@ export default function CheckoutResultPage() {
           {status === "canceled" && "😢 Payment Canceled."}
         </h1>
         <span className="">
-          You will be redirected to your account page in{" "}
+          You will be redirected to the billing page in{" "}
           {ACCOUNT_PAGE_REDIRECT_DELAY_MS / 1000} seconds...
         </span>
       </div>

@@ -69,7 +69,7 @@ export const stripePaymentProcessor: PaymentProcessor = {
     const billingPortalSession =
       await stripeClient.billingPortal.sessions.create({
         customer: paymentProcessorUserId,
-        return_url: `${config.frontendUrl}/account`,
+        return_url: `${config.frontendUrl}/billing`,
       });
 
     return billingPortalSession.url;

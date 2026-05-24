@@ -19,12 +19,18 @@ export const githubAppEnvSchema = z.object({
   GITHUB_APP_API_BASE_URL: optionalUrlSchema,
 });
 
+export function getMissingGitHubAppEnvVars(env: NodeJS.ProcessEnv = process.env): string[] {
+  const missing: string[] = [];
+
+  if (!env.GITHUB_APP_ID?.trim()) missing.push('GITHUB_APP_ID');
+  if (!env.GITHUB_APP_PRIVATE_KEY?.trim()) missing.push('GITHUB_APP_PRIVATE_KEY');
+  if (!env.GITHUB_APP_WEBHOOK_SECRET?.trim()) missing.push('GITHUB_APP_WEBHOOK_SECRET');
+
+  return missing;
+}
+
 export function isGitHubAppConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
-  return Boolean(
-    env.GITHUB_APP_ID?.trim()
-      && env.GITHUB_APP_PRIVATE_KEY?.trim()
-      && env.GITHUB_APP_WEBHOOK_SECRET?.trim(),
-  );
+  return getMissingGitHubAppEnvVars(env).length === 0;
 }
 
 export function getGitHubAppId(env: NodeJS.ProcessEnv = process.env): string {

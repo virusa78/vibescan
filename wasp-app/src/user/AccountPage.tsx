@@ -167,8 +167,8 @@ export default function AccountPage() {
                 <div className="text-foreground mt-1 text-sm sm:col-span-2 sm:mt-0">
                   {subscriptionStatus}
                 </div>
-                <WaspRouterLink to={routes.PricingPageRoute.to}>
-                  <Button className="ml-auto">Manage Billing</Button>
+                <WaspRouterLink to={routes.BillingPageRoute.to}>
+                  <Button className="ml-auto">Open Billing</Button>
                 </WaspRouterLink>
               </div>
             </div>

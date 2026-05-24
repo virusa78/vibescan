@@ -13,6 +13,7 @@ import { serializeDecimalFields } from "../server/utils/serialization";
 const submitScanInputSchema = z.object({
   inputRef: z.string().trim().min(1).max(512).describe("Repository/file reference"),
   inputType: z.enum(["github", "sbom", "source_zip"]).default("github"),
+  selectedSources: z.array(z.enum(["grype", "trivy", "codescoring_johnny", "owasp", "snyk"])).optional(),
 });
 
 const getScanByIdSchema = z.object({
@@ -39,6 +40,7 @@ export const submitScan: SubmitScan<SubmitScanInput, Scan> = async (
     workspaceId: user.workspaceId,
     inputType: args.inputType,
     inputRef: args.inputRef,
+    selectedSources: args.selectedSources,
   });
 
   return result.scan;

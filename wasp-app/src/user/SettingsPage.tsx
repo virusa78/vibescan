@@ -4,7 +4,7 @@ import { ExternalLink } from "lucide-react";
 import { Alert, AlertDescription } from "../client/components/ui/alert";
 import { Button } from "../client/components/ui/button";
 import { Badge } from "../client/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "../client/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../client/components/ui/card";
 import { Checkbox } from "../client/components/ui/checkbox";
 import { Input } from "../client/components/ui/input";
 import { Label } from "../client/components/ui/label";
@@ -16,18 +16,29 @@ import {
   SelectValue,
 } from "../client/components/ui/select";
 import { useAsyncState } from "../client/hooks/useAsyncState";
+import { Link as WaspRouterLink, routes } from "wasp/client/router";
 import {
   useQuery,
   updateUserSettings,
   getNotificationSettings,
   getScannerAccessSettings,
+  getZohoIntegrationStatus,
   linkGithubInstallation,
   getGithubAppSetup,
   listGithubInstallations,
+  connectZoho,
+  disconnectZoho,
+  testZohoConnection,
+  resyncZohoWorkspace,
   updateNotificationSettings,
   updateScannerAccessSettings,
   updateGithubInstallationSettings,
 } from "wasp/client/operations";
+import {
+  getScannerAvailabilityLabel,
+  getScannerHealthLabel,
+} from "../client/utils/scannerStatusVocabulary";
+import { getBillingPlanLabel, getBillingStateLabel } from "../client/utils/productVocabulary";
 
 type NotificationSettingsResponse = {
   project_key?: string;
@@ -60,6 +71,22 @@ type ScannerAccessResponse = {
     johnny: ScannerHealthSnapshot;
     snyk: ScannerHealthSnapshot;
   };
+  scanner_choices: Array<{
+    source: "grype" | "trivy" | "codescoring_johnny" | "owasp" | "snyk";
+    label: string;
+    description: string;
+    selectable: boolean;
+    selected_by_default: boolean;
+    status: "available" | "cooling_down" | "unavailable";
+    disabled_reason: string | null;
+    cooldown_reset_at: string | null;
+    usage?: {
+      used: number;
+      limit: number;
+      remaining: number;
+      reset_at: string | null;
+    };
+  }>;
 };
 
 type GithubInstallationSummary = {
@@ -89,6 +116,54 @@ type GithubAppSetupResponse = {
   callback_url: string | null;
   webhook_url: string | null;
   manual_linking_required: boolean;
+  missing_fields: string[];
+  setup_message: string;
+};
+
+type ZohoIntegrationStatusResponse = {
+  connected: boolean;
+  connection_status: "disconnected" | "connected" | "syncing" | "error";
+  sync_status: "idle" | "queued" | "running" | "succeeded" | "failed";
+  accounts_domain: string | null;
+  api_domain: string | null;
+  zoho_organization_id: string | null;
+  zoho_account_id: string | null;
+  zoho_contact_id: string | null;
+  last_sync_at: string | null;
+  last_sync_attempt_at: string | null;
+  last_error_at: string | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  sync_cursor: string | null;
+  last_payload_hash: string | null;
+  workspace_snapshot: {
+    workspace: {
+      id: string;
+      name: string;
+      slug: string;
+      is_personal: boolean;
+    };
+    owner: {
+      id: string;
+      email: string;
+      displayName: string | null;
+      username: string | null;
+    } | null;
+    summary: {
+      plan: string;
+      billingState: string | null;
+      scanHealth: "idle" | "healthy" | "degraded" | "processing";
+      lastScanAt: string | null;
+      openCriticalFindingsCount: number;
+      integrationHealth: "disconnected" | "connected" | "syncing" | "error";
+    };
+  } | null;
+};
+
+type ZohoResyncResponse = {
+  queued: boolean;
+  jobId: string;
+  status: ZohoIntegrationStatusResponse;
 };
 
 const DEFAULT_PROJECT_KEY = "default";
@@ -120,10 +195,16 @@ export default function SettingsPage() {
     error: githubError,
     run: runGitHub,
   } = useAsyncState();
+  const {
+    isLoading: isZohoLoading,
+    error: zohoError,
+    run: runZoho,
+  } = useAsyncState();
   const [profileSuccessMessage, setProfileSuccessMessage] = useState<string | null>(null);
   const [notificationSuccessMessage, setNotificationSuccessMessage] = useState<string | null>(null);
   const [scannerAccessSuccessMessage, setScannerAccessSuccessMessage] = useState<string | null>(null);
   const [githubSuccessMessage, setGithubSuccessMessage] = useState<string | null>(null);
+  const [zohoSuccessMessage, setZohoSuccessMessage] = useState<string | null>(null);
 
   const [displayName, setDisplayName] = useState("");
   const [timezone, setTimezone] = useState("");
@@ -135,13 +216,9 @@ export default function SettingsPage() {
   const [weeklyDigest, setWeeklyDigest] = useState(false);
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [snykApiKey, setSnykApiKey] = useState("");
-  const [snykApiKeyAttached, setSnykApiKeyAttached] = useState(false);
-  const [snykApiKeyPreview, setSnykApiKeyPreview] = useState<string | null>(null);
-  const [snykEnabled, setSnykEnabled] = useState(false);
-  const [snykReady, setSnykReady] = useState(false);
-  const [snykReadyReason, setSnykReadyReason] = useState<string | null>(null);
-  const [snykCredentialSource, setSnykCredentialSource] = useState<ScannerAccessResponse["snyk_credential_source"]>(null);
-  const [scannerHealth, setScannerHealth] = useState<ScannerAccessResponse["scanner_health"] | null>(null);
+  const [scannerAccess, setScannerAccess] = useState<ScannerAccessResponse | null>(null);
+  const [zohoAuthorizationCode, setZohoAuthorizationCode] = useState("");
+  const [zohoRefreshToken, setZohoRefreshToken] = useState("");
   const [githubInstallationIdInput, setGithubInstallationIdInput] = useState("");
   const [reposByInstallation, setReposByInstallation] = useState<Record<string, string[]>>({});
   const [targetBranchesByInstallation, setTargetBranchesByInstallation] = useState<Record<string, string>>({});
@@ -154,15 +231,29 @@ export default function SettingsPage() {
     data: githubAppSetupQuery,
   } = useQuery(getGithubAppSetup);
   const {
+    data: zohoStatusQuery,
+    error: zohoStatusError,
+    refetch: refetchZohoStatus,
+  } = useQuery(getZohoIntegrationStatus);
+  const {
     data: githubInstallationsQuery,
     isLoading: isGitHubInstallationsLoading,
     refetch: refetchGithubInstallations,
   } = useQuery(listGithubInstallations);
   const githubAppSetup = (githubAppSetupQuery as GithubAppSetupResponse | undefined) ?? null;
+  const zohoStatus = (zohoStatusQuery as ZohoIntegrationStatusResponse | undefined) ?? null;
   const githubInstallations = useMemo(
     () => ((githubInstallationsQuery as GithubInstallationsResponse | undefined)?.installations ?? []),
     [githubInstallationsQuery],
   );
+  const scannerChoices = scannerAccess?.scanner_choices ?? [];
+  const scannerHealth = scannerAccess?.scanner_health ?? null;
+  const snykApiKeyAttached = scannerAccess?.snyk_api_key_attached ?? false;
+  const snykApiKeyPreview = scannerAccess?.snyk_api_key_preview ?? null;
+  const snykCredentialSource = scannerAccess?.snyk_credential_source ?? null;
+  const snykReadyReason = scannerAccess?.snyk_ready_reason ?? null;
+  const johnnyChoice = scannerChoices.find((choice) => choice.source === "codescoring_johnny") ?? null;
+  const snykChoice = scannerChoices.find((choice) => choice.source === "snyk") ?? null;
 
   useEffect(() => {
     if (user) {
@@ -198,13 +289,7 @@ export default function SettingsPage() {
         const data = await getScannerAccessSettings({}) as ScannerAccessResponse;
 
         setSnykApiKey("");
-        setSnykEnabled(data.snyk_enabled);
-        setSnykApiKeyAttached(data.snyk_api_key_attached);
-        setSnykApiKeyPreview(data.snyk_api_key_preview);
-        setSnykReady(data.snyk_ready);
-        setSnykReadyReason(data.snyk_ready_reason);
-        setSnykCredentialSource(data.snyk_credential_source);
-        setScannerHealth(data.scanner_health);
+        setScannerAccess(data);
       },
       { errorMessage: "Failed to load scanner access settings." },
     );
@@ -325,13 +410,7 @@ export default function SettingsPage() {
 
         const data = response as ScannerAccessResponse;
         setSnykApiKey("");
-        setSnykEnabled(data.snyk_enabled);
-        setSnykApiKeyAttached(data.snyk_api_key_attached);
-        setSnykApiKeyPreview(data.snyk_api_key_preview);
-        setSnykReady(data.snyk_ready);
-        setSnykReadyReason(data.snyk_ready_reason);
-        setSnykCredentialSource(data.snyk_credential_source);
-        setScannerHealth(data.scanner_health);
+        setScannerAccess(data);
         setScannerAccessSuccessMessage(
           data.snyk_api_key_attached
             ? "Snyk API key attached successfully."
@@ -387,6 +466,77 @@ export default function SettingsPage() {
     );
   };
 
+  const onConnectZoho = async (event: FormEvent) => {
+    event.preventDefault();
+    setZohoSuccessMessage(null);
+
+    await runZoho(
+      async () => {
+        const response = await connectZoho({
+          authorization_code: zohoAuthorizationCode.trim() || undefined,
+          refresh_token: zohoRefreshToken.trim() || undefined,
+        });
+        setZohoAuthorizationCode("");
+        setZohoRefreshToken("");
+        await refetchZohoStatus();
+        setZohoSuccessMessage(
+          response.connected
+            ? "Zoho CRM connected and initial sync queued."
+            : "Zoho CRM connection updated.",
+        );
+      },
+      { errorMessage: "Failed to connect Zoho CRM." },
+    );
+  };
+
+  const onDisconnectZoho = async () => {
+    setZohoSuccessMessage(null);
+
+    await runZoho(
+      async () => {
+        await disconnectZoho({});
+        await refetchZohoStatus();
+        setZohoSuccessMessage("Zoho CRM disconnected for the active workspace.");
+      },
+      { errorMessage: "Failed to disconnect Zoho CRM." },
+    );
+  };
+
+  const onTestZohoConnection = async () => {
+    setZohoSuccessMessage(null);
+
+    await runZoho(
+      async () => {
+        const response = await testZohoConnection({});
+        await refetchZohoStatus();
+        setZohoSuccessMessage(
+          response.connected
+            ? "Zoho CRM connection verified successfully."
+            : "Zoho CRM test completed.",
+        );
+      },
+      { errorMessage: "Failed to test Zoho CRM connection." },
+    );
+  };
+
+  const onResyncZohoWorkspace = async () => {
+    setZohoSuccessMessage(null);
+
+    await runZoho(
+      async () => {
+        const response = await resyncZohoWorkspace({});
+        await refetchZohoStatus();
+        const data = response as ZohoResyncResponse;
+        setZohoSuccessMessage(
+          data.queued
+            ? `Zoho CRM resync queued (job ${data.jobId}).`
+            : "Zoho CRM resync requested.",
+        );
+      },
+      { errorMessage: "Failed to queue Zoho CRM resync." },
+    );
+  };
+
   const toggleRepoSelection = (installationId: string, repositoryFullName: string, checked: boolean) => {
     setReposByInstallation((current) => {
       const existing = current[installationId] ?? [];
@@ -403,6 +553,37 @@ export default function SettingsPage() {
 
   return (
     <div className="mt-10 px-6">
+      <Card className="mb-4 lg:m-8">
+        <CardHeader>
+          <CardTitle>Billing shell</CardTitle>
+          <CardDescription>Current plan, usage, and upgrade path in product terms.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-md border border-border/60 p-4">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Plan</div>
+              <div className="mt-2 text-lg font-semibold">{getBillingPlanLabel((user?.plan as any) ?? "free_trial")}</div>
+            </div>
+            <div className="rounded-md border border-border/60 p-4">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Billing state</div>
+              <div className="mt-2 text-lg font-semibold">{getBillingStateLabel(user?.subscriptionStatus ?? null)}</div>
+            </div>
+            <div className="rounded-md border border-border/60 p-4">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Usage</div>
+              <div className="mt-2 text-lg font-semibold">{user?.monthlyQuotaUsed ?? 0}/{user?.monthlyQuotaLimit ?? 0}</div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button asChild>
+              <WaspRouterLink to={routes.BillingPageRoute.to}>Open billing</WaspRouterLink>
+            </Button>
+            <Button asChild variant="outline">
+              <WaspRouterLink to={routes.PricingPageRoute.to}>Review plans</WaspRouterLink>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="mb-4 lg:m-8">
         <CardHeader>
           <CardTitle>User Profile Settings</CardTitle>
@@ -567,7 +748,8 @@ export default function SettingsPage() {
       </Card>
       <Card className="mb-4 lg:m-8">
         <CardHeader>
-          <CardTitle>Scanner Access</CardTitle>
+          <CardTitle>Scanner availability</CardTitle>
+          <CardDescription>Manage which scanners are available for this workspace.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {scannerAccessError && (
@@ -583,11 +765,11 @@ export default function SettingsPage() {
 
           <div className="space-y-4 rounded-md border border-border/60 p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={snykEnabled ? "default" : "outline"}>
-                {snykEnabled ? "Snyk enabled" : "Snyk disabled"}
+              <Badge variant={johnnyChoice?.status === "available" ? "default" : johnnyChoice?.status === "cooling_down" ? "secondary" : "outline"}>
+                Johnny: {getScannerAvailabilityLabel(johnnyChoice?.status)}
               </Badge>
-              <Badge variant={snykReady ? "default" : "secondary"}>
-                {snykReady ? "Ready" : "Not ready"}
+              <Badge variant={snykChoice?.status === "available" ? "default" : "outline"}>
+                Snyk: {getScannerAvailabilityLabel(snykChoice?.status)}
               </Badge>
               {snykCredentialSource && (
                 <Badge variant="outline">Credential source: {snykCredentialSource}</Badge>
@@ -596,21 +778,21 @@ export default function SettingsPage() {
 
             <div className="space-y-1 text-sm">
               <div>
-                Attached key:{" "}
+                Snyk key:{" "}
                 <span className="font-medium">
                   {snykApiKeyAttached ? (snykApiKeyPreview ?? "attached") : "not attached"}
                 </span>
               </div>
               {snykReadyReason && (
-                <div className="text-muted-foreground">Reason: {snykReadyReason}</div>
+                <div className="text-muted-foreground">Why Snyk is unavailable: {snykReadyReason}</div>
               )}
               {scannerHealth && (
                 <div className="text-muted-foreground">
-                  Health probes:
+                  Health checks:
                   {" "}
-                  Johnny {scannerHealth.johnny.healthy === true ? "healthy" : scannerHealth.johnny.healthy === false ? "unhealthy" : "unknown"},
+                  Johnny {getScannerHealthLabel(scannerHealth.johnny.healthy)},
                   {" "}
-                  Snyk {scannerHealth.snyk.healthy === true ? "healthy" : scannerHealth.snyk.healthy === false ? "unhealthy" : "unknown"}
+                  Snyk {getScannerHealthLabel(scannerHealth.snyk.healthy)}
                 </div>
               )}
             </div>
@@ -629,7 +811,7 @@ export default function SettingsPage() {
 
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={isScannerAccessLoading}>
-                  {isScannerAccessLoading ? "Saving..." : "Save scanner access"}
+                  {isScannerAccessLoading ? "Saving..." : "Save scanner settings"}
                 </Button>
                 <Button
                   type="button"
@@ -637,10 +819,150 @@ export default function SettingsPage() {
                   onClick={onRefreshScannerAccess}
                   disabled={isScannerAccessLoading}
                 >
-                  Refresh status
+                  Refresh checks
                 </Button>
               </div>
             </form>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-4 lg:m-8">
+        <CardHeader>
+          <CardTitle>Zoho CRM Integration</CardTitle>
+          <CardDescription>Sync the active workspace summary into Zoho CRM Account and Contact records.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {zohoStatusError && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {zohoStatusError instanceof Error ? zohoStatusError.message : String(zohoStatusError)}
+              </AlertDescription>
+            </Alert>
+          )}
+          {zohoError && (
+            <Alert variant="destructive">
+              <AlertDescription>{zohoError}</AlertDescription>
+            </Alert>
+          )}
+          {zohoSuccessMessage && (
+            <Alert>
+              <AlertDescription>{zohoSuccessMessage}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-4 rounded-md border border-border/60 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={zohoStatus?.connected ? "default" : "outline"}>
+                Connection: {zohoStatus?.connection_status ?? "disconnected"}
+              </Badge>
+              <Badge variant={zohoStatus?.sync_status === "succeeded" ? "default" : zohoStatus?.sync_status === "failed" ? "destructive" : "secondary"}>
+                Sync: {zohoStatus?.sync_status ?? "idle"}
+              </Badge>
+              {zohoStatus?.workspace_snapshot?.summary.scanHealth && (
+                <Badge variant="outline">
+                  Scan health: {zohoStatus.workspace_snapshot.summary.scanHealth}
+                </Badge>
+              )}
+            </div>
+
+            {zohoStatus?.workspace_snapshot ? (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-md border border-border/60 p-4">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Workspace</div>
+                  <div className="mt-2 text-lg font-semibold">{zohoStatus.workspace_snapshot.workspace.name}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{zohoStatus.workspace_snapshot.workspace.slug}</div>
+                </div>
+                <div className="rounded-md border border-border/60 p-4">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Plan / billing</div>
+                  <div className="mt-2 text-lg font-semibold">{zohoStatus.workspace_snapshot.summary.plan}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{zohoStatus.workspace_snapshot.summary.billingState ?? "no billing state"}</div>
+                </div>
+                <div className="rounded-md border border-border/60 p-4">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Open criticals</div>
+                  <div className="mt-2 text-lg font-semibold">{zohoStatus.workspace_snapshot.summary.openCriticalFindingsCount}</div>
+                </div>
+                <div className="rounded-md border border-border/60 p-4">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Last scan</div>
+                  <div className="mt-2 text-sm font-semibold">
+                    {zohoStatus.workspace_snapshot.summary.lastScanAt ?? "No completed scans yet"}
+                  </div>
+                </div>
+                <div className="rounded-md border border-border/60 p-4">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Owner</div>
+                  <div className="mt-2 text-sm font-semibold">
+                    {zohoStatus.workspace_snapshot.owner?.displayName ?? zohoStatus.workspace_snapshot.owner?.username ?? zohoStatus.workspace_snapshot.owner?.email ?? "Unknown"}
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">{zohoStatus.workspace_snapshot.owner?.email ?? "No owner email"}</div>
+                </div>
+                <div className="rounded-md border border-border/60 p-4">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Zoho ids</div>
+                  <div className="mt-2 text-xs text-muted-foreground break-all">
+                    <div>Org: {zohoStatus.zoho_organization_id ?? "unset"}</div>
+                    <div>Account: {zohoStatus.zoho_account_id ?? "unset"}</div>
+                    <div>Contact: {zohoStatus.zoho_contact_id ?? "unset"}</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+                No Zoho summary is available yet. Connect the integration to start syncing workspace health.
+              </div>
+            )}
+
+            <form className="space-y-4" onSubmit={onConnectZoho}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="zohoAuthorizationCode">Authorization code</Label>
+                  <Input
+                    id="zohoAuthorizationCode"
+                    placeholder="Paste Zoho OAuth authorization code"
+                    value={zohoAuthorizationCode}
+                    onChange={(event) => setZohoAuthorizationCode(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="zohoRefreshToken">Refresh token</Label>
+                  <Input
+                    id="zohoRefreshToken"
+                    placeholder="Optional refresh token for direct setup"
+                    value={zohoRefreshToken}
+                    onChange={(event) => setZohoRefreshToken(event.target.value)}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Enter either an authorization code from Zoho OAuth or an existing refresh token. The tokens are encrypted at rest and only the workspace admin can manage this connection.
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" disabled={isZohoLoading}>
+                  {isZohoLoading ? "Connecting..." : "Connect Zoho"}
+                </Button>
+                <Button type="button" variant="outline" onClick={onTestZohoConnection} disabled={isZohoLoading || !zohoStatus?.connected}>
+                  Test connection
+                </Button>
+                <Button type="button" variant="outline" onClick={onResyncZohoWorkspace} disabled={isZohoLoading || !zohoStatus?.connected}>
+                  Queue resync
+                </Button>
+                <Button type="button" variant="destructive" onClick={onDisconnectZoho} disabled={isZohoLoading || !zohoStatus?.connected}>
+                  Disconnect
+                </Button>
+              </div>
+            </form>
+
+            {(zohoStatus?.last_error_message || zohoStatus?.last_sync_at || zohoStatus?.last_sync_attempt_at) && (
+              <div className="rounded-md border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
+                {zohoStatus.last_sync_at && <div>Last successful sync: {zohoStatus.last_sync_at}</div>}
+                {zohoStatus.last_sync_attempt_at && <div>Last sync attempt: {zohoStatus.last_sync_attempt_at}</div>}
+                {zohoStatus.last_error_message && (
+                  <div>
+                    Last error: {zohoStatus.last_error_message}
+                    {zohoStatus.last_error_code ? ` (${zohoStatus.last_error_code})` : ""}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -691,8 +1013,18 @@ export default function SettingsPage() {
                 </div>
               </div>
             ) : (
-              <div className="rounded-md border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
-                GitHub App env is not fully configured yet. Configure the app first, then return here to connect installations.
+              <div className="space-y-3 rounded-md border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
+                <div>{githubAppSetup?.setup_message ?? 'GitHub App env is not fully configured yet.'}</div>
+                {githubAppSetup?.missing_fields?.length ? (
+                  <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs">
+                    <div className="font-medium text-foreground">Missing variables</div>
+                    <div>{githubAppSetup.missing_fields.join(', ')}</div>
+                  </div>
+                ) : null}
+                <div className="rounded-md border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
+                  <div>Callback URL: {githubAppSetup?.callback_url}</div>
+                  <div>Webhook URL: {githubAppSetup?.webhook_url}</div>
+                </div>
               </div>
             )}
 

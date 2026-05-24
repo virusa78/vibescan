@@ -27,6 +27,7 @@ const config = {
     },
     transformIgnorePatterns: ['node_modules/(?!bullmq)'],
     moduleFileExtensions: ['ts', 'js', 'json'],
+    modulePathIgnorePatterns: ['<rootDir>/wasp-app/.wasp/out'],
     moduleNameMapper: {
         '^(\\.{1,2}/.*)\\.js$': '$1',
         '^wasp/server$': '<rootDir>/test/mocks/wasp-server.ts',

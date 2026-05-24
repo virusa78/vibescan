@@ -101,4 +101,23 @@ describe('providerSelection', () => {
       userId: 'user-99',
     });
   });
+
+  it('filters planned executions to selected scanner sources', () => {
+    const executions = resolvePlannedScannerExecutions(
+      'pro',
+      { userId: 'user-1' },
+      ['grype', 'codescoring_johnny'],
+    );
+
+    expect(executions.map((execution) => execution.resultSource)).toEqual([
+      'grype',
+      'codescoring_johnny',
+    ]);
+  });
+
+  it('returns no executions for an explicit empty selection', () => {
+    const executions = resolvePlannedScannerExecutions('pro', { userId: 'user-1' }, []);
+
+    expect(executions).toEqual([]);
+  });
 });

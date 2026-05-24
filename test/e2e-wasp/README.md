@@ -50,6 +50,16 @@ This directory contains comprehensive E2E tests for the VibeScan MVP, verifying 
   - Multiple screenshots are captured for later visual review
   - Deterministic seeded data keeps the screenshots stable without waiting for workers
 
+### 2c. `github-ux-screenshots.spec.ts`
+**Test 2c: GitHub + Findings UX Screenshots**
+- User Story: Register → inspect GitHub App setup → open Findings → triage a finding
+- Verifies:
+  - GitHub App setup page shows concrete missing-variable diagnostics
+  - Findings overview renders seeded project findings and filters
+  - Findings drawer shows status, severity, SLA, and triage actions
+  - Pending triage state is captured while a mutation is intentionally delayed
+  - Four screenshots are captured for later visual review
+
 ### 3. `zip-upload-e2e.spec.ts`
 **Test 3: Source ZIP E2E**
 - User Story: Upload ZIP file → Extract components → See results
@@ -223,6 +233,7 @@ test/e2e-wasp/
 ├── sbom-upload-e2e.spec.ts         # Test 1: SBOM upload
 ├── github-url-e2e.spec.ts          # Test 2: GitHub URL
 ├── github-ci-decision-screenshots.spec.ts # Test 2b: CI decision screenshots
+├── github-ux-screenshots.spec.ts   # Test 2c: GitHub + Findings UX screenshots
 ├── zip-upload-e2e.spec.ts          # Test 3: ZIP upload
 ├── complete-happy-path.spec.ts    # Test 4: Complete flow
 └── settings-api-keys-webhooks-billing.spec.ts # Test 5: Settings + admin flows

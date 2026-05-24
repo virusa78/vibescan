@@ -1423,6 +1423,106 @@ export const schemas = {
     },
   },
 
+  ZohoWorkspaceSummary: {
+    type: "object",
+    properties: {
+      workspace: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          name: { type: "string" },
+          slug: { type: "string" },
+          is_personal: { type: "boolean" },
+        },
+      },
+      owner: {
+        type: "object",
+        nullable: true,
+        properties: {
+          id: { type: "string", format: "uuid" },
+          email: { type: "string" },
+          displayName: { type: "string", nullable: true },
+          username: { type: "string", nullable: true },
+        },
+      },
+      summary: {
+        type: "object",
+        properties: {
+          plan: { type: "string" },
+          billingState: { type: "string", nullable: true },
+          scanHealth: {
+            type: "string",
+            enum: ["idle", "healthy", "degraded", "processing"],
+          },
+          lastScanAt: { type: "string", format: "date-time", nullable: true },
+          openCriticalFindingsCount: { type: "integer" },
+          integrationHealth: {
+            type: "string",
+            enum: ["disconnected", "connected", "syncing", "error"],
+          },
+        },
+      },
+    },
+  },
+
+  ZohoIntegrationStatusResponse: {
+    type: "object",
+    properties: {
+      connected: { type: "boolean" },
+      connection_status: {
+        type: "string",
+        enum: ["disconnected", "connected", "syncing", "error"],
+      },
+      sync_status: {
+        type: "string",
+        enum: ["idle", "queued", "running", "succeeded", "failed"],
+      },
+      accounts_domain: { type: "string", nullable: true },
+      api_domain: { type: "string", nullable: true },
+      zoho_organization_id: { type: "string", nullable: true },
+      zoho_account_id: { type: "string", nullable: true },
+      zoho_contact_id: { type: "string", nullable: true },
+      last_sync_at: { type: "string", format: "date-time", nullable: true },
+      last_sync_attempt_at: { type: "string", format: "date-time", nullable: true },
+      last_error_at: { type: "string", format: "date-time", nullable: true },
+      last_error_code: { type: "string", nullable: true },
+      last_error_message: { type: "string", nullable: true },
+      sync_cursor: { type: "string", nullable: true },
+      last_payload_hash: { type: "string", nullable: true },
+      workspace_snapshot: {
+        $ref: "#/components/schemas/ZohoWorkspaceSummary",
+        nullable: true,
+      },
+    },
+  },
+
+  ConnectZohoRequest: {
+    type: "object",
+    properties: {
+      authorization_code: {
+        type: "string",
+        nullable: true,
+        description: "Zoho OAuth authorization code",
+      },
+      refresh_token: {
+        type: "string",
+        nullable: true,
+        description: "Existing Zoho OAuth refresh token",
+      },
+    },
+  },
+
+  ZohoResyncResponse: {
+    type: "object",
+    properties: {
+      queued: { type: "boolean" },
+      jobId: { type: "string" },
+      status: {
+        $ref: "#/components/schemas/ZohoIntegrationStatusResponse",
+      },
+    },
+  },
+
   ListGithubInstallationsResponse: {
     type: "object",
     properties: {

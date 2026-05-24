@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from "../client/components/ui/card";
 import { cn } from "../client/utils";
+import { developerSecurityTitle } from "../client/utils/productVocabulary";
 import {
   PaymentPlanId,
   paymentPlans,
@@ -129,14 +130,16 @@ const PricingPage = () => {
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div id="pricing" className="mx-auto max-w-4xl text-center">
           <h2 className="text-foreground mt-2 text-4xl font-bold tracking-tight sm:text-5xl">
-            Pick your <span className="text-primary">pricing</span>
+            Pick your <span className="text-primary">plan</span>
           </h2>
+          <p className="text-muted-foreground mt-4 text-sm">
+            {developerSecurityTitle} pricing stays in product language: plans, entitlements, and billing actions.
+          </p>
         </div>
         <p className="text-muted-foreground mx-auto mt-6 max-w-2xl text-center text-lg leading-8">
-          Choose the plan that matches your scan volume and reporting needs. Starter
-          access includes scan submissions with summary counts, while Pro unlocks
-          detailed vulnerability findings and remediation data. Credits are a simple
-          way to top up one-off scans.
+          Choose the plan that matches your scan volume and reporting needs. The
+          billing shell keeps the current plan, usage, and upgrade path in one place,
+          while this page stays focused on plan comparison.
         </p>
         {errorMessage && (
           <Alert variant="destructive" className="mt-8">
@@ -229,7 +232,7 @@ const PricingPage = () => {
                     className="w-full"
                     disabled={isPaymentLoading}
                   >
-                    {!!user ? "Buy plan" : "Log in to buy plan"}
+                    {!!user ? "Start checkout" : "Log in to continue"}
                   </Button>
                 )}
               </CardFooter>
