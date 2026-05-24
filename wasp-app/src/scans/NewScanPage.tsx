@@ -297,7 +297,7 @@ export default function NewScanPage() {
                     }`}
                   >
                     {/* left stripe to visually match scanner selection thickness */}
-                    <span className={`${isActive ? 'w-4 md:w-5' : 'w-3 md:w-4'} ${isActive ? 'bg-primary' : 'bg-transparent'} mr-3 hidden sm:block rounded-r-sm`} aria-hidden="true" />
+                    <span className={`${isActive ? 'w-4 md:w-5' : 'w-3 md:w-4'} ${isActive ? 'bg-accent' : 'bg-transparent'} mr-3 hidden sm:block rounded-r-sm`} aria-hidden="true" />
 
                     <div className="p-4">
                       <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
