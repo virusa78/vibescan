@@ -12,71 +12,26 @@ interface ScannerBadgesProps {
   _count?: number; // Reserved for future use (multi-scan aggregation)
 }
 
-// Scanner configuration: letter, colors, display name
-const SCANNER_CONFIG: Record<string, {
-  letter: string;
-  bgColor: string;
-  textColor: string;
-  borderColor: string;
-  hoverBg: string;
-  fullName: string;
-  dbUrl: (cveId: string) => string;
-}> = {
-  grype: {
-    letter: 'G',
-    bgColor: 'bg-purple-600',
+import { SCANNER_CONFIG } from '../client/utils/scannerColors';
+
+// Backwards-compatible mapping for ScannerBadges: add dbUrl and hover classes here
+const LOCAL_DB_URL = (cveId: string) => `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cveId)}`;
+
+function getLocalConfig(scanner: string) {
+  const cfg = SCANNER_CONFIG[scanner] ?? {
+    letter: scanner.charAt(0).toUpperCase(),
+    fullName: scanner,
+    bgColor: 'bg-slate-600',
     textColor: 'text-white',
-    borderColor: 'border-purple-700',
-    hoverBg: 'hover:bg-purple-700',
-    fullName: 'Grype',
-    dbUrl: (cveId) => `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cveId)}`,
-  },
-  snyk: {
-    letter: 'S',
-    bgColor: 'bg-emerald-600',
-    textColor: 'text-white',
-    borderColor: 'border-emerald-700',
-    hoverBg: 'hover:bg-emerald-700',
-    fullName: 'Snyk',
-    dbUrl: (cveId) => `https://snyk.io/vulnerability/${encodeURIComponent(cveId)}`,
-  },
-  codescoring_johnny: {
-    letter: 'C',
-    bgColor: 'bg-indigo-600',
-    textColor: 'text-white',
-    borderColor: 'border-indigo-700',
-    hoverBg: 'hover:bg-indigo-700',
-    fullName: 'Johnny',
-    dbUrl: (cveId) => `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cveId)}`,
-  },
-  trivy: {
-    letter: 'T',
-    bgColor: 'bg-cyan-600',
-    textColor: 'text-white',
-    borderColor: 'border-cyan-700',
-    hoverBg: 'hover:bg-cyan-700',
-    fullName: 'Trivy',
-    dbUrl: (cveId) => `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cveId)}`,
-  },
-  owasp: {
-    letter: 'O',
-    bgColor: 'bg-orange-600',
-    textColor: 'text-white',
-    borderColor: 'border-orange-700',
-    hoverBg: 'hover:bg-orange-700',
-    fullName: 'OWASP',
-    dbUrl: (cveId) => `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cveId)}`,
-  },
-  dast: {
-    letter: 'D',
-    bgColor: 'bg-rose-600',
-    textColor: 'text-white',
-    borderColor: 'border-rose-700',
-    hoverBg: 'hover:bg-rose-700',
-    fullName: 'DAST',
-    dbUrl: (cveId) => `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(cveId)}`,
-  },
-};
+    borderColor: 'border-slate-700',
+    hoverBg: 'hover:bg-slate-700',
+  };
+
+  return {
+    ...cfg,
+    dbUrl: (cveId: string) => LOCAL_DB_URL(cveId),
+  };
+}
 
 export function ScannerBadges({ cveId, reportedBy = [], _count }: ScannerBadgesProps) {
   if (reportedBy.length === 0) {

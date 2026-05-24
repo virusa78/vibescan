@@ -12,6 +12,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle, CheckCircle2, Clock, XCircle, Za
 import { getReport } from 'wasp/client/operations';
 import { ScannerLineupCard } from '../client/components/common/ScannerLineupCard';
 import { getScannerLineupEntry, type ScannerSource } from '../client/utils/scannerLineup';
+import { getScannerBadgeClass, getScannerDotClass } from '../client/utils/scannerColors';
 import {
   getScannerLineupStatus,
   getScannerResultDetail,
@@ -440,6 +441,7 @@ export function ScanDetailsPage() {
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
+                            <span className={`inline-block h-3 w-3 rounded-full ${getScannerDotClass(result.source)}`} aria-hidden />
                             <StatusIcon className={`size-4 shrink-0 ${summaryClass}`} />
                             <p className="truncate text-sm font-medium text-white">{entry.label}</p>
                           </div>
@@ -535,8 +537,8 @@ export function ScanDetailsPage() {
                               </span>
                             </td>
                             <td className="py-3 px-4">
-                              <span className="px-2 py-1 text-xs rounded bg-slate-700 text-slate-300">
-                                {vuln.source}
+                              <span className={`px-2 py-1 text-xs rounded ${getScannerBadgeClass(vuln.source)}`}>
+                                {getScannerLineupEntry(vuln.source).label}
                               </span>
                             </td>
                           </tr>

@@ -1,5 +1,4 @@
 import { Badge } from '../ui/badge';
-import { Checkbox } from '../ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import {
   getScannerLineupEntry,
@@ -9,8 +8,9 @@ import {
   getScannerResultLabel,
   getScannerSelectionLabel,
 } from '../../utils/scannerStatusVocabulary';
-import { CheckCircle2, Circle, Clock, XCircle } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, XCircle, Check } from 'lucide-react';
 import type { ScannerLineupStatus } from '../../../dashboard/scanLineupStatus';
+import { getScannerBadgeClass, getScannerCardClass, getScannerDotClass, getScannerFullName } from '../../utils/scannerColors';
 
 interface ScannerLineupCardProps {
   sources: ScannerSource[];
@@ -73,6 +73,7 @@ export function ScannerLineupCard({
                     : 'unavailable',
               })
               : getScannerResultLabel(status);
+
             const StatusIcon = selectionMode
               ? selected
                 ? CheckCircle2
@@ -81,11 +82,15 @@ export function ScannerLineupCard({
                   : selectable
                     ? Circle
                     : XCircle
-                : status === 'completed'
-                  ? CheckCircle2
-                  : status === 'failed'
-                    ? XCircle
-                    : Clock;
+              : status === 'completed'
+                ? CheckCircle2
+                : status === 'failed'
+                  ? XCircle
+                  : Clock;
+
+            // Use centralized scanner color classes when available
+            const scannerBadgeClass = getScannerBadgeClass(entry.source);
+            const scannerCardClass = getScannerCardClass(entry.source);
             const statusClassName = selectionMode
               ? selected
                 ? 'border-primary/30 bg-primary/10 text-primary'
@@ -100,7 +105,8 @@ export function ScannerLineupCard({
                   ? 'border-red-500/30 bg-red-500/10 text-red-700'
                   : status === 'missing'
                     ? 'border-amber-500/30 bg-amber-500/10 text-amber-700'
-                    : 'border-slate-500/30 bg-slate-500/10 text-slate-700';
+                    : `border-border/60 ${scannerBadgeClass}`;
+
             const cardClassName = selectionMode
               ? selected
                 ? 'rounded-xl border border-primary/30 bg-primary/5 p-3'
@@ -113,7 +119,7 @@ export function ScannerLineupCard({
                 ? 'rounded-xl border p-3 border-amber-500/30 bg-amber-500/10 text-amber-700'
                 : status === 'failed'
                   ? 'rounded-xl border p-3 border-red-500/30 bg-red-500/10 text-red-700'
-                  : `rounded-xl border p-3 ${entry.badgeClassName}`;
+                  : `rounded-xl border p-3 ${scannerCardClass}`;
 
             return (
               <div
@@ -124,12 +130,23 @@ export function ScannerLineupCard({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       {selectionMode ? (
-                        <Checkbox
-                          checked={selected}
+                        // Clickable colored dot + check interaction instead of a checkbox
+                        <button
+                          type="button"
+                          onClick={() => selectable && onToggleSource?.(source)}
                           disabled={!selectable}
-                          onCheckedChange={() => onToggleSource?.(source)}
+                          aria-pressed={selected}
                           aria-label={`${selected ? 'Deselect' : 'Select'} ${entry.label}`}
-                        />
+                          className={`flex items-center justify-center h-8 w-8 rounded-full transition ${selectable ? 'hover:scale-105' : 'opacity-50 cursor-not-allowed'}`}
+                        >
+                          {selected ? (
+                            <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-primary text-white">
+                              <Check className="h-4 w-4" />
+                            </span>
+                          ) : (
+                            <span className={`inline-block h-3 w-3 rounded-full ${getScannerDotClass(entry.source)}`} aria-hidden />
+                          )}
+                        </button>
                       ) : null}
                       <span className="truncate text-sm font-semibold">{entry.label}</span>
                     </div>
