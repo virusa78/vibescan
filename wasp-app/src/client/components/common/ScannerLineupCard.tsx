@@ -13,7 +13,6 @@ import type { ScannerLineupStatus } from '../../../dashboard/scanLineupStatus';
 import {
   getScannerBadgeClass,
   getScannerCardClass,
-  getScannerDotClass,
   getScannerLetter,
   getScannerSelectionAriaLabel,
 } from '../../utils/scannerColors';
@@ -129,10 +128,10 @@ export function ScannerLineupCard({
 
             if (selectionMode) {
               const selectionCardClass = !selectable
-                ? 'rounded-xl border border-slate-500/40 bg-slate-500/10 p-3 text-slate-600 dark:text-slate-300 opacity-70'
+                ? 'rounded-xl border border-border/50 bg-muted/30 p-3 text-muted-foreground opacity-70'
                 : selected
-                  ? `rounded-xl border p-3 text-left transition shadow-sm ${scannerCardClass}`
-                  : 'rounded-xl border border-border/70 bg-background p-3 text-left transition hover:border-primary/40 hover:bg-accent/40';
+                  ? 'rounded-xl border border-primary bg-primary/5 p-3 text-left transition shadow-sm'
+                  : 'rounded-xl border border-border/70 bg-background p-3 text-left transition hover:border-border hover:bg-accent/30';
 
               return (
                 <button
@@ -153,9 +152,9 @@ export function ScannerLineupCard({
                         </span>
                         <span className="truncate text-sm font-semibold">{entry.label}</span>
                       </div>
-                      <p className="mt-2 text-xs leading-5 opacity-80">{entry.description}</p>
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground">{entry.description}</p>
                       {disabledReason ? (
-                        <p className="mt-1 text-xs leading-5 opacity-80">{disabledReason}</p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">{disabledReason}</p>
                       ) : null}
                     </div>
                     <div className="flex flex-col items-end gap-2">
@@ -163,12 +162,12 @@ export function ScannerLineupCard({
                         <StatusIcon className="size-3" aria-hidden="true" />
                         <span>{statusLabel}</span>
                       </Badge>
-                      <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full border ${selected ? 'bg-primary text-primary-foreground border-primary' : `border ${getScannerDotClass(entry.source)}`}`}>
+                      <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full border ${selected ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-background text-transparent'}`}>
                         {selected ? <Check className="h-3 w-3" /> : null}
                       </span>
                     </div>
                   </div>
-                  <p className="mt-2 text-[10px] uppercase tracking-wide opacity-70">{entry.source}</p>
+                  <p className="mt-2 text-[10px] uppercase tracking-wide text-muted-foreground">{entry.source}</p>
                 </button>
               );
             }
