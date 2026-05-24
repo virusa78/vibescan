@@ -290,18 +290,23 @@ export default function NewScanPage() {
                     key={option.value}
                     type="button"
                     onClick={() => setInputType(option.value)}
-                    className={`rounded-xl border p-4 text-left transition ${
+                    className={`group flex items-start gap-0 rounded-xl border transition ${
                       isActive
                         ? "border-primary bg-primary/5 shadow-sm"
                         : "border-border/70 bg-background hover:border-primary/40 hover:bg-accent/40"
                     }`}
                   >
-                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div className="text-foreground font-medium">{option.title}</div>
-                    <div className="text-muted-foreground mt-2 text-sm">
-                      {option.description}
+                    {/* left stripe to visually match scanner selection thickness */}
+                    <span className={`${isActive ? 'w-4 md:w-5' : 'w-3 md:w-4'} ${isActive ? 'bg-primary' : 'bg-transparent'} mr-3 hidden sm:block rounded-r-sm`} aria-hidden="true" />
+
+                    <div className="p-4">
+                      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="text-foreground font-medium">{option.title}</div>
+                      <div className="text-muted-foreground mt-2 text-sm">
+                        {option.description}
+                      </div>
                     </div>
                   </button>
                 );
