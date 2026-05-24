@@ -16,6 +16,7 @@ import {
   getScannerLetter,
   getScannerSelectionAriaLabel,
   getScannerConfig,
+  STRIPE_THICKNESS_CLASS,
 } from '../../utils/scannerColors';
 
 interface ScannerLineupCardProps {
@@ -158,19 +159,19 @@ export function ScannerLineupCard({
                   className={`group flex items-start gap-0 overflow-hidden ${selectionCardClass}`}
                 >
                   {/* left color stripe: thicker when selected */}
-                  <span className={`${selected ? 'w-4 md:w-5' : 'w-3 md:w-4'} ${stripeClass} mr-3 hidden sm:block rounded-r-sm`} aria-hidden="true" />
+                  <span className={`${selected ? STRIPE_THICKNESS_CLASS : 'w-3 md:w-4'} ${stripeClass} mr-3 hidden sm:block rounded-r-sm`} aria-hidden="true" />
 
-                  <div className="flex flex-1 items-start justify-between gap-3 p-3">
+                  <div className="flex flex-1 items-start justify-between gap-3 p-2">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-start gap-3">
                         <span className={`inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border text-sm font-semibold ${scannerBadgeClass}`}>
                           {getScannerLetter(entry.source)}
                         </span>
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-foreground">{entry.label}</div>
-                          <p className="mt-1 text-xs leading-5 text-muted-foreground">{entry.description}</p>
+                          <p className="mt-0 text-xs leading-5 text-muted-foreground">{entry.description}</p>
                           {disabledReason ? (
-                            <p className="mt-1 text-xs leading-5 text-muted-foreground">{disabledReason}</p>
+                            <p className="mt-0 text-xs leading-5 text-muted-foreground">{disabledReason}</p>
                           ) : null}
                         </div>
                       </div>
@@ -201,7 +202,7 @@ export function ScannerLineupCard({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-start gap-3">
                       <span className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs font-semibold ${scannerBadgeClass}`}>
                         {getScannerLetter(entry.source)}
                       </span>

@@ -12,7 +12,7 @@ import { Link as WaspRouterLink, routes } from "wasp/client/router";
 import { useAsyncState } from "../client/hooks/useAsyncState";
 import { ScannerLineupCard } from "../client/components/common/ScannerLineupCard";
 import { getPlannedScannerSources, getScannerLineupEntry, type ScannerAccessPreview, type ScannerSource } from "../client/utils/scannerLineup";
-import { getScannerBadgeClass, getScannerFullName, getScannerLetter } from "../client/utils/scannerColors";
+import { getScannerBadgeClass, getScannerFullName, getScannerLetter, STRIPE_THICKNESS_CLASS } from "../client/utils/scannerColors";
 import { developerSecurityTitle, scanInputTypeLabels } from "../client/utils/productVocabulary";
 
 type ScanInputType = "github" | "sbom" | "source_zip";
@@ -297,7 +297,7 @@ export default function NewScanPage() {
                     }`}
                   >
                     {/* left stripe to visually match scanner selection thickness */}
-                    <span className={`${isActive ? 'w-4 md:w-5' : 'w-3 md:w-4'} ${isActive ? 'bg-accent' : 'bg-transparent'} mr-3 hidden sm:block rounded-r-sm`} aria-hidden="true" />
+                    <span className={`${isActive ? STRIPE_THICKNESS_CLASS : 'w-3 md:w-4'} ${isActive ? 'bg-accent' : 'bg-transparent'} mr-3 hidden sm:block rounded-r-sm`} aria-hidden="true" />
 
                     <div className="p-4">
                       <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">

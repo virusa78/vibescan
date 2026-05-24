@@ -100,6 +100,8 @@ export function getScannerFullName(scanner: ScannerKey) {
   return getScannerConfig(scanner).fullName;
 }
 
+export const STRIPE_THICKNESS_CLASS = 'w-4 md:w-5';
+
 export function getScannerSelectionAriaLabel({
   scanner,
   selected,
