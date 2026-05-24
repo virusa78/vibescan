@@ -29,11 +29,13 @@ export const SCANNER_CONFIG: Record<string, {
   codescoring_johnny: {
     letter: 'C',
     fullName: 'Johnny',
-    bgColor: 'bg-sky-50 dark:bg-sky-950/35',
-    textColor: 'text-sky-800 dark:text-sky-200',
-    borderColor: 'border-sky-500/40 dark:border-sky-400/40',
-    hoverBg: 'hover:bg-sky-100 dark:hover:bg-sky-900/45',
+    // lighter dark-mode background and higher text contrast for readability
+    bgColor: 'bg-sky-50 dark:bg-sky-800/20',
+    textColor: 'text-sky-800 dark:text-sky-100',
+    borderColor: 'border-sky-500/40 dark:border-sky-300/40',
+    hoverBg: 'hover:bg-sky-100 dark:hover:bg-sky-700/30',
   },
+
   trivy: {
     letter: 'T',
     fullName: 'Trivy',
@@ -65,7 +67,7 @@ const DEFAULT = {
   fullName: 'Unknown',
   bgColor: 'bg-slate-100',
   textColor: 'text-slate-700',
-  borderColor: 'border-slate-300',
+  borderColor: 'border-slate-300/20',
   hoverBg: 'hover:bg-slate-200',
 };
 
@@ -75,13 +77,14 @@ export function getScannerConfig(scanner: ScannerKey) {
 
 export function getScannerBadgeClass(scanner: ScannerKey) {
   const c = getScannerConfig(scanner);
+  // badge: use border + text + subtle bg (avoid using full colored bg for cards)
   return `${c.borderColor} ${c.bgColor} ${c.textColor}`;
 }
 
 export function getScannerCardClass(scanner: ScannerKey) {
   const c = getScannerConfig(scanner);
-  // card classes for a neutral card background with subtle colored border
-  return `${c.borderColor} ${c.bgColor} ${c.textColor}`;
+  // card classes: prefer neutral background and thin colored border (use borderColor only)
+  return `${c.borderColor} bg-background ${c.textColor}`;
 }
 
 export function getScannerDotClass(scanner: ScannerKey) {
