@@ -2,6 +2,10 @@
 
 VibeScan is a dual-scanner SaaS vulnerability platform (Grype free + Codescoring/BlackDuck enterprise) built on Wasp 0.23+. Full-stack TypeScript, PostgreSQL, Redis, BullMQ, Stripe.
 
+IMPORTANT: Documentation consistency — whenever documentation is updated, update all related documents (README.md, PRODUCTION_CHECKLIST.md, .env examples, CLAUDE.md, AGENTS.md, OPERATIONS.md, and any environment-specific docs). See docs/DOCS_CONSISTENCY.md for the canonical checklist and process.
+
+Note: For HubSpot server integrations, prefer a service key over a personal access token (PAK). Add HUBSPOT_SERVICE_KEY to `wasp-app/.env.server` (or your secret manager) and never commit raw keys to git.
+
 ## Commands
 
 ```bash
