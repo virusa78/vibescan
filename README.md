@@ -67,6 +67,8 @@ See:
 - `wasp-app/.env.server`
 - `wasp-app/.env.local`
 
+Note: For HubSpot server integrations, add a HUBSPOT_SERVICE_KEY to `wasp-app/.env.server` (prefer a service key over a personal access token). Store keys in CI/secret manager and never commit raw secrets.
+
 ## Architecture notes
 
 - Provider planning is stored on each scan as `plannedSources`

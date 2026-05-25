@@ -108,6 +108,7 @@ Deployment readiness verification for VibeScan Phase 5 (Production Release).
   - [ ] `REDIS_URL` configured
   - [ ] `JWT_SECRET` set (production value)
   - [ ] `ENCRYPTION_KEY` set (production value)
+  - [ ] `HUBSPOT_SERVICE_KEY` set (service key preferred; store in secret manager)
   - [ ] `STRIPE_SECRET_KEY` configured
   - [ ] `AWS_*` credentials configured
   - [ ] `MAIL_PROVIDER` and sender settings configured
