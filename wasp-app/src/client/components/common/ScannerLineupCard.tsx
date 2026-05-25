@@ -15,6 +15,8 @@ import {
   getScannerCardClass,
   getScannerLetter,
   getScannerSelectionAriaLabel,
+  getScannerConfig,
+  STRIPE_THICKNESS_CLASS,
 } from '../../utils/scannerColors';
 
 interface ScannerLineupCardProps {
@@ -24,6 +26,8 @@ interface ScannerLineupCardProps {
   selectedBySource?: Partial<Record<ScannerSource, boolean>>;
   selectableBySource?: Partial<Record<ScannerSource, boolean>>;
   disabledReasonBySource?: Partial<Record<ScannerSource, string | null>>;
+  // which sources are recommended for the current input type (used to highlight stripe)
+  recommendedBySource?: Partial<Record<ScannerSource, boolean>>;
   onToggleSource?: (source: ScannerSource) => void;
   title?: string;
   subtitle?: string;
@@ -37,6 +41,7 @@ export function ScannerLineupCard({
   selectedBySource,
   selectableBySource,
   disabledReasonBySource,
+  recommendedBySource,
   onToggleSource,
   title = 'Parallel scanners',
   subtitle = 'The backend fans this scan out across independent lanes.',
@@ -95,7 +100,8 @@ export function ScannerLineupCard({
 
             // Use centralized scanner color classes when available
             const scannerBadgeClass = getScannerBadgeClass(entry.source);
-            const scannerCardClass = getScannerCardClass(entry.source);
+            const scannerConfig = getScannerConfig(entry.source);
+
             const statusClassName = selectionMode
               ? selected
                 ? 'border-primary/30 bg-primary/10 text-primary'
@@ -110,7 +116,7 @@ export function ScannerLineupCard({
                   ? 'border-red-500/30 bg-red-500/10 text-red-700'
                   : status === 'missing'
                     ? 'border-amber-500/30 bg-amber-500/10 text-amber-700'
-                    : `border-border/60 ${scannerBadgeClass}`;
+                    : 'border-border/60 bg-background text-muted-foreground';
 
             const cardClassName = selectionMode
               ? selected
@@ -124,15 +130,23 @@ export function ScannerLineupCard({
                 ? 'rounded-xl border p-3 border-amber-500/30 bg-amber-500/10 text-amber-700'
                 : status === 'failed'
                   ? 'rounded-xl border p-3 border-red-500/30 bg-red-500/10 text-red-700'
-                  : `rounded-xl border p-3 ${scannerCardClass}`;
+                  : `rounded-xl border p-3 bg-background`;
 
             if (selectionMode) {
               const selectionCardClass = !selectable
-                ? 'rounded-xl border border-border/50 bg-muted/30 p-3 text-muted-foreground opacity-70'
+                ? 'rounded-xl border border-border/40 bg-muted/30 p-3 text-muted-foreground opacity-70'
                 : selected
-                  ? 'rounded-xl border border-primary bg-primary/5 p-3 text-left transition shadow-sm'
-                  : 'rounded-xl border border-border/70 bg-background p-3 text-left transition hover:border-border hover:bg-accent/30';
+                  ? 'rounded-xl border border-primary/30 bg-primary/5 p-3 text-left transition'
+                  : 'rounded-xl border border-border/30 bg-background p-3 text-left transition hover:border-border hover:bg-accent/6';
 
+              // use explicit config for stripe color
+              const scannerConfig = getScannerConfig(entry.source);
+              const recommended = recommendedBySource?.[entry.source] ?? false;
+              const baseStripe = scannerConfig?.bgColor ?? 'bg-slate-200';
+              const stripeEnhance = recommended ? 'ring-2 ring-offset-1 ring-primary/20' : '';
+              const stripeClass = `${baseStripe} ${stripeEnhance}`;
+
+              // compact, consistent card: small colored stripe on the left, content on the right
               return (
                 <button
                   key={source}
@@ -142,32 +156,41 @@ export function ScannerLineupCard({
                   aria-pressed={selected}
                   aria-label={getScannerSelectionAriaLabel({ scanner: entry.source, selected })}
                   title={`${entry.label}${disabledReason ? ` — ${disabledReason}` : ''}`}
-                  className={selectionCardClass}
+                  className={`group flex items-start gap-0 overflow-hidden ${selectionCardClass}`}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  {/* left color stripe: thicker when selected */}
+                  <span className={`${selected ? STRIPE_THICKNESS_CLASS : 'w-3 md:w-4'} ${stripeClass} mr-3 hidden sm:block rounded-r-sm`} aria-hidden="true" />
+
+                  <div className="flex flex-1 items-start justify-between gap-3 p-2">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs font-semibold ${scannerBadgeClass}`}>
+                      <div className="flex items-start gap-3">
+                        <span className={`inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border text-sm font-semibold ${scannerBadgeClass}`}>
                           {getScannerLetter(entry.source)}
                         </span>
-                        <span className="truncate text-sm font-semibold">{entry.label}</span>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-foreground">{entry.label}</div>
+                          <p className="mt-0 text-xs leading-5 text-muted-foreground">{entry.description}</p>
+                          {disabledReason ? (
+                            <p className="mt-0 text-xs leading-5 text-muted-foreground">{disabledReason}</p>
+                          ) : null}
+                        </div>
                       </div>
-                      <p className="mt-2 text-xs leading-5 text-muted-foreground">{entry.description}</p>
-                      {disabledReason ? (
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">{disabledReason}</p>
-                      ) : null}
                     </div>
+
                     <div className="flex flex-col items-end gap-2">
-                      <Badge variant="outline" className={`inline-flex items-center gap-1 whitespace-nowrap text-[10px] uppercase tracking-wide ${statusClassName}`}>
-                        <StatusIcon className="size-3" aria-hidden="true" />
-                        <span>{statusLabel}</span>
-                      </Badge>
-                      <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full border ${selected ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-background text-transparent'}`}>
+                      {/* only show status badge for unavailable or cooling states; hide "SELECTED" badge to reduce clutter */}
+                      {(!selectable || isCoolingDown) ? (
+                        <Badge variant="outline" className={`inline-flex items-center gap-1 whitespace-nowrap text-[10px] uppercase tracking-wide ${statusClassName}`}>
+                          <StatusIcon className="size-3" aria-hidden="true" />
+                          <span>{statusLabel}</span>
+                        </Badge>
+                      ) : null}
+
+                      <div className={`inline-flex items-center justify-center h-6 w-6 rounded-full border ${selected ? 'bg-emerald-600 text-white border-emerald-600' : 'border-border bg-background text-transparent'}`}>
                         {selected ? <Check className="h-3 w-3" /> : null}
-                      </span>
+                      </div>
                     </div>
                   </div>
-                  <p className="mt-2 text-[10px] uppercase tracking-wide text-muted-foreground">{entry.source}</p>
                 </button>
               );
             }
@@ -179,8 +202,11 @@ export function ScannerLineupCard({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-semibold">{entry.label}</span>
+                    <div className="flex items-start gap-3">
+                      <span className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs font-semibold ${scannerBadgeClass}`}>
+                        {getScannerLetter(entry.source)}
+                      </span>
+                      <span className="truncate text-sm font-semibold text-foreground">{entry.label}</span>
                     </div>
                   </div>
                   <Badge variant="outline" className={`inline-flex items-center gap-1 whitespace-nowrap text-[10px] uppercase tracking-wide ${statusClassName}`}>
@@ -188,7 +214,7 @@ export function ScannerLineupCard({
                     <span>{statusLabel}</span>
                   </Badge>
                 </div>
-                <p className="mt-2 text-xs leading-5 opacity-80">{entry.description}</p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">{entry.description}</p>
                 <p className="mt-2 text-[10px] uppercase tracking-wide opacity-70">{entry.source}</p>
               </div>
             );

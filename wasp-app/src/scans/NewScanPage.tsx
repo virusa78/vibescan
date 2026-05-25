@@ -12,7 +12,7 @@ import { Link as WaspRouterLink, routes } from "wasp/client/router";
 import { useAsyncState } from "../client/hooks/useAsyncState";
 import { ScannerLineupCard } from "../client/components/common/ScannerLineupCard";
 import { getPlannedScannerSources, getScannerLineupEntry, type ScannerAccessPreview, type ScannerSource } from "../client/utils/scannerLineup";
-import { getScannerBadgeClass, getScannerFullName, getScannerLetter } from "../client/utils/scannerColors";
+import { getScannerBadgeClass, getScannerFullName, getScannerLetter, STRIPE_THICKNESS_CLASS } from "../client/utils/scannerColors";
 import { developerSecurityTitle, scanInputTypeLabels } from "../client/utils/productVocabulary";
 
 type ScanInputType = "github" | "sbom" | "source_zip";
@@ -146,6 +146,12 @@ export default function NewScanPage() {
     [scannerChoices],
   );
   const scannerSources = useMemo(() => scannerChoices.map((choice) => choice.source), [scannerChoices]);
+
+  // recommended scanners for the current inputType (use planned sources as recommendation)
+  const recommendedBySource = useMemo(() => {
+    const planned = getPlannedScannerSources(scannerAccessData as ScannerAccessPreview | null);
+    return Object.fromEntries(planned.map((s) => [s, true]));
+  }, [scannerAccessData]);
   const activeType = useMemo(
     () => inputTypeOptions.find((option) => option.value === inputType) ?? inputTypeOptions[0],
     [inputType],
@@ -239,6 +245,7 @@ export default function NewScanPage() {
           selectedBySource={Object.fromEntries(selectedScannerSources.map((scanner) => [scanner, true])) as Partial<Record<ScannerSource, boolean>>}
           selectableBySource={Object.fromEntries(scannerChoices.map((choice) => [choice.source, choice.selectable])) as Partial<Record<ScannerSource, boolean>>}
           disabledReasonBySource={Object.fromEntries(scannerChoices.map((choice) => [choice.source, choice.disabled_reason])) as Partial<Record<ScannerSource, string | null>>}
+          recommendedBySource={recommendedBySource as Partial<Record<ScannerSource, boolean>>}
           onToggleSource={(scanner) => {
             const choice = scannerChoiceMap.get(scanner);
             if (!choice?.selectable) {
@@ -283,18 +290,23 @@ export default function NewScanPage() {
                     key={option.value}
                     type="button"
                     onClick={() => setInputType(option.value)}
-                    className={`rounded-xl border p-4 text-left transition ${
+                    className={`group flex items-start gap-0 rounded-xl border transition ${
                       isActive
                         ? "border-primary bg-primary/5 shadow-sm"
                         : "border-border/70 bg-background hover:border-primary/40 hover:bg-accent/40"
                     }`}
                   >
-                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div className="text-foreground font-medium">{option.title}</div>
-                    <div className="text-muted-foreground mt-2 text-sm">
-                      {option.description}
+                    {/* left stripe to visually match scanner selection thickness */}
+                    <span className={`${isActive ? STRIPE_THICKNESS_CLASS : 'w-3 md:w-4'} ${isActive ? 'bg-accent' : 'bg-transparent'} mr-3 hidden sm:block rounded-r-sm`} aria-hidden="true" />
+
+                    <div className="p-4">
+                      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="text-foreground font-medium">{option.title}</div>
+                      <div className="text-muted-foreground mt-2 text-sm">
+                        {option.description}
+                      </div>
                     </div>
                   </button>
                 );

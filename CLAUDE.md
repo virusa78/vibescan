@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. For agent collaboration guidance, see [AGENTS.md](AGENTS.md).
 
+Documentation consistency: Whenever changing documentation or environment variables, ensure the same changes are applied across README.md, PRODUCTION_CHECKLIST.md, wasp-app/.env.server.example, CLAUDE.md, AGENTS.md, OPERATIONS.md and any other relevant docs. Use docs/DOCS_CONSISTENCY.md as the authoritative checklist and record of required updates.
+
+HubSpot note: For server-to-server HubSpot integrations, prefer using HUBSPOT_SERVICE_KEY stored in a secret manager rather than committing a personal access token (PAK). Add `HUBSPOT_SERVICE_KEY` to `wasp-app/.env.server` for local/dev convenience (do not commit secrets).
+
 ## Project Overview
 
 VibeScan is a SaaS vulnerability scanning platform with dual-scanner architecture (Grype free + Codescoring/BlackDuck enterprise). **Complete Wasp-only architecture**—all legacy code removed. Full-stack TypeScript with 20 Wasp operations.
