@@ -95,8 +95,8 @@ export async function updateWebhook(
     // Secret rotation: optional when URL changes or explicitly requested
     if (args.rotateSecret && (args.url || args.rotateSecret)) {
       const newSecret = crypto.randomBytes(32).toString('hex');
-      const newSecretEncrypted = encryptWebhookSecret(newSecret);
-      updateData.signingSecretEncrypted = newSecretEncrypted;
+      const newSecretEncryptedBuf = encryptWebhookSecret(newSecret);
+      updateData.signingSecretEncrypted = Buffer.isBuffer(newSecretEncryptedBuf) ? newSecretEncryptedBuf.toString('base64') : String(newSecretEncryptedBuf);
     }
 
     const updatedWebhook = await context.entities.Webhook.update({

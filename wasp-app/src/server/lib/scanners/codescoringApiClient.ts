@@ -18,7 +18,7 @@ export interface CodescoringFinding {
   fixedVersion?: string;
   description: string;
   cvssScore: number;
-  source: 'codescoring_johnny';
+  source: 'enterprise';
 }
 
 export type CodescoringRawOutput = {
@@ -215,7 +215,7 @@ function generateMockFindings(components: NormalizedComponent[]): CodescoringFin
         fixedVersion: '1.0.2',
         description: 'Enterprise vulnerability in lodash',
         cvssScore: 9.2,
-        source: 'codescoring_johnny',
+        source: 'enterprise',
       },
     ],
     'express': [
@@ -227,7 +227,7 @@ function generateMockFindings(components: NormalizedComponent[]): CodescoringFin
         fixedVersion: '4.18.0',
         description: 'Express authentication bypass',
         cvssScore: 8.1,
-        source: 'codescoring_johnny',
+        source: 'enterprise',
       },
     ],
   };
@@ -244,7 +244,7 @@ function generateMockFindings(components: NormalizedComponent[]): CodescoringFin
 /**
  * Parse scan response into normalized findings
  */
-function parseCodescoringResponse(apiResponse: CodescoringRawOutput): CodescoringFinding[] {
+export function parseCodescoringResponse(apiResponse: CodescoringRawOutput): CodescoringFinding[] {
   if (!apiResponse) {
     return [];
   }
@@ -281,7 +281,7 @@ function parseCodescoringResponse(apiResponse: CodescoringRawOutput): Codescorin
             fixedVersion: Array.isArray(vuln.fixes) ? vuln.fixes[0]?.version : undefined,
             description: vuln.description || '',
             cvssScore: Number.parseFloat(String(rating?.score ?? '0')) || 0,
-            source: 'codescoring_johnny',
+            source: 'enterprise',
           });
         }
       }
@@ -300,8 +300,28 @@ function parseCodescoringResponse(apiResponse: CodescoringRawOutput): Codescorin
         fixedVersion: vuln.fixedVersion,
         description: vuln.description || '',
         cvssScore: Number.parseFloat(String(vuln.cvssScore ?? '0')) || 0,
-        source: 'codescoring_johnny',
+        source: 'enterprise',
       });
+    }
+  }
+
+  // 3. Handle Component-shaped legacy format
+  if (Array.isArray(apiResponse.components)) {
+    for (const comp of apiResponse.components) {
+      if (Array.isArray(comp.vulnerabilities)) {
+        for (const vuln of comp.vulnerabilities) {
+          findings.push({
+            cveId: vuln.cveId || 'UNKNOWN',
+            severity: (vuln.severity || 'info').toLowerCase() as CodescoringFinding['severity'],
+            package: comp.name || 'unknown',
+            version: comp.version || 'unknown',
+            fixedVersion: vuln.fixedVersion,
+            description: vuln.description || '',
+            cvssScore: Number.parseFloat(String(vuln.cvssScore ?? '0')) || 0,
+            source: 'enterprise',
+          });
+        }
+      }
     }
   }
 

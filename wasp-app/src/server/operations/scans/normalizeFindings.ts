@@ -10,7 +10,7 @@ export interface NormalizedFinding {
   fixedVersion?: string;
   description: string;
   cvssScore: number;
-  source: "grype" | "codescoring_johnny" | "snyk" | "owasp" | "trivy" | "dast";
+  source: "grype" | "enterprise" | "snyk" | "owasp" | "trivy" | "dast";
   filePath?: string;
 }
 
@@ -136,7 +136,7 @@ export function normalizeCodescoringFindings(rawOutput: unknown): NormalizedFind
         fixedVersion: vuln.fixedVersion,
         description: vuln.description || "",
         cvssScore: parseScore(vuln.cvssScore),
-        source: "codescoring_johnny" as const,
+        source: "enterprise" as const,
         filePath: (typedComponent as any).path || (typedComponent as any).location,
       });
     }

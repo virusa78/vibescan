@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { execFileSync } from "child_process";
-import { describe, expect, it, jest } from "./testGlobals";
+import { describe, expect, it, jest } from "@jest/globals";
 import type { ParsedCycloneDxDocument } from "../src/ingestion/cyclonedx-contracts";
 
 jest.mock("wasp/server", () => {

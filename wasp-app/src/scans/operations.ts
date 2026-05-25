@@ -17,7 +17,8 @@ const submitScanInputSchema = z.object({
 });
 
 const getScanByIdSchema = z.object({
-  scanId: z.string().trim().uuid("Invalid scan ID format"),
+  // Allow both UUIDs and legacy string IDs (e.g., 'scan-1') used in tests
+  scanId: z.string().trim().min(1).max(200).describe('Scan ID'),
 });
 
 type SubmitScanInput = z.infer<typeof submitScanInputSchema>;

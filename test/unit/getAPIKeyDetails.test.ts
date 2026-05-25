@@ -52,4 +52,77 @@ describe('getAPIKeyDetails', () => {
       status: 'active',
     });
   });
+
+  it('throws 404 when key does not exist', async () => {
+    prismaMock.apiKey.findUnique.mockResolvedValueOnce(null);
+
+    await expect(
+      getAPIKeyDetails(
+        { keyId: '11111111-1111-4111-8111-111111111111' },
+        {
+          user: {
+            id: '22222222-2222-4222-8222-222222222222',
+            workspaceId: '33333333-3333-4333-8333-333333333333',
+          },
+        }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      message: 'API key not found',
+    });
+  });
+
+  it('returns status revoked when disabled', async () => {
+    prismaMock.apiKey.findUnique.mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      userId: '22222222-2222-4222-8222-222222222222',
+      name: 'CI key',
+      createdAt: new Date('2026-04-01T10:00:00.000Z'),
+      expiresAt: null,
+      lastUsedAt: null,
+      enabled: false,
+    });
+    prismaMock.apiKeyUsageEvent.count.mockResolvedValueOnce(0);
+    prismaMock.apiKeyUsageEvent.findMany.mockResolvedValueOnce([]);
+
+    const result = await getAPIKeyDetails(
+      { keyId: '11111111-1111-4111-8111-111111111111' },
+      {
+        user: {
+          id: '22222222-2222-4222-8222-222222222222',
+          workspaceId: '33333333-3333-4333-8333-333333333333',
+        },
+      }
+    );
+
+    expect(result.status).toBe('revoked');
+    expect(result.expires_at).toBeNull();
+    expect(result.last_used_at).toBeNull();
+  });
+
+  it('returns status expired when key has expired', async () => {
+    prismaMock.apiKey.findUnique.mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      userId: '22222222-2222-4222-8222-222222222222',
+      name: 'CI key',
+      createdAt: new Date('2026-04-01T10:00:00.000Z'),
+      expiresAt: new Date(Date.now() - 3600000), // 1 hour ago
+      lastUsedAt: null,
+      enabled: true,
+    });
+    prismaMock.apiKeyUsageEvent.count.mockResolvedValueOnce(0);
+    prismaMock.apiKeyUsageEvent.findMany.mockResolvedValueOnce([]);
+
+    const result = await getAPIKeyDetails(
+      { keyId: '11111111-1111-4111-8111-111111111111' },
+      {
+        user: {
+          id: '22222222-2222-4222-8222-222222222222',
+          workspaceId: '33333333-3333-4333-8333-333333333333',
+        },
+      }
+    );
+
+    expect(result.status).toBe('expired');
+  });
 });

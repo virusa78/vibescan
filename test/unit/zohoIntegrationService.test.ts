@@ -284,4 +284,296 @@ describe('zoho integration service', () => {
       }),
     );
   });
+
+  describe('helper functions', () => {
+    it('buildHumanName normalizes display names correctly', async () => {
+      const { buildHumanName } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      expect(buildHumanName('')).toEqual({ firstName: null, lastName: 'VibeScan Workspace' });
+      expect(buildHumanName(null)).toEqual({ firstName: null, lastName: 'VibeScan Workspace' });
+      expect(buildHumanName('Ada')).toEqual({ firstName: null, lastName: 'Ada' });
+      expect(buildHumanName('Ada Lovelace')).toEqual({ firstName: 'Ada', lastName: 'Lovelace' });
+      expect(buildHumanName('Ada King Lovelace')).toEqual({ firstName: 'Ada King', lastName: 'Lovelace' });
+    });
+
+    it('safeJsonObject returns object or empty object', async () => {
+      const { safeJsonObject } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      expect(safeJsonObject(null)).toEqual({});
+      expect(safeJsonObject([])).toEqual({});
+      expect(safeJsonObject({ a: 1 })).toEqual({ a: 1 });
+    });
+
+    it('formatErrorMessage formats errors correctly', async () => {
+      const { formatErrorMessage } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      expect(formatErrorMessage('string error')).toBe('string error');
+      expect(formatErrorMessage(new Error('error object'))).toBe('error object');
+    });
+  });
+
+  describe('connect and token exchange edge cases', () => {
+    it('throws 422 if Zoho OAuth env is not configured', async () => {
+      delete process.env.ZOHO_CLIENT_ID;
+      const { connectZohoIntegrationForWorkspace } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      await expect(
+        connectZohoIntegrationForWorkspace({
+          workspaceId: 'workspace-1',
+          userId: 'user-1',
+          authorizationCode: 'auth-code',
+        })
+      ).rejects.toThrow('Zoho OAuth env is not configured');
+    });
+
+    it('throws if authorizationCode or refreshToken is missing', async () => {
+      const { connectZohoIntegrationForWorkspace } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      await expect(
+        connectZohoIntegrationForWorkspace({
+          workspaceId: 'workspace-1',
+          userId: 'user-1',
+        })
+      ).rejects.toThrow('Zoho authorization code or refresh token is required');
+    });
+
+    it('throws if authorization code exchange fails', async () => {
+      fetchMock.mockResolvedValueOnce(mockResponse(false, 400, { error: 'invalid_grant' }));
+      const { connectZohoIntegrationForWorkspace } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      await expect(
+        connectZohoIntegrationForWorkspace({
+          workspaceId: 'workspace-1',
+          userId: 'user-1',
+          authorizationCode: 'auth-code',
+        })
+      ).rejects.toThrow('Zoho authorization code exchange failed');
+    });
+
+    it('throws if token refresh fails', async () => {
+      fetchMock.mockResolvedValueOnce(mockResponse(false, 400, { error: 'invalid_grant' }));
+      const { connectZohoIntegrationForWorkspace } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      await expect(
+        connectZohoIntegrationForWorkspace({
+          workspaceId: 'workspace-1',
+          userId: 'user-1',
+          refreshToken: 'refresh-token',
+        })
+      ).rejects.toThrow('Zoho token refresh failed');
+    });
+  });
+
+  describe('testZohoConnection', () => {
+    it('throws if not connected', async () => {
+      prismaMock.zohoIntegration.findUnique.mockResolvedValue(null);
+      const { testZohoConnectionForWorkspace } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      await expect(
+        testZohoConnectionForWorkspace({ workspaceId: 'workspace-1' })
+      ).rejects.toThrow('Zoho integration is not connected');
+    });
+
+    it('saves organization ID on successful test connection', async () => {
+      prismaMock.zohoIntegration.findUnique.mockResolvedValue({
+        workspaceId: 'workspace-1',
+        connectionStatus: 'connected',
+        accessTokenEncrypted: encryptSecret('access-token'),
+        accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+      });
+      fetchMock.mockResolvedValueOnce(
+        mockResponse(true, 200, {
+          org: [{ id: 'org-99', company_name: 'Test Org' }],
+        })
+      );
+      prismaMock.zohoIntegration.upsert.mockResolvedValue({});
+
+      const { testZohoConnectionForWorkspace } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      const result = await testZohoConnectionForWorkspace({ workspaceId: 'workspace-1' });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.any(Object)
+      );
+      expect(fetchMock.mock.calls[0][0].toString()).toContain('/crm/v8/org');
+      expect(prismaMock.zohoIntegration.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({
+            zohoOrganizationId: 'org-99',
+            connectionStatus: 'connected',
+          }),
+        })
+      );
+    });
+
+    it('attempts to refresh access token if expired', async () => {
+      prismaMock.zohoIntegration.findUnique.mockResolvedValue({
+        workspaceId: 'workspace-1',
+        connectionStatus: 'connected',
+        accessTokenEncrypted: encryptSecret('old-access-token'),
+        refreshTokenEncrypted: encryptSecret('refresh-token'),
+        accessTokenExpiresAt: new Date(Date.now() - 3600_000), // expired
+      });
+      fetchMock
+        .mockResolvedValueOnce(
+          mockResponse(true, 200, {
+            access_token: 'new-access-token',
+            expires_in: 3600,
+          })
+        )
+        .mockResolvedValueOnce(
+          mockResponse(true, 200, {
+            org: [{ id: 'org-99', company_name: 'Test Org' }],
+          })
+        );
+      prismaMock.zohoIntegration.upsert.mockResolvedValue({});
+
+      const { testZohoConnectionForWorkspace } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      await testZohoConnectionForWorkspace({ workspaceId: 'workspace-1' });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.any(Object)
+      );
+      expect(fetchMock.mock.calls[0][0].toString()).toContain('/oauth/v2/token');
+    });
+
+    it('throws if expired and no refresh token exists', async () => {
+      prismaMock.zohoIntegration.findUnique.mockResolvedValue({
+        workspaceId: 'workspace-1',
+        connectionStatus: 'connected',
+        accessTokenEncrypted: null,
+        refreshTokenEncrypted: null,
+        accessTokenExpiresAt: null,
+      });
+
+      const { processZohoWorkspaceSyncJob } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      await expect(
+        processZohoWorkspaceSyncJob({
+          workspaceId: 'workspace-1',
+          reason: 'manual_resync',
+          requestedByUserId: 'user-1',
+        })
+      ).rejects.toThrow('Zoho access token is unavailable');
+    });
+  });
+
+  describe('sync workspace and resync', () => {
+    it('throws on manual resync if disconnected', async () => {
+      prismaMock.zohoIntegration.findUnique.mockResolvedValue(null);
+      const { resyncZohoWorkspace } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      await expect(
+        resyncZohoWorkspace({ workspaceId: 'workspace-1', userId: 'user-1' })
+      ).rejects.toThrow('Zoho integration is not connected');
+    });
+
+    it('returns immediately if payload hash matches and IDs exist', async () => {
+      const snapshot = {
+        workspace: { id: 'workspace-1', name: 'Acme Security', slug: 'acme-security', isPersonal: false },
+        owner: { id: 'user-1', email: 'owner@acme.test', displayName: 'Ada Owner', username: 'ada' },
+        summary: {
+          plan: 'pro',
+          billingState: 'active',
+          scanHealth: 'degraded',
+          lastScanAt: new Date('2026-05-24T10:00:00.000Z').toISOString(),
+          openCriticalFindingsCount: 2,
+          integrationHealth: 'connected',
+        },
+      };
+      const summaryHash = require('crypto').createHash('sha256').update(JSON.stringify({
+        snapshot,
+        reason: 'manual_resync',
+      })).digest('hex');
+
+      prismaMock.zohoIntegration.findUnique.mockResolvedValue({
+        workspaceId: 'workspace-1',
+        connectionStatus: 'connected',
+        zohoAccountId: 'account-1',
+        zohoContactId: 'contact-1',
+        lastPayloadHash: summaryHash,
+      });
+
+      const { processZohoWorkspaceSyncJob } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      await processZohoWorkspaceSyncJob({
+        workspaceId: 'workspace-1',
+        reason: 'manual_resync',
+        requestedByUserId: 'user-1',
+      });
+
+      // Fetch should not have been called because hash matches
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('handles HTTP error by saving sync error state', async () => {
+      prismaMock.zohoIntegration.findUnique.mockResolvedValue({
+        id: 'integration-1',
+        workspaceId: 'workspace-1',
+        connectionStatus: 'connected',
+        accessTokenEncrypted: encryptSecret('access-token'),
+        accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+      });
+      fetchMock.mockResolvedValueOnce(mockResponse(false, 500, 'Server Crash'));
+
+      const { processZohoWorkspaceSyncJob } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      await expect(
+        processZohoWorkspaceSyncJob({
+          workspaceId: 'workspace-1',
+          reason: 'manual_resync',
+          requestedByUserId: 'user-1',
+        })
+      ).rejects.toThrow('Zoho API request failed (500)');
+
+      expect(prismaMock.zohoIntegration.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({
+            connectionStatus: 'error',
+            syncStatus: 'failed',
+            lastErrorCode: 'http_500',
+            lastErrorMessage: expect.stringContaining('Server Crash'),
+          }),
+        })
+      );
+    });
+  });
+
+  describe('reconciliation', () => {
+    it('runs reconciliation and enqueues sync jobs', async () => {
+      prismaMock.zohoIntegration.findMany.mockResolvedValue([
+        { workspaceId: 'workspace-stale-1' },
+        { workspaceId: 'workspace-stale-2' },
+      ]);
+      prismaMock.zohoIntegration.findUnique.mockResolvedValue({
+        workspaceId: 'workspace-stale-1',
+        syncState: {},
+      });
+      prismaMock.zohoIntegration.upsert.mockResolvedValue({});
+      queueAddMock.mockResolvedValue({ id: 'job-recon' });
+
+      const { reconcileZohoIntegrations } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      const count = await reconcileZohoIntegrations(new Date());
+
+      expect(count).toBe(2);
+      expect(queueAddMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('starts and stops the reconciliation sweeper', async () => {
+      const { startZohoReconciliationSweeper, stopZohoReconciliationSweeper } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      prismaMock.zohoIntegration.findMany.mockResolvedValue([]);
+      
+      startZohoReconciliationSweeper();
+      await stopZohoReconciliationSweeper();
+    });
+  });
+
+  describe('uncommon endpoints', () => {
+    it('supports 204 status response in fetchZohoJson', async () => {
+      prismaMock.zohoIntegration.findUnique.mockResolvedValue({
+        workspaceId: 'workspace-1',
+        connectionStatus: 'connected',
+        accessTokenEncrypted: encryptSecret('access-token'),
+        accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+      });
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 204,
+      });
+
+      const { testZohoConnectionForWorkspace } = await import('../../wasp-app/src/server/services/zohoIntegrationService');
+      const result = await testZohoConnectionForWorkspace({ workspaceId: 'workspace-1' });
+      expect(result.connected).toBe(true);
+    });
+  });
 });
+

@@ -4,9 +4,26 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from './testGlobals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
-jest.mock('wasp/server', async () => import('../../test/mocks/wasp-server'));
+jest.mock('wasp/server', () => {
+  const j = (globalThis as any).jest || require('@jest/globals').jest;
+  const prisma = {
+    user: { create: j.fn(), findUnique: j.fn(), update: j.fn(), delete: j.fn(), findMany: j.fn(), count: j.fn() },
+    quotaLedger: { create: j.fn(), findMany: j.fn(), findFirst: j.fn(), deleteMany: j.fn() },
+    $transaction: j.fn(),
+  } as any;
+  class HttpError extends Error {
+    statusCode: number;
+    data?: Record<string, unknown>;
+    constructor(statusCode: number, message: string, data?: Record<string, unknown>) {
+      super(message);
+      this.statusCode = statusCode;
+      this.data = data;
+    }
+  }
+  return { prisma, HttpError };
+});
 
 import { prisma, HttpError } from 'wasp/server';
 import { quotaService } from '../src/server/services/quotaService';

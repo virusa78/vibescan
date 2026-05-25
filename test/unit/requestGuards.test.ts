@@ -16,6 +16,15 @@ describe('requestGuards', () => {
     createClientMock.mockReset();
   });
 
+  afterEach(() => {
+    // Cleanup any test-injected redis client
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((global as any).__TEST_REDIS_CLIENT__) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (global as any).__TEST_REDIS_CLIENT__;
+    }
+  });
+
   it('rejects oversized JSON bodies with 413', () => {
     try {
       parseJsonBodyWithLimit('{"a":1}', 2);
@@ -52,6 +61,9 @@ describe('requestGuards', () => {
     client.incr.mockResolvedValue(3);
     client.expire.mockResolvedValue(1);
     createClientMock.mockReturnValue(client);
+    // Provide deterministic injection for createRedisClient
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).__TEST_REDIS_CLIENT__ = client;
 
     await expect(
       enforceRateLimit({ key: 'rate_limit:test', limit: 2, windowSeconds: 60 })
@@ -72,6 +84,8 @@ describe('requestGuards', () => {
     client.quit.mockResolvedValue(undefined);
     client.incr.mockRejectedValue(new Error('redis_down'));
     createClientMock.mockReturnValue(client);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).__TEST_REDIS_CLIENT__ = client;
 
     await expect(
       enforceRateLimit({ key: 'rate_limit:test', limit: 2, windowSeconds: 60 })

@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, jest, test } from './testGlobals';
+import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
 
 type ScanData = {
   id: string;
@@ -24,32 +24,32 @@ const queryScenario: {
   queryError: null,
 };
 
-jest.mock('wasp/client/operations', async () => {
-  const React = await import('react');
+jest.mock('wasp/client/operations', () => {
+  const React = require('react');
   const getScanById = jest.fn();
   const useQuery = jest.fn();
 
   useQuery.mockImplementation(() => {
-      const [data, setData] = React.useState(queryScenario.initialData);
-      const [error, setError] = React.useState(queryScenario.queryError);
+    const [data, setData] = React.useState(queryScenario.initialData);
+    const [error, setError] = React.useState(queryScenario.queryError);
 
-      const refetch = jest.fn(() => {
-        if (queryScenario.queryError) {
-          setError(queryScenario.queryError);
-          return;
-        }
+    const refetch = jest.fn(() => {
+      if (queryScenario.queryError) {
+        setError(queryScenario.queryError);
+        return;
+      }
 
-        if (queryScenario.nextData) {
-          setData(queryScenario.nextData);
-        }
-      });
+      if (queryScenario.nextData) {
+        setData(queryScenario.nextData);
+      }
+    });
 
-      return {
-        data,
-        isLoading: false,
-        error,
-        refetch,
-      };
+    return {
+      data,
+      isLoading: false,
+      error,
+      refetch,
+    };
   });
 
   return { getScanById, useQuery };

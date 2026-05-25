@@ -10,6 +10,7 @@ export const QUEUE_NAMES = {
   ENTERPRISE_SCAN: 'enterprise_scan_queue',
   WEBHOOK_DELIVERY: 'webhook_delivery_queue',
   ZOHO_SYNC: 'zoho_sync_queue',
+  HUBSPOT_SYNC: 'hubspot_sync_queue',
 } as const;
 
 export type QueueName = typeof QUEUE_NAMES[keyof typeof QUEUE_NAMES];
@@ -46,6 +47,15 @@ export interface ZohoSyncJob {
   requestedByUserId?: string | null;
 }
 
+export interface HubspotSyncJob {
+  data: {
+    workspaceId: string;
+    trigger: 'manual' | 'scheduled' | 'webhook';
+    userId?: string;
+    force?: boolean;
+  };
+}
+
 export interface WorkerStatusSnapshot {
   isRunning: boolean;
   isPaused: boolean;
@@ -56,4 +66,5 @@ export interface QueueWorkerStatus {
   enterprise: WorkerStatusSnapshot;
   webhook: WorkerStatusSnapshot;
   zoho: WorkerStatusSnapshot;
+  hubspot: WorkerStatusSnapshot;
 }

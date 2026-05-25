@@ -167,6 +167,12 @@ export async function submitScanSubmission(
       inputRef: input.inputRef,
     });
 
+    const persistedPlannedSources = planAtSubmission === 'enterprise'
+      ? plannedExecutions
+          .filter((e) => e.provider === 'snyk' || e.queueTarget === 'free')
+          .map((execution) => execution.resultSource)
+      : plannedExecutions.map((execution) => execution.resultSource);
+
     const scan = await tx.scan.create({
       data: {
         userId: input.userId,
@@ -177,7 +183,7 @@ export async function submitScanSubmission(
         githubContext: input.githubContext as Prisma.InputJsonValue | undefined,
         status: "pending",
         planAtSubmission,
-        plannedSources: plannedExecutions.map((execution) => execution.resultSource),
+        plannedSources: persistedPlannedSources,
       },
     });
     createdScanId = scan.id;

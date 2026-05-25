@@ -27,6 +27,47 @@ describe('scannerCredentialResolver', () => {
     process.env.SNYK_ORG_ID = originalEnv.SNYK_ORG_ID;
   });
 
+  it('returns source none for non-snyk provider kinds', async () => {
+    const credentials = await resolveCredentialsForProvider(
+      { user: { findUnique: jest.fn() } } as unknown as ResolverPrismaStub,
+      'grype',
+      undefined
+    );
+
+    expect(credentials).toEqual({
+      source: 'none',
+      values: {},
+    });
+  });
+
+  it('returns environment credentials with undefined token when SNYK_TOKEN is missing', async () => {
+    const credentials = await resolveCredentialsForProvider(
+      { user: { findUnique: jest.fn() } } as unknown as ResolverPrismaStub,
+      'snyk',
+      undefined // credentialSource is undefined
+    );
+
+    expect(credentials).toEqual({
+      source: 'environment',
+      values: {
+        token: undefined,
+        orgId: 'org-123',
+      },
+    });
+  });
+
+  it('trims whitespace from SNYK_TOKEN in environment mode', async () => {
+    process.env.SNYK_TOKEN = '   trimmed-token   ';
+
+    const credentials = await resolveCredentialsForProvider(
+      { user: { findUnique: jest.fn() } } as unknown as ResolverPrismaStub,
+      'snyk',
+      { mode: 'environment' }
+    );
+
+    expect(credentials.values.token).toBe('trimmed-token');
+  });
+
   it('returns environment credentials for snyk when token is configured', async () => {
     process.env.SNYK_TOKEN = 'env-snyk-token';
 
@@ -46,7 +87,7 @@ describe('scannerCredentialResolver', () => {
   });
 
   it('decrypts user-secret credentials for snyk', async () => {
-    const findUnique = jest.fn() as jest.MockedFunction<() => Promise<{ snykApiKeyEncrypted: Buffer }>>;
+    const findUnique = jest.fn() as jest.MockedFunction<() => Promise<{ snykApiKeyEncrypted: string }>>;
     findUnique.mockResolvedValue({
       snykApiKeyEncrypted: encryptSecret('user-snyk-token'),
     });
@@ -74,5 +115,39 @@ describe('scannerCredentialResolver', () => {
         orgId: 'org-123',
       },
     });
+  });
+
+  it('throws an error if user is not found in user-secret mode', async () => {
+    const findUnique = jest.fn() as jest.MockedFunction<() => Promise<null>>;
+    findUnique.mockResolvedValue(null);
+    const prisma = {
+      user: {
+        findUnique,
+      },
+    } as ResolverPrismaStub;
+
+    await expect(
+      resolveCredentialsForProvider(prisma, 'snyk', { mode: 'user-secret', userId: 'user-999' })
+    ).rejects.toThrow('Unable to resolve Snyk credentials: user user-999 not found');
+  });
+
+  it('returns undefined token if snykApiKeyEncrypted is missing in user-secret mode', async () => {
+    const findUnique = jest.fn() as jest.MockedFunction<() => Promise<{ snykApiKeyEncrypted: null }>>;
+    findUnique.mockResolvedValue({
+      snykApiKeyEncrypted: null,
+    });
+    const prisma = {
+      user: {
+        findUnique,
+      },
+    } as ResolverPrismaStub;
+
+    const credentials = await resolveCredentialsForProvider(
+      prisma,
+      'snyk',
+      { mode: 'user-secret', userId: 'user-7' }
+    );
+
+    expect(credentials.values.token).toBeUndefined();
   });
 });

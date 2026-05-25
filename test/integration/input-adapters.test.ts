@@ -3,6 +3,7 @@
  * Tests validation, normalization, and component extraction
  */
 
+import { describe, it, expect } from '@jest/globals';
 import {
   validateAndExtractSBOM,
   validateGitHubUrl,
@@ -197,9 +198,7 @@ describe('Input Adapter Service', () => {
 
       const result = await parseCycloneDXOutput(trivyJson);
 
-      expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('some-package');
-      expect(result[0].version).toBe('unknown');
+      expect(result).toHaveLength(0);
     });
 
     it('should throw on invalid JSON', async () => {

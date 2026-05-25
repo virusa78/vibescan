@@ -2,9 +2,66 @@
  * Unit tests for scanner utilities
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, jest } from '@jest/globals';
 import { parseGrypOutput } from '../wasp-app/src/server/lib/scanners/grypeScannerUtil';
+import {
+  parseCodescoringResponse,
+  scanWithCodescoring,
+  scanWithCodescoringDetailed,
+} from '../wasp-app/src/server/lib/scanners/codescoringApiClient';
 import type { NormalizedComponent } from '../wasp-app/src/server/services/inputAdapterService';
+
+// Mock child_process and fs using standard jest.mock and jest.requireActual
+jest.mock('child_process', () => {
+  const actual = jest.requireActual('child_process') as any;
+  return {
+    ...actual,
+    execSync: jest.fn(),
+    execFileSync: jest.fn().mockImplementation((cmd, args) => {
+      if (cmd === 'ssh' && Array.isArray(args) && args[args.length - 1] === 'mktemp -d') {
+        return '/tmp/remote-temp\n';
+      }
+      if (cmd === 'ssh') {
+        return 'ssh-success';
+      }
+      if (cmd === 'scp') {
+        return 'scp-success';
+      }
+      return '';
+    }),
+  };
+});
+
+jest.mock('fs', () => {
+  const actual = jest.requireActual('fs') as any;
+  return {
+    ...actual,
+    readFileSync: jest.fn().mockImplementation(() => {
+      return JSON.stringify({
+        bomFormat: 'CycloneDX',
+        components: [
+          {
+            name: 'lodash',
+            version: '4.17.21',
+            'bom-ref': 'pkg:npm/lodash@4.17.21',
+          },
+        ],
+        vulnerabilities: [
+          {
+            id: 'CVE-2021-23337',
+            ratings: [{ score: 8.1, severity: 'HIGH' }],
+            affects: [{ ref: 'pkg:npm/lodash@4.17.21' }],
+            fixes: [{ version: '4.17.22' }],
+            description: 'lodash vulnerability',
+          },
+        ],
+      });
+    }),
+    mkdirSync: jest.fn(),
+    rmSync: jest.fn(),
+    existsSync: jest.fn().mockReturnValue(true),
+  };
+});
 
 describe('Grype Scanner Utility', () => {
   describe('parseGrypOutput', () => {
@@ -49,7 +106,7 @@ describe('Grype Scanner Utility', () => {
       expect(findings[0].severity).toBe('high');
       expect(findings[0].cvssScore).toBe(7.5);
       expect(findings[0].fixedVersion).toBe('1.0.1');
-      expect(findings[0].source).toBe('free');
+      expect(findings[0].source).toBe('grype');
 
       expect(findings[1].cveId).toBe('CVE-2024-5678');
       expect(findings[1].severity).toBe('critical');
@@ -179,97 +236,151 @@ describe('Grype Scanner Utility', () => {
 });
 
 describe('Codescoring API Client', () => {
-  describe('Mock findings generation', () => {
-    it('should generate mock findings for known vulnerable packages', async () => {
-      // This test would require mocking the Codescoring client
-      // For MVP, we verify the mock mode exists and returns expected format
+  describe('parseCodescoringResponse', () => {
+    it('returns empty array on null/undefined input', () => {
+      expect(parseCodescoringResponse(null as any)).toEqual([]);
+      expect(parseCodescoringResponse(undefined as any)).toEqual([]);
+    });
+
+    it('parses CycloneDX format correctly', () => {
+      const cdSbom = {
+        bomFormat: 'CycloneDX',
+        components: [
+          {
+            name: 'lodash',
+            version: '4.17.21',
+            bomRef: 'pkg:npm/lodash@4.17.21',
+          },
+          {
+            name: 'express',
+            version: '4.18.2',
+            purl: 'pkg:npm/express@4.18.2',
+          },
+        ],
+        vulnerabilities: [
+          {
+            id: 'CVE-2021-23337',
+            ratings: [{ score: 8.1, severity: 'HIGH' }],
+            affects: [{ ref: 'pkg:npm/lodash@4.17.21' }],
+            fixes: [{ version: '4.17.22' }],
+            description: 'lodash vulnerability',
+          },
+          {
+            bomRef: 'vuln-2',
+            ratings: [{ score: 5.0, severity: 'medium' }],
+            affects: [{ ref: 'pkg:npm/express@4.18.2' }],
+          },
+        ],
+      };
+
+      const findings = parseCodescoringResponse(cdSbom);
+      expect(findings).toHaveLength(2);
+      
+      const f1 = findings.find((f) => f.package === 'lodash')!;
+      expect(f1.cveId).toBe('CVE-2021-23337');
+      expect(f1.severity).toBe('high');
+      expect(f1.fixedVersion).toBe('4.17.22');
+      expect(f1.cvssScore).toBe(8.1);
+
+      const f2 = findings.find((f) => f.package === 'express')!;
+      expect(f2.cveId).toBe('vuln-2');
+      expect(f2.severity).toBe('medium');
+      expect(f2.fixedVersion).toBeUndefined();
+    });
+
+    it('parses Legacy API format correctly', () => {
+      const legacyResponse = {
+        vulnerabilities: [
+          {
+            cveId: 'CVE-2024-0001',
+            severity: 'CRITICAL',
+            packageName: 'lodash',
+            version: '4.17.21',
+            fixedVersion: '4.17.22',
+            description: 'legacy lodash vuln',
+            cvssScore: '9.8',
+          },
+        ],
+      };
+
+      const findings = parseCodescoringResponse(legacyResponse);
+      expect(findings).toHaveLength(1);
+      expect(findings[0].package).toBe('lodash');
+      expect(findings[0].cveId).toBe('CVE-2024-0001');
+      expect(findings[0].severity).toBe('critical');
+      expect(findings[0].cvssScore).toBe(9.8);
+    });
+
+    it('parses Component-shaped legacy format correctly', () => {
+      const componentResponse = {
+        components: [
+          {
+            name: 'express',
+            version: '4.18.0',
+            vulnerabilities: [
+              {
+                cveId: 'CVE-2024-0002',
+                severity: 'medium',
+                fixedVersion: '4.18.1',
+                description: 'express vuln',
+                cvssScore: 5.4,
+              },
+            ],
+          },
+        ],
+      };
+
+      const findings = parseCodescoringResponse(componentResponse);
+      expect(findings).toHaveLength(1);
+      expect(findings[0].package).toBe('express');
+      expect(findings[0].cveId).toBe('CVE-2024-0002');
+      expect(findings[0].severity).toBe('medium');
+      expect(findings[0].cvssScore).toBe(5.4);
+    });
+  });
+
+  describe('scanWithCodescoring', () => {
+    it('uses mock findings if SSH is not fully configured', async () => {
       const components: NormalizedComponent[] = [
         { name: 'lodash', version: '1.0.0' },
         { name: 'express', version: '4.0.0' },
+        { name: 'unknown-pkg', version: '1.0.0' },
       ];
 
-      // Mock findings should include vulnerabilities for these packages
-      // Verified in integration tests
-      expect(components).toBeDefined();
-    });
-  });
-
-  describe('Retry logic', () => {
-    it('should retry on 5xx errors', () => {
-      // Retry logic tested in integration tests
-      // Unit test would require mocking fetch API
-      expect(true).toBe(true);
+      // Since we don't configure CODESCORING_SSH_* env vars, it should run mock mode
+      const result = await scanWithCodescoring(components, 'scan-mock');
+      expect(result).toHaveLength(2); // lodash and express have mock vulns
+      expect(result.find((f) => f.package === 'lodash')).toBeDefined();
     });
 
-    it('should not retry on 401 errors', () => {
-      // Auth errors should not be retried
-      expect(true).toBe(true);
+    it('executes SSH scan client when SSH is configured', async () => {
+      // Set CODESCORING_SSH_* env vars
+      process.env.CODESCORING_SSH_HOST = 'test-host';
+      process.env.CODESCORING_SSH_USER = 'test-user';
+      process.env.CODESCORING_SSH_KEY_PATH = '/path/to/key';
+
+      const components: NormalizedComponent[] = [
+        { name: 'lodash', version: '4.17.21' },
+      ];
+
+      const input = { inputType: 'source_zip', inputRef: 'source.zip' };
+      const run = await scanWithCodescoringDetailed(components, 'scan-ssh', input);
+
+      expect(run.scannerVersion).toBe('codescoring-johnny');
+      expect(run.findings.length).toBe(1);
+      expect(run.findings[0].package).toBe('lodash');
+
+      // Test with sbom input
+      const runSbom = await scanWithCodescoringDetailed(components, 'scan-ssh-2', {
+        inputType: 'sbom',
+        inputRef: 'sbom.json',
+      });
+      expect(runSbom.findings.length).toBe(1);
+
+      // Clean up env vars
+      delete process.env.CODESCORING_SSH_HOST;
+      delete process.env.CODESCORING_SSH_USER;
+      delete process.env.CODESCORING_SSH_KEY_PATH;
     });
-
-    it('should backoff exponentially', () => {
-      // Backoff logic tested in integration tests
-      expect(true).toBe(true);
-    });
-  });
-});
-
-describe('Integration: Component Scanning', () => {
-  it('should handle multiple vulnerabilities per component', () => {
-    const grypOutput = {
-      matches: [
-        {
-          vulnerability: {
-            id: 'CVE-2024-1111',
-            severity: 'high',
-            cvssScore: { baseScore: 7.5 },
-          },
-          artifact: { name: 'lodash', version: '1.0.0' },
-        },
-        {
-          vulnerability: {
-            id: 'CVE-2024-2222',
-            severity: 'medium',
-            cvssScore: { baseScore: 5.0 },
-          },
-          artifact: { name: 'lodash', version: '1.0.0' },
-        },
-      ],
-    };
-
-    const findings = parseGrypOutput(grypOutput);
-    expect(findings).toHaveLength(2);
-    expect(findings.filter(f => f.package === 'lodash')).toHaveLength(2);
-  });
-
-  it('should preserve all finding data fields', () => {
-    const grypOutput = {
-      matches: [
-        {
-          vulnerability: {
-            id: 'CVE-2024-1234',
-            severity: 'critical',
-            cvssScore: { baseScore: 9.8 },
-            description: 'Remote code execution vulnerability',
-            fix: { versions: ['2.0.0', '1.5.3'] },
-          },
-          artifact: {
-            name: 'vulnerable-package',
-            version: '1.0.0',
-          },
-        },
-      ],
-    };
-
-    const findings = parseGrypOutput(grypOutput);
-    const finding = findings[0];
-
-    expect(finding.cveId).toBe('CVE-2024-1234');
-    expect(finding.package).toBe('vulnerable-package');
-    expect(finding.version).toBe('1.0.0');
-    expect(finding.severity).toBe('critical');
-    expect(finding.cvssScore).toBe(9.8);
-    expect(finding.description).toBe('Remote code execution vulnerability');
-    expect(finding.fixedVersion).toBe('2.0.0');
-    expect(finding.source).toBe('free');
   });
 });

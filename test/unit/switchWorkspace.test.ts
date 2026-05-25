@@ -159,4 +159,15 @@ describe('switchWorkspace', () => {
       statusCode: 404,
     });
   });
+
+  it('throws validation error when workspace_id is not a valid UUID', async () => {
+    await expect(
+      switchWorkspace(
+        { workspace_id: 'invalid-uuid' },
+        {
+          user: { id: 'user-1', workspaceId: 'workspace-1' },
+        },
+      ),
+    ).rejects.toThrow('Operation arguments validation failed');
+  });
 });

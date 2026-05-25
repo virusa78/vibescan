@@ -113,7 +113,8 @@ describe('Finding Normalization', () => {
         fixedVersion: '1.0.2',
         description: 'Enterprise vulnerability',
         cvssScore: 9.2,
-        source: 'codescoring_johnny',
+        source: 'enterprise',
+        filePath: undefined,
       });
     });
 

@@ -4,17 +4,17 @@ const queueAddMock = jest.fn();
 
 const prismaMock = {
   webhook: {
-    findMany: jest.fn() as jest.MockedFunction<() => Promise<Array<{ id: string; url: string; signingSecretEncrypted: string }>>>,
+    findMany: jest.fn() as any,
   },
   webhookDelivery: {
-    findMany: jest.fn() as jest.MockedFunction<() => Promise<Array<{ webhookId: string }>>>,
-    create: jest.fn() as jest.MockedFunction<(args: { data: { webhookId: string } }) => Promise<{ id: string }>>,
+    findMany: jest.fn() as any,
+    create: jest.fn() as any,
   },
 };
 
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn(() => prismaMock),
-}), { virtual: true });
+}));
 
 jest.mock('../../wasp-app/src/server/queues/config.js', () => ({
   webhookDeliveryQueue: {

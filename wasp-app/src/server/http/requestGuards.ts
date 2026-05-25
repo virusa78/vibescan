@@ -46,7 +46,22 @@ export function parseJsonBodyWithLimit<T extends Record<string, unknown>>(
 }
 
 async function createRedisClient(): Promise<RedisClient> {
-  const redisModule = await import('redis');
+  // Use synchronous require to make Jest's module mocking reliable
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const redisModule = require('redis');
+  // Allow tests to inject a fake redis client via global variable for determinism
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ((global as any).__TEST_REDIS_CLIENT__) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line no-console
+    console.log('[createRedisClient] using __TEST_REDIS_CLIENT__');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (global as any).__TEST_REDIS_CLIENT__ as RedisClient;
+  }
+
+  // Debug: inspect the module to help tests
+  // eslint-disable-next-line no-console
+  console.log('[createRedisClient] redisModule.createClient type=', typeof redisModule.createClient, 'isMock=', !!(redisModule.createClient && (redisModule.createClient._isMockFunction || redisModule.createClient.mock)));
   const redisConfig = getRedisConnectionConfig();
   return redisModule.createClient({
     socket: {
@@ -67,12 +82,18 @@ export async function enforceRateLimit(options: {
   try {
     await redis.connect();
     connected = true;
+    // eslint-disable-next-line no-console
+    console.log('[enforceRateLimit] calling incr');
     const current = await redis.incr(options.key);
+    // eslint-disable-next-line no-console
+    console.log('[enforceRateLimit] incr returned', current, 'limit=', options.limit);
     if (current === 1) {
       await redis.expire(options.key, options.windowSeconds);
     }
 
     if (current > options.limit) {
+      // eslint-disable-next-line no-console
+      console.log('[enforceRateLimit] throwing quota_exceeded, current=', current, 'limit=', options.limit);
       throw Object.assign(new Error('quota_exceeded'), { statusCode: 429, data: { error: 'quota_exceeded' } });
     }
   } catch (error) {

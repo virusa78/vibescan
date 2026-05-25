@@ -14,11 +14,11 @@
     "resolveJsonModule": true,
     "declaration": false,
     "declarationMap": false,
-    "sourceMap": false,
+    "sourceMap": true,
     "moduleResolution": "Node",
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
-    "types": ["jest", "node"],
+    "types": ["jest", "vitest", "node"],
     "paths": {
       "@/*": ["src/*"],
       "@services/*": ["src/services/*"],

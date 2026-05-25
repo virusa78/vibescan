@@ -89,6 +89,11 @@ enum CycloneDxRolloutStatus {
   rollback_active
 }
 
+enum CrmProvider {
+  zoho
+  hubspot
+}
+
 enum ZohoConnectionStatus {
   disconnected
   connected
@@ -181,6 +186,8 @@ model User {
   scannerUsageLedger          ScannerUsageLedger[]
   projectNotificationSettings ProjectNotificationSetting[]
   projectFindingAnnotations   ProjectFindingAnnotation[]
+  connectedZohoIntegrations   ZohoIntegration[]           @relation("ZohoConnectedBy")
+  connectedCrmIntegrations    CrmIntegration[]            @relation("CrmConnectedBy")
 
   @@index([activeWorkspaceId])
   @@map("users")
@@ -284,6 +291,7 @@ model Workspace {
   projectNotificationSettings ProjectNotificationSetting[]
   githubInstallations         GithubInstallation[]
   zohoIntegration             ZohoIntegration?
+  crmIntegration              CrmIntegration?
   quotaLedger                 QuotaLedger[]
 
   @@unique([organizationId, slug], map: "workspaces_organization_slug_unique")
@@ -320,11 +328,42 @@ model ZohoIntegration {
   lastPayloadHash String? @map("last_payload_hash")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  connectedByUser User? @relation(fields: [connectedByUserId], references: [id], onDelete: SetNull)
+  connectedByUser User? @relation("ZohoConnectedBy", fields: [connectedByUserId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId], map: "zoho_integrations_workspace_id_idx")
   @@index([connectionStatus], map: "zoho_integrations_connection_status_idx")
   @@map("zoho_integrations")
+}
+
+model CrmIntegration {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspaceId String @unique @map("workspace_id") @db.Uuid
+  provider CrmProvider @map("provider")
+  connectedByUserId String? @map("connected_by_user_id") @db.Uuid
+  connectionStatus ZohoConnectionStatus @default(disconnected) @map("connection_status")
+  syncStatus ZohoSyncStatus @default(idle) @map("sync_status")
+  accessToken String? @map("access_token")
+  refreshToken String? @map("refresh_token")
+  accessTokenExpiresAt DateTime? @map("access_token_expires_at")
+  metadata Json @default("{}") @map("metadata")
+  syncState Json @default("{}") @map("sync_state")
+  lastSyncAt DateTime? @map("last_sync_at")
+  lastSyncAttemptAt DateTime? @map("last_sync_attempt_at")
+  lastErrorAt DateTime? @map("last_error_at")
+  lastErrorCode String? @map("last_error_code")
+  lastErrorMessage String? @map("last_error_message")
+  lastPayloadHash String? @map("last_payload_hash")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connectedByUser User? @relation("CrmConnectedBy", fields: [connectedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId], map: "crm_integrations_workspace_id_idx")
+  @@index([provider], map: "crm_integrations_provider_idx")
+  @@index([connectionStatus], map: "crm_integrations_connection_status_idx")
+  @@map("crm_integrations")
 }
 
 model WorkspaceMembership {

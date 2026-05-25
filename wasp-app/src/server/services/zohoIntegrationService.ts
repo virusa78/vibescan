@@ -156,7 +156,7 @@ function hashPayload(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-function buildHumanName(value: string | null | undefined): { firstName: string | null; lastName: string } {
+export function buildHumanName(value: string | null | undefined): { firstName: string | null; lastName: string } {
   const trimmed = (value ?? '').trim();
   if (!trimmed) {
     return { firstName: null, lastName: 'VibeScan Workspace' };
@@ -173,17 +173,18 @@ function buildHumanName(value: string | null | undefined): { firstName: string |
   };
 }
 
-function safeJsonObject(value: unknown): Record<string, unknown> {
+export function safeJsonObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function formatErrorMessage(error: unknown): string {
+export function formatErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
 
   return String(error);
 }
+
 
 async function fetchZohoJson<T>(
   path: string,

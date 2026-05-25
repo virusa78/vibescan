@@ -57,13 +57,14 @@ export class QuotaService {
     if (user.quotaResetDate && user.quotaResetDate <= now) {
       // Reset has occurred - update the user record
       const nextResetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      currentUser = await executor.user.update({
+      const updatedUser = await executor.user.update({
         where: { id: userId },
         data: {
           monthlyQuotaUsed: 0,
           quotaResetDate: nextResetDate,
         },
       });
+      currentUser = updatedUser ?? user;
 
       // Record the reset in ledger
       if (!tx) {
@@ -128,16 +129,6 @@ export class QuotaService {
     const now = new Date();
     let currentUser = user;
 
-    if (user.quotaResetDate && user.quotaResetDate <= now) {
-      const nextResetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      currentUser = await tx.user.update({
-        where: { id: userId },
-        data: {
-          monthlyQuotaUsed: 0,
-          quotaResetDate: nextResetDate,
-        },
-      });
-    }
 
     const limit = getQuotaLimitForPlan(user.plan);
     const quotaAvailable = isUnlimitedQuota(limit) ? Infinity : limit - currentUser.monthlyQuotaUsed;

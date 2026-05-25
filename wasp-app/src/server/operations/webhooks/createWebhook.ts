@@ -67,7 +67,8 @@ export async function createWebhook(
   // Encrypt the signing secret using AES-256-GCM
   let signingSecretEncrypted: string;
   try {
-    signingSecretEncrypted = encryptWebhookSecret(signingSecret);
+    const encryptedBuf = encryptWebhookSecret(signingSecret);
+    signingSecretEncrypted = Buffer.isBuffer(encryptedBuf) ? encryptedBuf.toString('base64') : String(encryptedBuf);
   } catch {
     throw new HttpError(500, 'Failed to encrypt webhook secret');
   }

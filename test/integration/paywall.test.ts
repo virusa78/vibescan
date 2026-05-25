@@ -4,7 +4,7 @@
  */
 
 import { prisma } from 'wasp/server';
-import { getReport } from '../../../wasp-app/src/server/operations/reports/getReport';
+import { getReport } from '../../wasp-app/src/server/operations/reports/getReport';
 
 // Mock context with user
 const createMockContext = (userId: string) => ({

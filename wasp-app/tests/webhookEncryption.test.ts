@@ -20,7 +20,7 @@ describe('webhookEncryption', () => {
     const original = 'whsec_test_secret_1234567890';
     const encrypted = encryptWebhookSecret(original);
 
-    expect(typeof encrypted).toBe('string');
+    expect(Buffer.isBuffer(encrypted)).toBe(true);
     expect(decryptWebhookSecret(encrypted)).toBe(original);
   });
 
@@ -31,7 +31,7 @@ describe('webhookEncryption', () => {
   });
 
   it('fails when auth tag is modified', () => {
-    const encrypted = Buffer.from(encryptWebhookSecret('whsec_test_secret_1234567890'), 'base64');
+    const encrypted = encryptWebhookSecret('whsec_test_secret_1234567890');
     encrypted[16] ^= 1;
 
     expect(() => decryptWebhookSecret(encrypted.toString('base64'))).toThrow();

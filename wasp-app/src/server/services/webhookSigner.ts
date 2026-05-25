@@ -21,11 +21,11 @@ export interface SignatureResult {
  */
 export function signWebhookPayload(
   payload: string,
-  signingSecretEncrypted: string
+  signingSecretEncrypted: string | Buffer
 ): SignatureResult {
   try {
     // Decrypt the signing secret
-    const signingSecret = decryptWebhookSecret(signingSecretEncrypted);
+    const signingSecret = decryptWebhookSecret(signingSecretEncrypted as any);
 
     // Generate HMAC-SHA256 signature
     const signature = crypto
@@ -54,10 +54,10 @@ export function signWebhookPayload(
 export function verifyWebhookSignature(
   payload: string,
   signature: string,
-  signingSecretEncrypted: string
+  signingSecretEncrypted: string | Buffer
 ): boolean {
   try {
-    const { signature: computedSignature } = signWebhookPayload(payload, signingSecretEncrypted);
+    const { signature: computedSignature } = signWebhookPayload(payload, signingSecretEncrypted as any);
     const received = Buffer.from(signature, 'hex');
     const computed = Buffer.from(computedSignature, 'hex');
 

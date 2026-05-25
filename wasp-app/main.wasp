@@ -214,6 +214,13 @@ action updateUserSettings {
   auth: true
 }
 
+action sendTestEmail {
+  fn: import { sendTestEmail } from "@src/server/operations/email/sendTestEmail",
+  entities: [User],
+  auth: true
+}
+
+
 // Auth compatibility for legacy email form endpoints used by current UI components.
 api emailSignupCompatApi {
   fn: import { emailSignupCompatApi } from "@src/server/authCompat",
@@ -710,6 +717,39 @@ action resyncZohoWorkspace {
   entities: [User, Workspace, WorkspaceMembership, Organization, ZohoIntegration],
   auth: true
 }
+
+//#region HubSpot CRM Integration
+query getHubspotIntegrationStatus {
+  fn: import { getHubspotIntegrationStatus } from "@src/server/operations/hubspot/getHubspotIntegrationStatus",
+  entities: [User, Workspace, CrmIntegration],
+  auth: true
+}
+
+action connectHubspot {
+  fn: import { connectHubspot } from "@src/server/operations/hubspot/connectHubspot",
+  entities: [User, Workspace, CrmIntegration],
+  auth: true
+}
+
+action disconnectHubspot {
+  fn: import { disconnectHubspot } from "@src/server/operations/hubspot/disconnectHubspot",
+  entities: [User, Workspace, CrmIntegration],
+  auth: true
+}
+
+action testHubspotConnection {
+  fn: import { testHubspotConnection } from "@src/server/operations/hubspot/testHubspotConnection",
+  entities: [User, Workspace, CrmIntegration],
+  auth: true
+}
+
+action resyncHubspotWorkspace {
+  fn: import { resyncHubspotWorkspace } from "@src/server/operations/hubspot/resyncHubspotWorkspace",
+  entities: [User, Workspace, CrmIntegration],
+  auth: true
+}
+//#endregion HubSpot CRM Integration
+
 //#endregion Settings
 
 //#region Workspace/Onboarding/GitHub API

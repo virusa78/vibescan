@@ -64,6 +64,10 @@ export const serverCoreEnvValidationSchema = z.object({
   ZOHO_API_BASE_URL: optionalUrlSchema,
   ZOHO_RECONCILIATION_INTERVAL_MS: z.preprocess(emptyStringToUndefined, z.coerce.number().int().positive().optional()),
   ZOHO_STALE_SYNC_THRESHOLD_MS: z.preprocess(emptyStringToUndefined, z.coerce.number().int().positive().optional()),
+  HUBSPOT_CLIENT_ID: optionalStringSchema,
+  HUBSPOT_CLIENT_SECRET: optionalStringSchema,
+  HUBSPOT_REDIRECT_URI: optionalStringSchema,
+  HUBSPOT_SERVICE_KEY: optionalStringSchema,
 });
 
 export function getJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
@@ -132,4 +136,32 @@ export function getZohoReconciliationIntervalMs(env: NodeJS.ProcessEnv = process
 
 export function getZohoStaleSyncThresholdMs(env: NodeJS.ProcessEnv = process.env): number {
   return z.coerce.number().int().positive().default(6 * 60 * 60 * 1000).parse(env.ZOHO_STALE_SYNC_THRESHOLD_MS);
+}
+
+export function getHubspotClientId(env: NodeJS.ProcessEnv = process.env): string {
+  const id = optionalStringSchema.parse(env.HUBSPOT_CLIENT_ID);
+  if (!id) {
+    throw new Error('HUBSPOT_CLIENT_ID is required for HubSpot integration');
+  }
+  return id;
+}
+
+export function getHubspotClientSecret(env: NodeJS.ProcessEnv = process.env): string {
+  const secret = optionalStringSchema.parse(env.HUBSPOT_CLIENT_SECRET);
+  if (!secret) {
+    throw new Error('HUBSPOT_CLIENT_SECRET is required for HubSpot integration');
+  }
+  return secret;
+}
+
+export function getHubspotRedirectUri(env: NodeJS.ProcessEnv = process.env): string {
+  const uri = optionalStringSchema.parse(env.HUBSPOT_REDIRECT_URI);
+  if (!uri) {
+    throw new Error('HUBSPOT_REDIRECT_URI is required for HubSpot integration');
+  }
+  return uri;
+}
+
+export function getHubspotServiceKey(env: NodeJS.ProcessEnv = process.env): string | null {
+  return optionalStringSchema.parse(env.HUBSPOT_SERVICE_KEY) ?? null;
 }

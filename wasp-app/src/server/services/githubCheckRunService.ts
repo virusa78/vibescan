@@ -17,6 +17,7 @@ function toGitHubContext(value: unknown): PersistedGitHubScanContext | null {
 }
 
 function buildScanDetailsUrl(scanId: string): string {
+  // Use /reports/ path for GitHub check run details (tests expect the reports URL)
   return `${getFrontendBaseUrl()}/reports/${scanId}`;
 }
 

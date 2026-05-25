@@ -217,7 +217,7 @@ write_rotating_dev_log() {
 
     printf '%s\n' "$line" >> "$DEV_LOG_FILE"
 
-    if [[ "$line" == *"Can not connect to database"* || "$line" == *"database needs to be running"* || "$line" == *"Bind for 0.0.0.0:5432 failed"* || "$line" == *"port is already allocated"* ]]; then
+    if (( announced_backend == 0 )) && [[ "$line" == *"Bind for 0.0.0.0:5432 failed"* || "$line" == *"port is already allocated"* ]]; then
       echo "[run.sh] Startup failed: ${line}" >&2
       tail_log "$DEV_LOG_FILE" 80 >&2
       return 1
@@ -249,20 +249,38 @@ db_url_for_port() {
     "${DB_NAME:-vibescan}"
 }
 
-database_schema_matches() {
+find_matching_database_url_for_port() {
   local port="$1"
-  local database_url="$2"
+  local candidates=(
+    "$(db_url_for_port "$port")"
+    "postgresql://vibescan:vibescan@127.0.0.1:${port}/${DB_NAME:-vibescan}"
+    "postgresql://postgres:postgres@127.0.0.1:${port}/${DB_NAME:-vibescan}"
+  )
+
+  local database_url
   local diff_output=""
 
-  if diff_output="$(cd "$WASP_DIR" && DATABASE_URL="$database_url" npx prisma migrate diff --from-url "$database_url" --to-schema-datamodel schema.prisma --exit-code 2>&1)"; then
+  for database_url in "${candidates[@]}"; do
+    if diff_output="$(cd "$WASP_DIR" && DATABASE_URL="$database_url" npx prisma migrate diff --from-url "$database_url" --to-schema-datamodel schema.prisma --exit-code 2>&1)"; then
+      printf '%s' "$database_url"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+database_schema_matches() {
+  local port="$1"
+  local matched_url=""
+  matched_url="$(find_matching_database_url_for_port "$port" || true)"
+  if [[ -n "$matched_url" ]]; then
+    export DATABASE_URL="$matched_url"
     echo "[run.sh] Existing database on ${port} matches current Prisma schema" >&2
     return 0
   fi
 
   echo "[run.sh] Existing database on ${port} is not reusable; switching to ${FALLBACK_DB_PORT}" >&2
-  if [[ -n "$diff_output" ]]; then
-    echo "$diff_output" | tail -n 20 >&2
-  fi
   return 1
 }
 
@@ -276,8 +294,6 @@ resolve_db_port() {
   fi
 
   local preferred_port="$DEFAULT_DB_PORT"
-  local preferred_url
-  preferred_url="$(db_url_for_port "$preferred_port")"
 
   if is_port_free "$preferred_port"; then
     echo "[run.sh] Port ${preferred_port} is free; using local Postgres there" >&2
@@ -285,7 +301,7 @@ resolve_db_port() {
     return 0
   fi
 
-  if database_schema_matches "$preferred_port" "$preferred_url"; then
+  if database_schema_matches "$preferred_port"; then
     printf '%s' "$preferred_port"
     return 0
   fi
@@ -302,8 +318,10 @@ resolve_db_port() {
 start_database() {
   local db_port="$1"
   export DB_PORT="$db_port"
-  export DATABASE_URL
-  DATABASE_URL="$(db_url_for_port "$db_port")"
+  if [[ -z "${DATABASE_URL:-}" ]]; then
+    export DATABASE_URL
+    DATABASE_URL="$(db_url_for_port "$db_port")"
+  fi
 
   if managed_postgres_is_running; then
     local managed_port
