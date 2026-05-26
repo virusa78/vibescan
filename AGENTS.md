@@ -102,6 +102,11 @@ query myOp {
 
 ## Critical Gotchas
 
+### Auth Form CSS Contrast
+- **Defect Alert**: In dark mode, Wasp's built-in auth form inputs (`LoginForm`, `SignupForm`) default to a light background `#f8f4ff` but inherit the `text-white` color from `AuthPageLayout`, making the typed text completely invisible.
+- **Fix/Rule**: Always ensure input text color overrides are defined in `wasp-app/src/client/Main.css` using highly specific selectors (e.g., `form input[class] { @apply bg-slate-950/80! border-slate-700/50! text-white!; }`) to override Wasp's default CSS modules and guarantee readable text in both themes.
+
+
 ### Migrations
 - **Never** run `prisma migrate dev` directly. Always `wasp db migrate-dev --name "x"`.
 - **Never** manually edit files in `migrations/`.

@@ -6,6 +6,8 @@ Documentation consistency: Whenever changing documentation or environment variab
 
 HubSpot note: For server-to-server HubSpot integrations, prefer using HUBSPOT_SERVICE_KEY stored in a secret manager rather than committing a personal access token (PAK). Add `HUBSPOT_SERVICE_KEY` to `wasp-app/.env.server` for local/dev convenience (do not commit secrets).
 
+Auth Form styling note: In dark mode, Wasp's default auth forms have a light background `#f8f4ff` but inherit `text-white` from parent containers, making typed text invisible. Always override this in `wasp-app/src/client/Main.css` using `form input[class] { @apply bg-slate-950/80! border-slate-700/50! text-white!; }` to guarantee text readability in all color schemes.
+
 ## Project Overview
 
 VibeScan is a SaaS vulnerability scanning platform with dual-scanner architecture (Grype free + Codescoring/BlackDuck enterprise). **Complete Wasp-only architecture**—all legacy code removed. Full-stack TypeScript with 20 Wasp operations.

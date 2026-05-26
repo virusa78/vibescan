@@ -292,6 +292,11 @@ form button[type="submit"] {
   @apply bg-success! hover:bg-success/90! text-success-foreground! transition-colors;
 }
 
+/* Fix Wasp auth inputs text and background contrast in dark mode */
+form input[class], form textarea[class] {
+  @apply bg-slate-950/80! border-slate-700/50! text-white! placeholder:text-slate-500! focus:border-success/50! focus:ring-success/20!;
+}
+
 /* Sidebar fixes */
 aside {
   scrollbar-width: none;
