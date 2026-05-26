@@ -1,12 +1,13 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { ArrowRight, Github, Package, UploadCloud } from "lucide-react";
-import { submitScan, getScans, getScannerAccessSettings, useQuery } from "wasp/client/operations";
+import { ArrowRight, Github, Package, UploadCloud, FileJson, FileArchive, CheckCircle2, XCircle, Trash2, Loader2, HelpCircle, Copy, Check } from "lucide-react";
+import { submitScan, uploadScanFile, getScans, getScannerAccessSettings, useQuery } from "wasp/client/operations";
 import { Alert, AlertDescription } from "../client/components/ui/alert";
 import { Button } from "../client/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../client/components/ui/card";
 import { Input } from "../client/components/ui/input";
 import { Label } from "../client/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../client/components/ui/dialog";
 import { Skeleton } from "../client/components/ui/skeleton";
 import { Link as WaspRouterLink, routes } from "wasp/client/router";
 import { useAsyncState } from "../client/hooks/useAsyncState";
@@ -110,6 +111,19 @@ export default function NewScanPage() {
   const requestedType = queryParams.get("type");
   const [inputRef, setInputRef] = useState("");
   const [inputType, setInputType] = useState<ScanInputType>("github");
+  const [fileInfo, setFileInfo] = useState<{ name: string; size: number } | null>(null);
+  const [uploadState, setUploadState] = useState<'idle' | 'reading' | 'uploading' | 'success' | 'error'>('idle');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showSyftHelp, setShowSyftHelp] = useState(false);
+
+  useEffect(() => {
+    // Reset file states when changing input type to prevent cross-contamination
+    setFileInfo(null);
+    setUploadState('idle');
+    setUploadError(null);
+    setInputRef("");
+  }, [inputType]);
+
   const [selectedScannerSources, setSelectedScannerSources] = useState<ScannerSource[]>([]);
   const selectionInitializedRef = useRef(false);
   const { isLoading: isSubmitting, error, run } = useAsyncState();
@@ -192,6 +206,55 @@ export default function NewScanPage() {
       return next.length === current.length ? current : next;
     });
   }, [scannerChoiceMap]);
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate size limit (10MB for SBOM, 25MB for ZIP)
+    const maxSize = inputType === "sbom" ? 10 * 1024 * 1024 : 25 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setUploadError(`File is too large. Max allowed size is ${inputType === "sbom" ? "10 MB" : "25 MB"}.`);
+      setUploadState("error");
+      return;
+    }
+
+    setFileInfo({ name: file.name, size: file.size });
+    setUploadState("reading");
+    setUploadError(null);
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        setUploadState("uploading");
+        const base64String = (reader.result as string).split(",")[1];
+        
+        const result = await uploadScanFile({
+          fileName: file.name,
+          fileContent: base64String,
+        });
+
+        setInputRef(result.uniqueName);
+        setUploadState("success");
+      } catch (err: any) {
+        console.error("Upload error:", err);
+        setUploadError(err.message || "Failed to upload file.");
+        setUploadState("error");
+      }
+    };
+    reader.onerror = () => {
+      setUploadError("Failed to read local file.");
+      setUploadState("error");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleClearFile = () => {
+    setFileInfo(null);
+    setUploadState("idle");
+    setUploadError(null);
+    setInputRef("");
+  };
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -326,18 +389,106 @@ export default function NewScanPage() {
                   {activeType.hint}
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="inputRef">Source reference</Label>
-                <Input
-                  id="inputRef"
-                  value={inputRef}
-                  onChange={(e) => setInputRef(e.target.value)}
-                  placeholder={activeType.placeholder}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Paste the exact repository URL, SBOM path, or archive path your environment can resolve.
-                </p>
-              </div>
+              {inputType === "github" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="inputRef">Repository URL</Label>
+                  <Input
+                    id="inputRef"
+                    value={inputRef}
+                    onChange={(e) => setInputRef(e.target.value)}
+                    placeholder={activeType.placeholder}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Paste the exact repository URL your environment can resolve.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Upload file</Label>
+                    {inputType === "sbom" && (
+                      <button
+                        type="button"
+                        onClick={() => setShowSyftHelp(true)}
+                        className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition cursor-pointer"
+                      >
+                        <HelpCircle className="h-3.5 w-3.5" />
+                        How to generate SBOM?
+                      </button>
+                    )}
+                  </div>
+                  
+                  {uploadState === "idle" || uploadState === "error" ? (
+                    <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/70 bg-background/50 hover:bg-background/80 hover:border-primary/40 transition duration-200 py-8 px-4 text-center cursor-pointer relative group">
+                      <input
+                        type="file"
+                        id="file-upload"
+                        onChange={handleFileChange}
+                        accept={inputType === "sbom" ? ".json,.xml" : ".zip"}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary group-hover:scale-105 transition-transform duration-200">
+                        {inputType === "sbom" ? <FileJson className="h-6 w-6" /> : <FileArchive className="h-6 w-6" />}
+                      </div>
+                      <p className="text-sm font-semibold text-foreground">
+                        Click to upload or drag and drop
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        {inputType === "sbom" ? "CycloneDX JSON or XML (Max 10MB)" : "Source ZIP archive (Max 25MB)"}
+                      </p>
+                    </div>
+                  ) : uploadState === "reading" || uploadState === "uploading" ? (
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-border/50 bg-background/30 py-8 px-4 text-center">
+                      <Loader2 className="h-8 w-8 text-primary animate-spin mb-3" />
+                      <p className="text-sm font-medium text-foreground">
+                        {uploadState === "reading" ? "Reading file..." : "Uploading to server..."}
+                      </p>
+                      {fileInfo && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {fileInfo.name} ({(fileInfo.size / 1024).toFixed(1)} KB)
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between rounded-xl border border-border bg-background p-4 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/15 text-success">
+                          {inputType === "sbom" ? <FileJson className="h-5 w-5" /> : <FileArchive className="h-5 w-5" />}
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-foreground flex items-center gap-2">
+                            {fileInfo?.name}
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success border border-success/20">
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-0.5" />
+                              Ready
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {(fileInfo?.size ? (fileInfo.size / 1024).toFixed(1) + " KB" : "")}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleClearFile}
+                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 w-8"
+                        aria-label="Remove uploaded file"
+                      >
+                        <Trash2 className="h-4.5 w-4.5" />
+                      </Button>
+                    </div>
+                  )}
+
+                  {uploadState === "error" && uploadError && (
+                    <div className="flex items-center gap-2 text-xs font-medium text-destructive mt-1 bg-destructive/10 p-2.5 rounded-lg border border-destructive/20">
+                      <XCircle className="h-4 w-4 shrink-0" />
+                      <span>{uploadError}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button type="submit" disabled={isSubmitting || inputRef.trim().length === 0 || selectedCount === 0}>
                   {isSubmitting ? "Starting..." : "Run scan"}
@@ -478,6 +629,90 @@ export default function NewScanPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={showSyftHelp} onOpenChange={setShowSyftHelp}>
+        <DialogContent className="sm:max-w-[550px] bg-slate-900 border-slate-800 text-slate-100">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-white">
+              <HelpCircle className="h-5 w-5 text-blue-400" />
+              Generating SBOM with Syft
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Syft is a fast CLI tool by Anchore for generating a Software Bill of Materials (SBOM) from container images and filesystems.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 my-2 text-sm text-slate-300">
+            <div className="space-y-2">
+              <h4 className="font-semibold text-white">1. Install Syft</h4>
+              <div className="space-y-3">
+                <div>
+                  <div className="text-xs text-slate-400 mb-1">macOS / Linux:</div>
+                  <div className="flex items-center justify-between gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 font-mono text-xs">
+                    <span className="text-slate-200 select-all overflow-x-auto whitespace-nowrap">curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin</span>
+                    <CopyButton text="curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-400 mb-1">Windows (PowerShell):</div>
+                  <div className="flex items-center justify-between gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 font-mono text-xs">
+                    <span className="text-slate-200 select-all overflow-x-auto whitespace-nowrap">winget install anchore.syft</span>
+                    <CopyButton text="winget install anchore.syft" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-semibold text-white">2. Run Syft to generate a CycloneDX JSON SBOM</h4>
+              <p className="text-xs text-slate-400">Run the command inside your project directory to create a valid `sbom.json`:</p>
+              <div className="space-y-3">
+                <div>
+                  <div className="text-xs text-slate-400 mb-1">From a local folder / source directory:</div>
+                  <div className="flex items-center justify-between gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 font-mono text-xs">
+                    <span className="text-slate-200 select-all overflow-x-auto whitespace-nowrap">syft . -o cyclonedx-json=sbom.json</span>
+                    <CopyButton text="syft . -o cyclonedx-json=sbom.json" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-400 mb-1">From a Docker image:</div>
+                  <div className="flex items-center justify-between gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 font-mono text-xs">
+                    <span className="text-slate-200 select-all overflow-x-auto whitespace-nowrap">syft my-docker-image:latest -o cyclonedx-json=sbom.json</span>
+                    <CopyButton text="syft my-docker-image:latest -o cyclonedx-json=sbom.json" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1 bg-blue-950/30 border border-blue-900/50 p-3 rounded-xl text-xs text-blue-300">
+              <span className="font-semibold block text-blue-200 mb-0.5">💡 Tip:</span>
+              CycloneDX JSON format (`cyclonedx-json`) is highly recommended for VibeScan scans because it preserves detailed dependency locations and package licenses.
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+const CopyButton = ({ text }: { text: string }) => {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      // Fallback
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="text-xs text-slate-400 hover:text-white flex items-center gap-1 bg-slate-800/80 hover:bg-slate-700/80 px-2 py-1 rounded border border-slate-700/60 transition cursor-pointer shrink-0"
+    >
+      {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+      {copied ? "Copied!" : "Copy"}
+    </button>
+  );
+};

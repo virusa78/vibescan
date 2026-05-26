@@ -113,6 +113,8 @@ Deployment readiness verification for VibeScan Phase 5 (Production Release).
   - [ ] `AWS_*` credentials configured
   - [ ] `MAIL_PROVIDER` and sender settings configured
   - [ ] `SMTP_*` or `SENDGRID_API_KEY` configured
+  - [ ] `FREE_SCAN_CONCURRENCY` and `ENTERPRISE_SCAN_CONCURRENCY` set
+  - [ ] `OWASP_NO_UPDATE` and `NVD_API_KEY` (if authenticating) configured
 
 - [ ] **Email Configuration**:
   - [ ] Email provider configured (not Dummy)

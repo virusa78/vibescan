@@ -68,6 +68,10 @@ export const serverCoreEnvValidationSchema = z.object({
   HUBSPOT_CLIENT_SECRET: optionalStringSchema,
   HUBSPOT_REDIRECT_URI: optionalStringSchema,
   HUBSPOT_SERVICE_KEY: optionalStringSchema,
+  FREE_SCAN_CONCURRENCY: z.preprocess(emptyStringToUndefined, z.coerce.number().int().positive().default(20)).optional(),
+  ENTERPRISE_SCAN_CONCURRENCY: z.preprocess(emptyStringToUndefined, z.coerce.number().int().positive().default(3)).optional(),
+  OWASP_NO_UPDATE: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  NVD_API_KEY: optionalStringSchema,
 });
 
 export function getJwtSecret(env: NodeJS.ProcessEnv = process.env): string {

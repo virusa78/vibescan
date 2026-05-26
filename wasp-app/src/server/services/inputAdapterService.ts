@@ -4,8 +4,10 @@
  * SBOM/ZIP helpers stay available for project-level scan coverage.
  */
 
-import { execFileSync } from 'child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'fs';
+import { execFile, execSync } from 'child_process';
+import { promisify } from 'util';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync } from 'fs';
+import { rm } from 'fs/promises';
 import { join, basename, resolve, isAbsolute, sep } from 'path';
 import { HttpError } from 'wasp/server';
 import { createGitHubInstallationAccessToken, type PersistedGitHubScanContext } from './githubAppService';
@@ -13,7 +15,8 @@ import {
   fromCycloneDX,
   validateCycloneDX,
 } from '../../ingestion/cyclonedx-contracts.js';
-import { execSync } from 'child_process';
+
+const execFilePromise = promisify(execFile);
 
 /**
  * Normalized component format - consistent across all input sources
@@ -127,7 +130,7 @@ export function validateAndExtractSBOM(rawText: string): {
 
       return { components: normalized, totalComponents: normalized.length };
     }
-  } catch (e) {
+  } catch {
     // fall through to strict validation below
   }
 
@@ -461,7 +464,7 @@ export async function extractZipAndScanWithSBOMGenerator(
 
   try {
     try {
-      execFileSync(
+      await execFilePromise(
         'python3',
         [
           '-c',
@@ -487,7 +490,7 @@ export async function extractZipAndScanWithSBOMGenerator(
           filePath,
           extractDir,
         ],
-        { timeout: timeoutMs, stdio: 'pipe' },
+        { timeout: timeoutMs },
       );
     } catch (error) {
       throw new HttpError(
@@ -501,12 +504,12 @@ export async function extractZipAndScanWithSBOMGenerator(
     if (isJohnnyInstalled()) {
       try {
         console.log(`[InputAdapter] Using Johnny to scan ZIP: ${filePath}`);
-        const johnnyOutput = execFileSync(
+        const { stdout: johnnyOutput } = await execFilePromise(
           'johnny',
           ['--input', extractDir, '--output-format', 'cyclonedx-json'],
           { ...DEFAULT_PROCESS_OPTIONS, timeout: timeoutMs },
         );
-        return parseCycloneDXOutput(johnnyOutput);
+        return await parseCycloneDXOutput(johnnyOutput);
       } catch (error) {
         console.warn(`[InputAdapter] Johnny scan failed for ZIP ${filePath}:`, error instanceof Error ? error.message : String(error));
       }
@@ -514,12 +517,12 @@ export async function extractZipAndScanWithSBOMGenerator(
 
     if (isTrivyInstalled()) {
       try {
-        const trivyOutput = execFileSync(
+        const { stdout: trivyOutput } = await execFilePromise(
           'trivy',
           ['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', extractDir],
           { ...DEFAULT_PROCESS_OPTIONS, timeout: timeoutMs },
         );
-        return parseCycloneDXOutput(trivyOutput);
+        return await parseCycloneDXOutput(trivyOutput);
       } catch (error) {
         console.warn(`[InputAdapter] trivy scan failed for ZIP ${filePath}:`, error instanceof Error ? error.message : String(error));
       }
@@ -528,7 +531,7 @@ export async function extractZipAndScanWithSBOMGenerator(
     console.warn(`[InputAdapter] No SBOM generators (Johnny/Trivy) available or successful for ZIP ${filePath}, falling back to manifest parsing`);
     return normalizeComponents(collectRepoComponents(extractDir));
   } finally {
-    rmSync(tempRoot, { recursive: true, force: true });
+    await rm(tempRoot, { recursive: true, force: true });
   }
 }
 
@@ -598,23 +601,21 @@ export async function cloneGitHubAndScanWithSBOMGenerator(
         authCloneUrl,
         repoPath,
       ];
-      execFileSync(
+      await execFilePromise(
         'git',
         cloneArgs,
-        { timeout: timeoutMs, stdio: 'pipe' },
+        { timeout: timeoutMs },
       );
 
       if (commitSha) {
         try {
-          execFileSync('git', ['fetch', '--depth', '1', 'origin', commitSha], {
+          await execFilePromise('git', ['fetch', '--depth', '1', 'origin', commitSha], {
             cwd: repoPath,
             timeout: timeoutMs,
-            stdio: 'pipe',
           });
-          execFileSync('git', ['checkout', '--quiet', commitSha], {
+          await execFilePromise('git', ['checkout', '--quiet', commitSha], {
             cwd: repoPath,
             timeout: timeoutMs,
-            stdio: 'pipe',
           });
         } catch (checkoutError) {
           console.warn(
@@ -635,12 +636,12 @@ export async function cloneGitHubAndScanWithSBOMGenerator(
     if (isJohnnyInstalled()) {
       try {
         console.log(`[InputAdapter] Using Johnny to scan repo: ${url}`);
-        const johnnyOutput = execFileSync(
+        const { stdout: johnnyOutput } = await execFilePromise(
           'johnny',
           ['--input', repoPath, '--output-format', 'cyclonedx-json'],
           { ...DEFAULT_PROCESS_OPTIONS, timeout: timeoutMs },
         );
-        return parseCycloneDXOutput(johnnyOutput);
+        return await parseCycloneDXOutput(johnnyOutput);
       } catch (error) {
         console.warn(`[InputAdapter] Johnny scan failed for ${url}:`, error instanceof Error ? error.message : String(error));
       }
@@ -648,12 +649,12 @@ export async function cloneGitHubAndScanWithSBOMGenerator(
 
     if (isTrivyInstalled()) {
       try {
-        const trivyOutput = execFileSync(
+        const { stdout: trivyOutput } = await execFilePromise(
           'trivy',
           ['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', repoPath],
           { ...DEFAULT_PROCESS_OPTIONS, timeout: timeoutMs },
         );
-        return parseCycloneDXOutput(trivyOutput);
+        return await parseCycloneDXOutput(trivyOutput);
       } catch (error) {
         console.warn(`[InputAdapter] trivy scan failed for ${url}:`, error instanceof Error ? error.message : String(error));
       }
@@ -662,6 +663,6 @@ export async function cloneGitHubAndScanWithSBOMGenerator(
     console.warn(`[InputAdapter] No SBOM generators available or successful for ${url}, falling back to manifest parsing`);
     return normalizeComponents(collectRepoComponents(repoPath));
   } finally {
-    rmSync(tempRoot, { recursive: true, force: true });
+    await rm(tempRoot, { recursive: true, force: true });
   }
 }

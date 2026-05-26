@@ -8,7 +8,7 @@ export const syftProvider: ScannerProvider = {
   supportsUserSecrets: false,
 
   async getHealth(): Promise<{ configured: boolean; healthy: boolean | null; message?: string }> {
-    const trivyInstalled = isTrivyInstalled();
+    const trivyInstalled = await isTrivyInstalled();
     return {
       configured: trivyInstalled,
       healthy: trivyInstalled ? true : false,

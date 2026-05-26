@@ -2,14 +2,19 @@
  * OWASP Dependency-Check Scanner Utility - executes Dependency-Check in Docker
  */
 
-import { execFileSync, execSync } from 'child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'fs';
+import { exec, execFile } from 'child_process';
+import { promisify } from 'util';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'fs';
+import { rm } from 'fs/promises';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
 import { normalizeOwaspFindings, type NormalizedFinding } from '../../operations/scans/normalizeFindings.js';
 import { createGitHubInstallationAccessToken, type PersistedGitHubScanContext } from '../../services/githubAppService.js';
 import { resolveTrustedScanInputPath, validateGitHubUrl } from '../../services/inputAdapterService.js';
+
+const execPromise = promisify(exec);
+const execFilePromise = promisify(execFile);
 
 export interface OwaspVulnerability {
   name: string;
@@ -39,9 +44,9 @@ export function getOwaspCommand(env: NodeJS.ProcessEnv = process.env): string {
   return env.OWASP_COMMAND?.trim() || 'dependency-check';
 }
 
-function isDockerAvailable(): boolean {
+async function isDockerAvailable(): Promise<boolean> {
   try {
-    execFileSync('docker', ['--version'], { stdio: 'pipe' });
+    await execFilePromise('docker', ['--version'], { timeout: 5000 });
     return true;
   } catch {
     return false;
@@ -101,9 +106,9 @@ function logOwaspStage(scope: string, stage: string, details?: unknown): void {
   console.log(`[OWASP / ${scope}] ${stage}`, details);
 }
 
-export function isOwaspInstalled(): boolean {
+export async function isOwaspInstalled(): Promise<boolean> {
   try {
-    execSync(`${getOwaspCommand()} --version`, { stdio: 'pipe' });
+    await execFilePromise(getOwaspCommand(), ['--version'], { timeout: 5000 });
     return true;
   } catch (error) {
     return !isOwaspMissingError(error);
@@ -121,6 +126,10 @@ function buildDockerArgs(scanPath: string, reportDir: string, dataDir: string, p
 
   if (uidGid) {
     args.push('-u', uidGid);
+  }
+
+  if (process.env.NVD_API_KEY) {
+    args.push('-e', `NVD_API_KEY=${process.env.NVD_API_KEY}`);
   }
 
   args.push(
@@ -141,10 +150,18 @@ function buildDockerArgs(scanPath: string, reportDir: string, dataDir: string, p
     '/report',
   );
 
+  if (process.env.OWASP_NO_UPDATE === 'true') {
+    args.push('--noupdate');
+  }
+
+  if (process.env.NVD_API_KEY) {
+    args.push('--nvdApiKey', process.env.NVD_API_KEY);
+  }
+
   return args;
 }
 
-async function prepareScanPath(context: OwaspScanContext): Promise<{ scanPath: string; cleanup: (() => void) | null }> {
+async function prepareScanPath(context: OwaspScanContext): Promise<{ scanPath: string; cleanup: (() => Promise<void>) | null }> {
   if (context.inputType === 'github_app') {
     const { owner, repo } = validateGitHubUrl(context.inputRef);
     const tempRoot = mkdtempSync(join(tmpdir(), 'vibescan-owasp-github-'));
@@ -174,25 +191,25 @@ async function prepareScanPath(context: OwaspScanContext): Promise<{ scanPath: s
         authCloneUrl,
         repoPath,
       ];
-      execFileSync('git', cloneArgs, { stdio: 'pipe' });
+      await execFilePromise('git', cloneArgs);
 
       if (commitSha) {
         try {
           logOwaspStage(context.inputRef, 'checking out commit', { commitSha });
-          execFileSync('git', ['fetch', '--depth', '1', 'origin', commitSha], { cwd: repoPath, stdio: 'pipe' });
-          execFileSync('git', ['checkout', '--quiet', commitSha], { cwd: repoPath, stdio: 'pipe' });
+          await execFilePromise('git', ['fetch', '--depth', '1', 'origin', commitSha], { cwd: repoPath });
+          await execFilePromise('git', ['checkout', '--quiet', commitSha], { cwd: repoPath });
         } catch {
           // Best effort; the branch checkout is usually enough for OWASP scans.
         }
       }
     } catch (error) {
-      rmSync(tempRoot, { recursive: true, force: true });
+      await rm(tempRoot, { recursive: true, force: true });
       throw new Error(`Failed to clone GitHub repo for OWASP scan: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     return {
       scanPath: repoPath,
-      cleanup: () => rmSync(tempRoot, { recursive: true, force: true }),
+      cleanup: () => rm(tempRoot, { recursive: true, force: true }),
     };
   }
 
@@ -204,20 +221,20 @@ async function prepareScanPath(context: OwaspScanContext): Promise<{ scanPath: s
 
     try {
       logOwaspStage(context.inputRef, 'extracting source zip', { candidate, extractDir });
-      execFileSync('python3', [
+      await execFilePromise('python3', [
         '-c',
         'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])',
         candidate,
         extractDir,
-      ], { stdio: 'pipe' });
+      ]);
     } catch (error) {
-      rmSync(tempRoot, { recursive: true, force: true });
+      await rm(tempRoot, { recursive: true, force: true });
       throw new Error(`Failed to extract source ZIP for OWASP scan: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     return {
       scanPath: extractDir,
-      cleanup: () => rmSync(tempRoot, { recursive: true, force: true }),
+      cleanup: () => rm(tempRoot, { recursive: true, force: true }),
     };
   }
 
@@ -245,81 +262,69 @@ export async function executeOwaspCli(
   timeoutMs: number = 600000, // 10 minutes - Dependency-Check can be slow
   command: string = getOwaspCommand(),
 ): Promise<OwaspScanResult> {
-  return new Promise((resolvePromise, rejectPromise) => {
+  const reportDir = resolve(tmpdir(), `vibescan-owasp-${Date.now()}`);
+  mkdirSync(reportDir, { recursive: true });
+
+  let commandLine = `${command} --project "${projectName}" --scan "${targetPath}" --format JSON --out "${reportDir}"`;
+  
+  if (process.env.OWASP_NO_UPDATE === 'true') {
+    commandLine += ' --noupdate';
+  }
+  if (process.env.NVD_API_KEY) {
+    commandLine += ` --nvdApiKey "${process.env.NVD_API_KEY}"`;
+  }
+
+  logOwaspStage(projectName, 'starting CLI execution', {
+    targetPath,
+    reportDir,
+    timeoutMs,
+    commandLine,
+  });
+
+  try {
+    await execPromise(commandLine, {
+      timeout: timeoutMs,
+      maxBuffer: 20 * 1024 * 1024, // 20MB
+    });
+
+    logOwaspStage(projectName, 'CLI finished, reading report', { reportDir });
+    const parsed = readDependencyCheckReport(reportDir);
+    logOwaspStage(projectName, 'report parsed', {
+      reportVersion: parsed.reportVersion,
+      vulnerabilities: Array.isArray(parsed.vulnerabilities) ? parsed.vulnerabilities.length : 0,
+    });
+
+    // Cleanup
     try {
-      const reportDir = resolve(tmpdir(), `vibescan-owasp-${Date.now()}`);
-      mkdirSync(reportDir, { recursive: true });
+      await rm(reportDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
 
-      const commandLine = `${command} --project "${projectName}" --scan "${targetPath}" --format JSON --out "${reportDir}"`;
-      logOwaspStage(projectName, 'starting CLI execution', {
-        targetPath,
-        reportDir,
-        timeoutMs,
-        command,
+    return parsed;
+  } catch (error) {
+    // Cleanup on error
+    try {
+      await rm(reportDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
+
+    if (error instanceof Error && error.message.includes('timed out')) {
+      throw error;
+    } else {
+      const stdout = error && typeof error === 'object' && 'stdout' in error ? String((error as any).stdout ?? '') : '';
+      const stderr = error && typeof error === 'object' && 'stderr' in error ? String((error as any).stderr ?? '') : '';
+      logOwaspStage(projectName, 'CLI execution failed', {
+        error: error instanceof Error ? error.message : String(error),
+        stdout: stdout.slice(0, 2000),
+        stderr: stderr.slice(0, 2000),
       });
-
-      const timeout = setTimeout(() => {
-        logOwaspStage(projectName, 'execution timeout reached', { timeoutMs });
-        rejectPromise(new Error(`OWASP execution timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      try {
-        execSync(commandLine, {
-          timeout: timeoutMs,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-
-        clearTimeout(timeout);
-        logOwaspStage(projectName, 'CLI finished, reading report', { reportDir });
-
-        const parsed = readDependencyCheckReport(reportDir);
-        logOwaspStage(projectName, 'report parsed', {
-          reportVersion: parsed.reportVersion,
-          vulnerabilities: Array.isArray(parsed.vulnerabilities) ? parsed.vulnerabilities.length : 0,
-        });
-
-        // Cleanup
-        try {
-          execSync(`rm -rf "${reportDir}"`);
-        } catch {
-          // Ignore cleanup errors
-        }
-
-        resolvePromise(parsed);
-      } catch (error) {
-        clearTimeout(timeout);
-        // Cleanup on error
-        try {
-          execSync(`rm -rf "${reportDir}"`);
-        } catch {
-          // Ignore cleanup errors
-        }
-
-        if (error instanceof Error && error.message.includes('timed out')) {
-          rejectPromise(error);
-        } else {
-          const stdout = error instanceof Error && 'stdout' in error ? String((error as NodeJS.ErrnoException & { stdout?: Buffer | string }).stdout ?? '') : '';
-          const stderr = error instanceof Error && 'stderr' in error ? String((error as NodeJS.ErrnoException & { stderr?: Buffer | string }).stderr ?? '') : '';
-          logOwaspStage(projectName, 'CLI execution failed', {
-            error: error instanceof Error ? error.message : String(error),
-            stdout: stdout.slice(0, 2000),
-            stderr: stderr.slice(0, 2000),
-          });
-          rejectPromise(
-            new Error(
-              `Failed to execute OWASP: ${error instanceof Error ? error.message : String(error)}`
-            )
-          );
-        }
-      }
-    } catch (error) {
-      rejectPromise(
-        new Error(
-          `OWASP execution error: ${error instanceof Error ? error.message : String(error)}`
-        )
+      throw new Error(
+        `Failed to execute OWASP: ${error instanceof Error ? error.message : String(error)}`
       );
     }
-  });
+  }
 }
 
 export type OwaspScanRun = {
@@ -340,7 +345,7 @@ export async function scanWithOwaspDetailed(
   const runtimeMode = getRuntimeMode();
   const reportDir = getReportDirectory(scanId);
   const dataDir = getDataDirectory();
-  let scanTarget: { scanPath: string; cleanup: (() => void) | null } | null = null;
+  let scanTarget: { scanPath: string; cleanup: (() => Promise<void>) | null } | null = null;
 
   try {
     logOwaspStage(scanId, 'scan starting', {
@@ -364,7 +369,7 @@ export async function scanWithOwaspDetailed(
       logOwaspStage(scanId, 'using fallback scan target', { fallbackDir });
       scanTarget = {
         scanPath: fallbackDir,
-        cleanup: () => rmSync(fallbackDir, { recursive: true, force: true }),
+        cleanup: () => rm(fallbackDir, { recursive: true, force: true }),
       };
     }
 
@@ -373,7 +378,7 @@ export async function scanWithOwaspDetailed(
       hasCleanup: Boolean(scanTarget.cleanup),
     });
 
-    const localCommandAvailable = isOwaspInstalled();
+    const localCommandAvailable = await isOwaspInstalled();
     let owaspOutput: OwaspScanResult;
     if (runtimeMode === 'local' || (runtimeMode === 'auto' && localCommandAvailable)) {
       logOwaspStage(scanId, 'running local OWASP command', {
@@ -387,7 +392,7 @@ export async function scanWithOwaspDetailed(
         getOwaspCommand(),
       );
     } else {
-      if (!isDockerAvailable()) {
+      if (!(await isDockerAvailable())) {
         if (runtimeMode === 'docker') {
           logOwaspStage(scanId, 'docker requested but unavailable');
           throw new Error('Docker is required for OWASP scanning but is not available');
@@ -408,9 +413,8 @@ export async function scanWithOwaspDetailed(
           dataDir,
           args: dockerArgs,
         });
-        execFileSync('docker', dockerArgs, {
+        await execFilePromise('docker', dockerArgs, {
           timeout: 600000,
-          stdio: ['pipe', 'pipe', 'pipe'],
         });
         logOwaspStage(scanId, 'docker command finished, reading report', { reportDir });
         owaspOutput = readDependencyCheckReport(reportDir);
@@ -424,17 +428,16 @@ export async function scanWithOwaspDetailed(
     // Get OWASP version
     let owaspVersion: string | undefined;
     try {
-      if (runtimeMode === 'local' || localCommandAvailable || !isDockerAvailable()) {
-        owaspVersion = execSync(`${getOwaspCommand()} --version`, {
-          encoding: 'utf-8',
-        })
+      if (runtimeMode === 'local' || localCommandAvailable || !(await isDockerAvailable())) {
+        const versionOutput = await execFilePromise(getOwaspCommand(), ['--version']);
+        owaspVersion = versionOutput.stdout
           .trim()
           .match(/(\d+\.\d+\.\d+)/)?.[1];
       } else {
-        owaspVersion = execFileSync('docker', ['run', '--rm', getDockerImage(), '--version'], {
-          encoding: 'utf-8',
-          stdio: 'pipe',
-        })
+        const versionOutput = await execFilePromise('docker', ['run', '--rm', getDockerImage(), '--version'], {
+          timeout: 20000,
+        });
+        owaspVersion = versionOutput.stdout
           .trim()
           .match(/(\d+\.\d+\.\d+)/)?.[1];
       }
@@ -455,7 +458,7 @@ export async function scanWithOwaspDetailed(
     };
   } finally {
     if (scanTarget?.cleanup) {
-      scanTarget.cleanup();
+      await scanTarget.cleanup();
     }
   }
 }

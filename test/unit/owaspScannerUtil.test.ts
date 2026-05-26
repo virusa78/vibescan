@@ -1,6 +1,7 @@
 import { describe, expect, it, jest, beforeEach, afterEach } from '@jest/globals';
-import { execFileSync, execSync } from 'child_process';
+import { execFileSync, execSync, execFile, exec } from 'child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'fs';
+import { rm } from 'fs/promises';
 import {
   getOwaspCommand,
   isOwaspInstalled,
@@ -8,11 +9,22 @@ import {
   scanWithOwaspDetailed,
 } from '../../wasp-app/src/server/lib/scanners/owaspScannerUtil';
 
-// Mock child_process
 jest.mock('child_process', () => ({
   execSync: jest.fn(),
   execFileSync: jest.fn(),
+  execFile: jest.fn((file: any, args: any, options: any, callback: any) => {
+    const cb = typeof options === 'function' ? options : callback;
+    if (cb) cb(null, { stdout: '', stderr: '' });
+  }),
+  exec: jest.fn((command: any, options: any, callback: any) => {
+    const cb = typeof options === 'function' ? options : callback;
+    if (cb) cb(null, { stdout: '', stderr: '' });
+  }),
 }));
+
+import { execFile, exec } from 'child_process';
+const mockExecFile = execFile as unknown as jest.Mock;
+const mockExec = exec as unknown as jest.Mock;
 
 // Mock fs
 jest.mock('fs', () => ({
@@ -23,9 +35,13 @@ jest.mock('fs', () => ({
   rmSync: jest.fn(),
 }));
 
+jest.mock('fs/promises', () => ({
+  rm: jest.fn(() => Promise.resolve()),
+}));
+
 // Mock external services
 jest.mock('../../wasp-app/src/server/services/githubAppService.js', () => ({
-  createGitHubInstallationAccessToken: jest.fn().mockResolvedValue('fake-github-token'),
+  createGitHubInstallationAccessToken: jest.fn().mockImplementation(() => Promise.resolve('fake-github-token')) as any,
 }));
 
 jest.mock('../../wasp-app/src/server/services/inputAdapterService.js', () => ({
@@ -47,6 +63,7 @@ jest.mock('../../wasp-app/src/server/operations/scans/normalizeFindings.js', () 
 
 const mockExecSync = execSync as jest.Mock;
 const mockExecFileSync = execFileSync as jest.Mock;
+const mockRmMock = rm as unknown as jest.Mock;
 const mockExistsSync = existsSync as jest.Mock;
 const mockMkdirSync = mkdirSync as jest.Mock;
 const mockMkdtempSync = mkdtempSync as jest.Mock;
@@ -59,6 +76,30 @@ describe('owaspScannerUtil', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env = { ...originalEnv };
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('{}');
+    
+    mockExecFile.mockImplementation((file: string, args: string[], options: any, callback: any) => {
+      const cb = typeof options === 'function' ? options : callback;
+      if (file === 'docker' && args.includes('--version')) {
+        if (cb) cb(null, { stdout: 'docker version 20.10.7', stderr: '' });
+      } else if (file === 'docker' && args.includes('run') && args.includes('--version')) {
+        if (cb) cb(null, { stdout: 'dependency-check version 8.0.0', stderr: '' });
+      } else if (file === 'git') {
+        if (cb) cb(null, { stdout: 'git clone done', stderr: '' });
+      } else if (file === 'python3') {
+        if (cb) cb(null, { stdout: 'zip extracted', stderr: '' });
+      } else if (file === 'dependency-check') {
+        if (cb) cb(null, { stdout: 'dependency-check version 8.0.0', stderr: '' });
+      } else {
+        if (cb) cb(null, { stdout: 'SUCCESS', stderr: '' });
+      }
+    });
+
+    mockExec.mockImplementation((command: string, options: any, callback: any) => {
+      const cb = typeof options === 'function' ? options : callback;
+      if (cb) cb(null, { stdout: 'SUCCESS', stderr: '' });
+    });
 
     mockExecSync.mockImplementation((cmd: string) => {
       if (cmd.includes('--version')) {
@@ -101,25 +142,30 @@ describe('owaspScannerUtil', () => {
   });
 
   describe('isOwaspInstalled', () => {
-    it('returns true when version command succeeds', () => {
-      mockExecSync.mockReturnValueOnce('dependency-check version 8.0.0');
-      expect(isOwaspInstalled()).toBe(true);
+    it('returns true when version command succeeds', async () => {
+      mockExecFile.mockImplementationOnce((file: any, args: any, options: any, callback: any) => {
+        const cb = typeof options === 'function' ? options : callback;
+        if (cb) cb(null, { stdout: 'dependency-check version 8.0.0', stderr: '' });
+      });
+      expect(await isOwaspInstalled()).toBe(true);
     });
 
-    it('returns false when version command fails with ENOENT', () => {
+    it('returns false when version command fails with ENOENT', async () => {
       const error: any = new Error('not found');
       error.code = 'ENOENT';
-      mockExecSync.mockImplementationOnce(() => {
-        throw error;
+      mockExecFile.mockImplementationOnce((file: any, args: any, options: any, callback: any) => {
+        const cb = typeof options === 'function' ? options : callback;
+        if (cb) cb(error);
       });
-      expect(isOwaspInstalled()).toBe(false);
+      expect(await isOwaspInstalled()).toBe(false);
     });
 
-    it('returns true when command fails with other errors', () => {
-      mockExecSync.mockImplementationOnce(() => {
-        throw new Error('generic error');
+    it('returns true when command fails with other errors', async () => {
+      mockExecFile.mockImplementationOnce((file: any, args: any, options: any, callback: any) => {
+        const cb = typeof options === 'function' ? options : callback;
+        if (cb) cb(new Error('generic error'));
       });
-      expect(isOwaspInstalled()).toBe(true);
+      expect(await isOwaspInstalled()).toBe(true);
     });
   });
 
@@ -134,9 +180,10 @@ describe('owaspScannerUtil', () => {
 
       const result = await executeOwaspCli('/target/path', 'test-project', 5000);
       expect(result.appName).toBe('test-app');
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('dependency-check --project "test-project" --scan "/target/path"'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -144,8 +191,9 @@ describe('owaspScannerUtil', () => {
       const execError: any = new Error('Command failed');
       execError.stdout = 'stdout logs';
       execError.stderr = 'stderr logs';
-      mockExecSync.mockImplementationOnce(() => {
-        throw execError;
+      mockExec.mockImplementationOnce((command: string, options: any, callback: any) => {
+        const cb = typeof options === 'function' ? options : callback;
+        if (cb) cb(execError);
       });
 
       await expect(executeOwaspCli('/target/path', 'test-project')).rejects.toThrow('Failed to execute OWASP');
@@ -154,8 +202,9 @@ describe('owaspScannerUtil', () => {
     it('handles timeout correctly', async () => {
       const execError: any = new Error('Command timed out');
       execError.message = 'Command timed out after 1000ms';
-      mockExecSync.mockImplementationOnce(() => {
-        throw execError;
+      mockExec.mockImplementationOnce((command: string, options: any, callback: any) => {
+        const cb = typeof options === 'function' ? options : callback;
+        if (cb) cb(execError);
       });
 
       await expect(executeOwaspCli('/target/path', 'test-project', 1000)).rejects.toThrow('Command timed out');
@@ -196,16 +245,12 @@ describe('owaspScannerUtil', () => {
       });
 
       expect(result.owaspVersion).toBe('8.0.0');
-      expect(mockExecFileSync).toHaveBeenCalledWith('docker', expect.arrayContaining(['run', '--rm']), expect.any(Object));
+      expect(mockExecFile).toHaveBeenCalledWith('docker', expect.arrayContaining(['run', '--rm']), expect.any(Object), expect.any(Function));
     });
 
     it('runs docker app cloning and cleanup for github_app scan', async () => {
       process.env.OWASP_RUNTIME = 'docker';
-      mockExecFileSync.mockReturnValueOnce(Buffer.from('docker-version')); // isDockerAvailable check
       mockMkdtempSync.mockReturnValue('/tmp/test-temp-dir');
-      
-      mockExecFileSync.mockReturnValueOnce(Buffer.from('git clone successful')); // git clone
-      mockExecFileSync.mockReturnValueOnce(Buffer.from('SUCCESS')); // docker execution
       mockExistsSync.mockReturnValue(true);
       mockReadFileSync.mockReturnValue(JSON.stringify({
         reportVersion: '8.0.0',
@@ -217,23 +262,20 @@ describe('owaspScannerUtil', () => {
         inputType: 'github_app',
         inputRef: 'https://github.com/test-owner/test-repo',
         githubContext: {
-          installationId: 12345,
+          installationId: '12345',
           branch: 'main',
           commitSha: 'abcdef',
           ref: 'refs/heads/main',
-        },
+        } as any,
       });
 
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
-      expect(mockRmSync).toHaveBeenCalledWith('/tmp/test-temp-dir', expect.objectContaining({ recursive: true }));
+      expect(mockRmMock).toHaveBeenCalledWith('/tmp/test-temp-dir', expect.objectContaining({ recursive: true }));
     });
 
     it('runs zip extraction using python3 for source_zip scan', async () => {
       process.env.OWASP_RUNTIME = 'docker';
-      mockExecFileSync.mockReturnValueOnce(Buffer.from('docker-version')); // isDockerAvailable check
       mockMkdtempSync.mockReturnValue('/tmp/test-zip-dir');
-      mockExecFileSync.mockReturnValueOnce(Buffer.from('zip extracted')); // python3 run
-      mockExecFileSync.mockReturnValueOnce(Buffer.from('SUCCESS')); // docker execution
       mockExistsSync.mockReturnValue(true);
       mockReadFileSync.mockReturnValue(JSON.stringify({
         reportVersion: '8.0.0',
@@ -247,8 +289,8 @@ describe('owaspScannerUtil', () => {
       });
 
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
-      expect(mockExecFileSync).toHaveBeenCalledWith('python3', expect.arrayContaining(['-c']), expect.any(Object));
-      expect(mockRmSync).toHaveBeenCalledWith('/tmp/test-zip-dir', expect.objectContaining({ recursive: true }));
+      expect(mockExecFile).toHaveBeenCalledWith('python3', expect.arrayContaining(['-c']), expect.any(Function));
+      expect(mockRmMock).toHaveBeenCalledWith('/tmp/test-zip-dir', expect.objectContaining({ recursive: true }));
     });
   });
 });

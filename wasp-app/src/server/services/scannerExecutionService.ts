@@ -412,12 +412,15 @@ export async function executeScannerForScan(
       console.error(`[${loggerLabel}] OWASP pipeline failed`, error);
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const friendlyErrorMessage = errorMessage === 'Invalid SBOM format'
+      ? 'The uploaded file is not a valid SBOM. Please ensure you upload a valid CycloneDX JSON/XML or SPDX SBOM file.'
+      : `${loggerLabel} failed: ${errorMessage}`;
     await handleScannerFailure({
       prisma: prisma as any,
       scanId,
       userId,
       scannerId: source,
-      errorMessage: `${loggerLabel} failed: ${errorMessage}`,
+      errorMessage: friendlyErrorMessage,
       loggerLabel,
     });
 

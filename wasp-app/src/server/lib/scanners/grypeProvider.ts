@@ -10,7 +10,7 @@ import type {
 } from './providerTypes.js';
 
 async function getGrypeHealth(): Promise<ScannerHealthState> {
-  const configured = isGrypInstalled();
+  const configured = await isGrypInstalled();
   return {
     configured,
     healthy: configured,

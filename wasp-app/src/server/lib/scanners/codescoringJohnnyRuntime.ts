@@ -1,4 +1,4 @@
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import { shellQuote, type RemoteCommandResult, type RemoteCommandExecutor, type RemoteSshConfig } from './remoteSsh.js';
 
 export interface JohnnyComponent {
@@ -34,21 +34,70 @@ function defaultExecutor(
   args: string[],
   input: string,
   timeoutMs: number,
-): RemoteCommandResult {
-  const result = spawnSync(command, args, {
-    input,
-    encoding: 'utf8',
-    timeout: timeoutMs,
-    maxBuffer: 20 * 1024 * 1024,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+): Promise<RemoteCommandResult> {
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(command, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
 
-  return {
-    status: result.status,
-    stdout: typeof result.stdout === 'string' ? result.stdout : '',
-    stderr: typeof result.stderr === 'string' ? result.stderr : '',
-    error: result.error instanceof Error ? result.error : null,
-  };
+      let stdout = '';
+      let stderr = '';
+      let error: Error | null = null;
+      let killedDueToTimeout = false;
+
+      const timeout = setTimeout(() => {
+        killedDueToTimeout = true;
+        child.kill('SIGTERM');
+        error = new Error(`Codescoring local execution timed out after ${timeoutMs}ms`);
+      }, timeoutMs);
+
+      if (child.stdin) {
+        child.stdin.on('error', (err) => {
+          if ((err as any).code !== 'EPIPE') {
+            error = err;
+          }
+        });
+        child.stdin.write(input);
+        child.stdin.end();
+      }
+
+      if (child.stdout) {
+        child.stdout.setEncoding('utf8');
+        child.stdout.on('data', (data) => {
+          stdout += data;
+        });
+      }
+
+      if (child.stderr) {
+        child.stderr.setEncoding('utf8');
+        child.stderr.on('data', (data) => {
+          stderr += data;
+        });
+      }
+
+      child.on('error', (err) => {
+        error = err;
+      });
+
+      child.on('close', (status) => {
+        clearTimeout(timeout);
+        resolve({
+          status: killedDueToTimeout ? null : status,
+          stdout,
+          stderr,
+          error: error || (killedDueToTimeout ? new Error('Timeout') : null),
+        });
+      });
+    } catch (err) {
+      resolve({
+        status: null,
+        stdout: '',
+        stderr: '',
+        error: err instanceof Error ? err : new Error(String(err)),
+      });
+    }
+  });
 }
 
 function getJohnnyRuntimeConfig(): JohnnyRuntimeConfig | null {
@@ -154,12 +203,12 @@ export function isJohnnyRemoteConfigured(): boolean {
   return getJohnnyRuntimeConfig() !== null;
 }
 
-export function runJohnnyScanViaSsh(
+export async function runJohnnyScanViaSsh(
   components: JohnnyComponent[],
   scanId: string,
   timeoutMs: number,
   executor: JohnnyExecutor = defaultExecutor,
-): string {
+): Promise<string> {
   const config = getJohnnyRuntimeConfig();
   if (!config) {
     throw new Error('CodeScoring Johnny SSH runtime is not configured');
@@ -169,7 +218,7 @@ export function runJohnnyScanViaSsh(
   const remoteBomPath = `${config.remoteTempDir.replace(/\/+$/, '')}/vibescan-${scanId}-${Date.now()}.json`;
   const remoteShellCommand = buildRemoteShellCommand(config.commandTemplate, remoteBomPath);
   const sshArgs = buildRawSshArgs(config, remoteShellCommand);
-  const result = executor('ssh', sshArgs, bomJson, timeoutMs);
+  const result = await executor('ssh', sshArgs, bomJson, timeoutMs);
 
   return resolveJohnnyResult(result);
 }

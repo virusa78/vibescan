@@ -29,6 +29,18 @@ jest.mock('child_process', () => {
       }
       return '';
     }),
+    execFile: jest.fn().mockImplementation((cmd, args, options, callback) => {
+      const cb = typeof options === 'function' ? options : callback;
+      if (cmd === 'ssh' && Array.isArray(args) && args[args.length - 1] === 'mktemp -d') {
+        if (cb) cb(null, '/tmp/remote-temp\n', '');
+      } else if (cmd === 'ssh') {
+        if (cb) cb(null, 'ssh-success', '');
+      } else if (cmd === 'scp') {
+        if (cb) cb(null, 'scp-success', '');
+      } else {
+        if (cb) cb(null, '', '');
+      }
+    }),
   };
 });
 

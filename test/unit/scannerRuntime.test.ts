@@ -45,7 +45,7 @@ describe('scannerRuntime', () => {
     );
   });
 
-  it('falls back to local execution when docker is unavailable in auto mode', () => {
+  it('falls back to local execution when docker is unavailable in auto mode', async () => {
     delete process.env.VIBESCAN_SCANNER_RUNTIME;
 
     const sbomPath = join(tempRoot, 'sbom.json');
@@ -58,10 +58,10 @@ describe('scannerRuntime', () => {
 
       expect(command).toBe('trivy');
       expect(args).toEqual(['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', sbomPath]);
-      return '{"artifacts": []}';
+      return Promise.resolve('{"artifacts": []}');
     });
 
-    const result = runScannerTool(
+    const result = await runScannerTool(
       {
         tool: 'trivy',
         targetPath: sbomPath,
@@ -70,7 +70,7 @@ describe('scannerRuntime', () => {
         localArgs: ['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', sbomPath],
         dockerArgs: ['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', '/work'],
       },
-      executor,
+      executor as any,
     );
 
     expect(result).toBe('{"artifacts": []}');
@@ -79,7 +79,7 @@ describe('scannerRuntime', () => {
     expect(executor.mock.calls[1][0]).toBe('trivy');
   });
 
-  it('uses docker when runtime is forced to docker', () => {
+  it('uses docker when runtime is forced to docker', async () => {
     process.env.VIBESCAN_SCANNER_RUNTIME = 'docker';
 
     const repoDir = mkdtempSync(join(tempRoot, 'repo-'));
@@ -88,10 +88,10 @@ describe('scannerRuntime', () => {
     const executor = jest.fn((command: string, args: string[]) => {
       expect(command).toBe('docker');
       expect(args).toEqual(expect.arrayContaining(['--network=none', '--read-only', 'aquasec/trivy:latest', 'fs']));
-      return '{"artifacts": []}';
+      return Promise.resolve('{"artifacts": []}');
     });
 
-    const result = runScannerTool(
+    const result = await runScannerTool(
       {
         tool: 'trivy',
         targetPath: repoDir,
@@ -100,7 +100,7 @@ describe('scannerRuntime', () => {
         localArgs: ['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', repoDir],
         dockerArgs: ['fs', '--format', 'cyclonedx', '--output', '/dev/stdout', '/work'],
       },
-      executor,
+      executor as any,
     );
 
     expect(result).toBe('{"artifacts": []}');

@@ -42,7 +42,7 @@ wasp db studio                              # Visual Prisma editor
 
 ```
 wasp-app/                  # Primary Wasp app
-├── main.wasp              # DSL: routes, pages, auth, all operations (55 queries/actions + 23 APIs)
+├── main.wasp              # DSL: routes, pages, auth, all operations (72 queries/actions + 28 APIs)
 ├── schema.prisma          # Prisma schema (28 models, 741 lines) — at wasp-app root, NOT in prisma/
 ├── src/
 │   ├── client/            # React frontend (Tailwind, Radix/shadcn)
@@ -173,6 +173,14 @@ Provider planning lives in `wasp-app/src/server/lib/scanners/providerSelection.t
 - Enterprise runs `grype + snyk` in parallel when `VIBESCAN_ENABLE_SNYK_SCANNER=true`
 - `plannedSources` is persisted on each Scan at submission time
 - Lifecycle finalization evaluates against stored `plannedSources`, not current provider policy
+
+## Scanner Execution & Concurrency
+
+All VibeScan scanners (Grype, Trivy, OWASP, Syft, Snyk, and SSH/SCP remote runtimes) execute processes asynchronously using `child_process` promises to avoid blocking the Node.js event loop.
+- Scans are enqueued via BullMQ with configurable worker concurrency:
+  - `FREE_SCAN_CONCURRENCY`: Concurrency limit for free scans (default: 20).
+  - `ENTERPRISE_SCAN_CONCURRENCY`: Concurrency limit for enterprise scans (default: 3).
+- OWASP Dependency-Check database updates can be skipped via `OWASP_NO_UPDATE=true` in development to avoid long delays, and optionally authenticated using `NVD_API_KEY` to prevent rate limiting.
 
 ## OpenAPI contract
 

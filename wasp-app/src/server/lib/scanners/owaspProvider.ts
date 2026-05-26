@@ -6,11 +6,14 @@
 import type { ScannerExecutionContext, ScannerProvider, ScannerScanResult } from './providerTypes.js';
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
 import { getOwaspCommand, isOwaspInstalled, scanWithOwaspDetailed } from './owaspScannerUtil.js';
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 
-function isDockerAvailable(): boolean {
+const execFilePromise = promisify(execFile);
+
+async function isDockerAvailable(): Promise<boolean> {
   try {
-    execFileSync('docker', ['--version'], { stdio: 'pipe' });
+    await execFilePromise('docker', ['--version'], { timeout: 5000 });
     return true;
   } catch {
     return false;
@@ -24,8 +27,8 @@ export const owaspProvider: ScannerProvider = {
 
   async getHealth(context?: Partial<ScannerExecutionContext>): Promise<{ configured: boolean; healthy: boolean | null; message?: string }> {
     const runtimeMode = (process.env.OWASP_RUNTIME?.trim().toLowerCase() || 'auto') as 'docker' | 'local' | 'auto';
-    const dockerAvailable = isDockerAvailable();
-    const localInstalled = isOwaspInstalled();
+    const dockerAvailable = await isDockerAvailable();
+    const localInstalled = await isOwaspInstalled();
     const configured =
       runtimeMode === 'local'
         ? localInstalled

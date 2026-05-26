@@ -55,12 +55,12 @@ describe('codescoringJohnnyRuntime', () => {
     );
   });
 
-  it('accepts exit code 1 and preserves JSON output for findings', () => {
+  it('accepts exit code 1 and preserves JSON output for findings', async () => {
     process.env.CODESCORING_SSH_HOST = 'johnny.codescoring.internal';
     process.env.CODESCORING_SSH_USER = 'scanner';
     process.env.CODESCORING_SSH_COMMAND = 'johnny scan --format json --no-summary --bom-path "$VIBESCAN_BOM_PATH"';
 
-    const executor = jest.fn(() => ({
+    const executor = jest.fn(() => Promise.resolve({
       status: 1,
       stdout: JSON.stringify({
         vulnerabilities: [
@@ -79,11 +79,11 @@ describe('codescoringJohnnyRuntime', () => {
       error: null,
     }));
 
-    const rawOutput = runJohnnyScanViaSsh(
+    const rawOutput = await runJohnnyScanViaSsh(
       [{ name: 'lodash', version: '4.17.21' }],
       'scan-123',
       1000,
-      executor,
+      executor as any,
     );
 
     const findings = parseCodescoringResponse(JSON.parse(rawOutput));
@@ -98,46 +98,46 @@ describe('codescoringJohnnyRuntime', () => {
     });
   });
 
-  it('returns an empty result for exit code 3 when the remote CLI emits no JSON', () => {
+  it('returns an empty result for exit code 3 when the remote CLI emits no JSON', async () => {
     process.env.CODESCORING_SSH_HOST = 'johnny.codescoring.internal';
     process.env.CODESCORING_SSH_COMMAND = 'johnny scan --format json --no-summary --bom-path "$VIBESCAN_BOM_PATH"';
 
-    const executor = jest.fn(() => ({
+    const executor = jest.fn(() => Promise.resolve({
       status: 3,
       stdout: '',
       stderr: 'successful run, no result',
       error: null,
     }));
 
-    const rawOutput = runJohnnyScanViaSsh(
+    const rawOutput = await runJohnnyScanViaSsh(
       [{ name: 'express', version: '4.18.2' }],
       'scan-456',
       1000,
-      executor,
+      executor as any,
     );
 
     expect(JSON.parse(rawOutput)).toEqual({ vulnerabilities: [] });
   });
 
-  it('throws for exit code 5 BOM validation failures', () => {
+  it('throws for exit code 5 BOM validation failures', async () => {
     process.env.CODESCORING_SSH_HOST = 'johnny.codescoring.internal';
     process.env.CODESCORING_SSH_COMMAND = 'johnny scan --format json --no-summary --bom-path "$VIBESCAN_BOM_PATH"';
 
-    const executor = jest.fn(() => ({
+    const executor = jest.fn(() => Promise.resolve({
       status: 5,
       stdout: '',
       stderr: 'BOM validation failed',
       error: null,
     }));
 
-    expect(() =>
+    await expect(
       runJohnnyScanViaSsh(
         [{ name: 'express', version: '4.18.2' }],
         'scan-789',
         1000,
-        executor,
+        executor as any,
       ),
-    ).toThrow(/BOM validation failed/i);
+    ).rejects.toThrow(/BOM validation failed/i);
   });
 
   it('parses component-shaped CodeScoring responses', () => {

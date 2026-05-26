@@ -1,10 +1,13 @@
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
 import { generateCycloneDxSbom } from './grypeScannerUtil.js';
 import { normalizeTrivyFindings, type NormalizedFinding } from '../../operations/scans/normalizeFindings.js';
 import { runTrivySbomScan } from './scannerRuntime.js';
+
+const execPromise = promisify(exec);
 
 export type TrivyScanRun = {
   rawOutput: unknown;
@@ -13,9 +16,9 @@ export type TrivyScanRun = {
   trivyVersion?: string;
 };
 
-export function isTrivyInstalled(): boolean {
+export async function isTrivyInstalled(): Promise<boolean> {
   try {
-    execSync('trivy --version', { stdio: 'pipe' });
+    await execPromise('trivy --version');
     return true;
   } catch {
     return false;
@@ -38,13 +41,14 @@ export async function scanWithTrivyDetailed(
     sbomPath = resolve(scratchDir, `sbom-${scanId}.json`);
     writeFileSync(sbomPath, generateCycloneDxSbom(components), 'utf-8');
 
-    const output = runTrivySbomScan(sbomPath, 600000);
+    const output = await runTrivySbomScan(sbomPath, 600000);
     const parsed = JSON.parse(output) as unknown;
     const findings = normalizeTrivyFindings(parsed);
 
     let trivyVersion: string | undefined;
     try {
-      trivyVersion = execSync('trivy --version', { encoding: 'utf-8' })
+      const versionOutput = await execPromise('trivy --version');
+      trivyVersion = versionOutput.stdout
         .trim()
         .match(/(\d+\.\d+\.\d+)/)?.[1];
     } catch {

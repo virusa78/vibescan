@@ -1,4 +1,4 @@
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 
 export interface RemoteSshConfig {
   host: string;
@@ -19,7 +19,7 @@ export type RemoteCommandExecutor = (
   args: string[],
   input: string,
   timeoutMs: number,
-) => RemoteCommandResult;
+) => Promise<RemoteCommandResult>;
 
 export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\"'\"'`)}'`;
@@ -49,15 +49,15 @@ export function buildSshArgs(config: RemoteSshConfig, remoteCommand: string): st
   return args;
 }
 
-export function runRemoteCommandViaSsh(
+export async function runRemoteCommandViaSsh(
   config: RemoteSshConfig,
   remoteCommand: string,
   input: string,
   timeoutMs: number,
   executor: RemoteCommandExecutor = defaultExecutor,
-): RemoteCommandResult {
+): Promise<RemoteCommandResult> {
   const sshArgs = buildSshArgs(config, remoteCommand);
-  return executor('ssh', sshArgs, input, timeoutMs);
+  return await executor('ssh', sshArgs, input, timeoutMs);
 }
 
 function defaultExecutor(
@@ -65,19 +65,69 @@ function defaultExecutor(
   args: string[],
   input: string,
   timeoutMs: number,
-): RemoteCommandResult {
-  const result = spawnSync(command, args, {
-    input,
-    encoding: 'utf8',
-    timeout: timeoutMs,
-    maxBuffer: 20 * 1024 * 1024,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+): Promise<RemoteCommandResult> {
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(command, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
 
-  return {
-    status: result.status,
-    stdout: typeof result.stdout === 'string' ? result.stdout : '',
-    stderr: typeof result.stderr === 'string' ? result.stderr : '',
-    error: result.error instanceof Error ? result.error : null,
-  };
+      let stdout = '';
+      let stderr = '';
+      let error: Error | null = null;
+      let killedDueToTimeout = false;
+
+      const timeout = setTimeout(() => {
+        killedDueToTimeout = true;
+        child.kill('SIGTERM');
+        error = new Error(`Command execution timed out after ${timeoutMs}ms`);
+      }, timeoutMs);
+
+      if (child.stdin) {
+        child.stdin.on('error', (err) => {
+          // Ignore EPIPE errors which happen if the command exits before we finish writing
+          if ((err as any).code !== 'EPIPE') {
+            error = err;
+          }
+        });
+        child.stdin.write(input);
+        child.stdin.end();
+      }
+
+      if (child.stdout) {
+        child.stdout.setEncoding('utf8');
+        child.stdout.on('data', (data) => {
+          stdout += data;
+        });
+      }
+
+      if (child.stderr) {
+        child.stderr.setEncoding('utf8');
+        child.stderr.on('data', (data) => {
+          stderr += data;
+        });
+      }
+
+      child.on('error', (err) => {
+        error = err;
+      });
+
+      child.on('close', (status) => {
+        clearTimeout(timeout);
+        resolve({
+          status: killedDueToTimeout ? null : status,
+          stdout,
+          stderr,
+          error: error || (killedDueToTimeout ? new Error('Timeout') : null),
+        });
+      });
+    } catch (err) {
+      resolve({
+        status: null,
+        stdout: '',
+        stderr: '',
+        error: err instanceof Error ? err : new Error(String(err)),
+      });
+    }
+  });
 }

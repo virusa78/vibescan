@@ -135,7 +135,7 @@ export async function scanWithGrypeDetailed(
 
     // Execute Grype using unified runtime (handles Docker fallback)
     const startTime = Date.now();
-    const output = runGrypeCycloneDxScan(sbomPath, timeoutMs);
+    const output = await runGrypeCycloneDxScan(sbomPath, timeoutMs);
     const durationMs = Date.now() - startTime;
 
     const grypOutput = JSON.parse(output) as GrypeRawOutput;
@@ -170,6 +170,6 @@ export async function scanWithGrypeDetailed(
 /**
  * Check if Grype is available (local or Docker)
  */
-export function isGrypInstalled(): boolean {
-  return isToolAvailable('grype');
+export async function isGrypInstalled(): Promise<boolean> {
+  return await isToolAvailable('grype');
 }

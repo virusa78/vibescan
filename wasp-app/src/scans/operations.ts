@@ -1,7 +1,9 @@
 import type { Scan } from "wasp/entities";
 import { HttpError } from "wasp/server";
-import type { GetScanById, GetScans, SubmitScan } from "wasp/server/operations";
+import type { GetScanById, GetScans, SubmitScan, UploadScanFile } from "wasp/server/operations";
 import * as z from "zod";
+import { writeFileSync, mkdirSync } from "fs";
+import { join } from "path";
 import { ensureArgsSchemaOrThrowHttpError } from "../server/validation";
 import { submitScanSubmission } from "../server/services/scanSubmissionService";
 import {
@@ -83,4 +85,43 @@ export const getScanById: GetScanById<GetScanByIdInput, ScanWithDetails> = async
   }
 
   return serializeDecimalFields(scan);
+};
+
+const uploadScanFileInputSchema = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  fileContent: z.string().describe("Base64 encoded file content"),
+});
+
+type UploadScanFileInput = z.infer<typeof uploadScanFileInputSchema>;
+
+export const uploadScanFile: UploadScanFile<UploadScanFileInput, { uniqueName: string }> = async (
+  rawArgs,
+  context,
+) => {
+  const user = await requireWorkspaceScopedUser(context.user as any);
+
+  const args = ensureArgsSchemaOrThrowHttpError(uploadScanFileInputSchema, rawArgs);
+
+  const runtimeTempRoot = process.env.VIBESCAN_RUNTIME_TMP_DIR
+    ?? join(process.cwd(), 'test-results', 'runtime-temp');
+  const defaultTrustedScanInputRoot = join(runtimeTempRoot, 'scan-inputs');
+  const rootDir = process.env.VIBESCAN_SCAN_INPUT_DIR ?? defaultTrustedScanInputRoot;
+
+  // Ensure directory exists
+  mkdirSync(rootDir, { recursive: true });
+
+  // Generate a unique safe filename
+  const cleanFileName = args.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const uniqueName = `upload-${Date.now()}-${cleanFileName}`;
+  const targetPath = join(rootDir, uniqueName);
+
+  // Convert base64 back to buffer and write
+  const buffer = Buffer.from(args.fileContent, 'base64');
+  
+  // Write to file
+  writeFileSync(targetPath, buffer);
+
+  return {
+    uniqueName,
+  };
 };

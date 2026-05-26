@@ -3,12 +3,17 @@
  * Syft generates Software Bill of Materials (SBOM) with component and vulnerability information
  */
 
-import { execSync } from 'child_process';
-import { writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
+import { exec, execFile } from 'child_process';
+import { promisify } from 'util';
+import { writeFileSync, existsSync, mkdirSync } from 'fs';
+import { rm } from 'fs/promises';
 import { resolve } from 'path';
 import { tmpdir } from 'os';
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
 import { normalizeTrivyFindings, type NormalizedFinding } from '../../operations/scans/normalizeFindings.js';
+
+const execPromise = promisify(exec);
+const execFilePromise = promisify(execFile);
 
 export interface SyftComponent {
   name: string;
@@ -50,9 +55,9 @@ function isSyftMissingError(error: unknown): boolean {
   return /syft/i.test(message) && /(not found|enoent)/i.test(message);
 }
 
-export function isSyftInstalled(): boolean {
+export async function isSyftInstalled(): Promise<boolean> {
   try {
-    execSync('syft --version', { stdio: 'pipe' });
+    await execPromise('syft --version');
     return true;
   } catch (error) {
     return !isSyftMissingError(error);
@@ -66,48 +71,22 @@ export async function executeSyftCli(
   targetPath: string,
   timeoutMs: number = 300000 // 5 minutes - Syft is fast
 ): Promise<SyftCycloneDxOutput> {
-  return new Promise((resolvePromise, rejectPromise) => {
-    try {
-      // Execute: syft <path> -o cyclonedx-json
-      const command = `syft "${targetPath}" -o cyclonedx-json`;
-
-      const timeout = setTimeout(() => {
-        rejectPromise(new Error(`Syft execution timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      try {
-        const output = execSync(command, {
-          timeout: timeoutMs,
-          encoding: 'utf-8',
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-
-        clearTimeout(timeout);
-
-        // Parse the JSON output
-        const parsed = JSON.parse(output);
-        resolvePromise(parsed);
-      } catch (error) {
-        clearTimeout(timeout);
-
-        if (error instanceof Error && error.message.includes('timed out')) {
-          rejectPromise(error);
-        } else {
-          rejectPromise(
-            new Error(
-              `Failed to execute Syft: ${error instanceof Error ? error.message : String(error)}`
-            )
-          );
-        }
-      }
-    } catch (error) {
-      rejectPromise(
-        new Error(
-          `Syft execution error: ${error instanceof Error ? error.message : String(error)}`
-        )
+  // Execute: syft <path> -o cyclonedx-json
+  try {
+    const { stdout } = await execFilePromise('syft', [targetPath, '-o', 'cyclonedx-json'], {
+      timeout: timeoutMs,
+      maxBuffer: 20 * 1024 * 1024,
+    });
+    return JSON.parse(stdout);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('timed out')) {
+      throw error;
+    } else {
+      throw new Error(
+        `Failed to execute Syft: ${error instanceof Error ? error.message : String(error)}`
       );
     }
-  });
+  }
 }
 
 export type SyftScanRun = {
@@ -146,9 +125,8 @@ export async function scanWithSyftDetailed(
     // Get Syft version
     let syftVersion: string | undefined;
     try {
-      syftVersion = execSync('syft --version', {
-        encoding: 'utf-8',
-      })
+      const versionOutput = await execPromise('syft --version');
+      syftVersion = versionOutput.stdout
         .trim()
         .match(/(\d+\.\d+\.\d+)/)?.[1];
     } catch {
@@ -164,7 +142,7 @@ export async function scanWithSyftDetailed(
     // Cleanup
     if (tempDir && existsSync(tempDir)) {
       try {
-        execSync(`rm -rf "${tempDir}"`);
+        await rm(tempDir, { recursive: true, force: true });
       } catch {
         // Ignore cleanup errors
       }

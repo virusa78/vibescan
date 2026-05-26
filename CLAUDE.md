@@ -10,7 +10,7 @@ Auth Form styling note: In dark mode, Wasp's default auth forms have a light bac
 
 ## Project Overview
 
-VibeScan is a SaaS vulnerability scanning platform with dual-scanner architecture (Grype free + Codescoring/BlackDuck enterprise). **Complete Wasp-only architecture**—all legacy code removed. Full-stack TypeScript with 20 Wasp operations.
+VibeScan is a SaaS vulnerability scanning platform with dual-scanner architecture (Grype free + Codescoring/BlackDuck enterprise). **Complete Wasp-only architecture**—all legacy code removed. Full-stack TypeScript with 22 Wasp operations.
 
 ## Current Architecture Status (April 2026)
 
@@ -18,7 +18,7 @@ VibeScan is a SaaS vulnerability scanning platform with dual-scanner architectur
 - **Primary**: Wasp v0.23+ (full-stack, batteries-included)
 - **All Phases**: Complete (1-9) + Wasp migration done
 - **Legacy Code**: Completely removed from git (Backup/ holds archived notes)
-- **Architecture**: Wasp-only with 20 operations
+- **Architecture**: Wasp-only with 22 operations
 
 ### Service Configuration
 - **Frontend**: http://127.0.0.1:3000 (Vite via Wasp)
@@ -54,7 +54,7 @@ VibeScan is a SaaS vulnerability scanning platform with dual-scanner architectur
 ```
 /home/virus/vibescan/
 ├── wasp-app/                    # Primary Wasp full-stack application
-│   ├── main.wasp               # Wasp DSL config (20 operations, auth, routes)
+│   ├── main.wasp               # Wasp DSL config (22 operations, auth, routes)
 │   ├── src/
 │   │   ├── client/              # Frontend React components
 │   │   │   ├── App.tsx          # Root component with auth check
@@ -65,7 +65,7 @@ VibeScan is a SaaS vulnerability scanning platform with dual-scanner architectur
 │   │   ├── apiKeys/             # API keys management (page + operations)
 │   │   ├── auth/                # Auth forms and email templates
 │   │   ├── server/              # Backend operations
-│   │   │   ├── operations/      # 20 Wasp operations grouped by domain
+│   │   │   ├── operations/      # 22 Wasp operations grouped by domain
 │   │   │   │   ├── apikeys/
 │   │   │   │   ├── scans/
 │   │   │   │   ├── reports/
@@ -124,10 +124,10 @@ VibeScan is a SaaS vulnerability scanning platform with dual-scanner architectur
 - Migrations auto-generated, no manual SQL
 - Relationships enforce ownership (userId, organizationId)
 
-**Operations** (20 total - see OPERATIONS.md):
+**Operations** (22 total - see OPERATIONS.md):
 - **User Management** (3): getPaginatedUsers, updateIsUserAdminById, updateUserSettings
 - **API Keys** (3): generateApiKey, listApiKeys, revokeApiKey
-- **Scans** (3): getScans, getScanById, submitScan
+- **Scans** (4): getScans, getScanById, submitScan, uploadScanFile
 - **Reports** (4): getReport, getReportSummary, generateReportPDF, getCIDecision
 - **Webhooks** (5): createWebhook, listWebhooks, getWebhook, updateWebhook, deleteWebhook
 - **Billing** (2): getCustomerPortalUrl, generateCheckoutSession
@@ -660,7 +660,7 @@ wasp db migrate-dev  # Apply pending migrations
 
 ## Documentation & References
 
-- **Operations Reference**: See [OPERATIONS.md](OPERATIONS.md) for all 20 operations
+- **Operations Reference**: See [OPERATIONS.md](OPERATIONS.md) for all 22 operations
 - **Wasp Docs**: https://wasp.sh/docs
 - **Prisma ORM**: https://www.prisma.io/docs
 - **React**: https://react.dev
@@ -698,6 +698,14 @@ AWS_SECRET_ACCESS_KEY=your-secret
 STRIPE_SECRET_KEY=sk_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 CODESCORING_API_KEY=your-key
+
+# Scanner worker lanes concurrency
+FREE_SCAN_CONCURRENCY=20
+ENTERPRISE_SCAN_CONCURRENCY=3
+
+# OWASP Dependency-Check configurations
+OWASP_NO_UPDATE=false
+NVD_API_KEY=your_nvd_api_key_here
 ```
 
 ### Client (`.env.local`)

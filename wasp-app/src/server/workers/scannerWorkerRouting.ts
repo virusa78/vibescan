@@ -21,14 +21,14 @@ function createScannerLaneProcessor(
 export const scannerWorkerDefinitions = {
   free: {
     queueName: QUEUE_NAMES.FREE_SCAN,
-    concurrency: 20,
+    concurrency: Number(process.env.FREE_SCAN_CONCURRENCY) || 20,
     label: 'Free Scanner',
     processor: createScannerLaneProcessor('free'),
   },
   enterprise: {
     queueName: QUEUE_NAMES.ENTERPRISE_SCAN,
-    concurrency: 3,
+    concurrency: Number(process.env.ENTERPRISE_SCAN_CONCURRENCY) || 3,
     label: 'Enterprise Scanner',
     processor: createScannerLaneProcessor('enterprise'),
   },
-} as const satisfies Record<ScannerWorkerRole, ScannerWorkerDefinition>;
+} satisfies Record<ScannerWorkerRole, ScannerWorkerDefinition>;

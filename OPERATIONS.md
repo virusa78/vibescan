@@ -27,11 +27,11 @@ The older sections below are still useful as legacy reference, but they should n
 | **Authentication** | 1 | refreshToken |
 | **User Management** | 3 | getPaginatedUsers, updateIsUserAdminById, updateUserSettings |
 | **API Keys** | 3 | generateApiKey, listApiKeys, revokeApiKey |
-| **Scans** | 3 | getScans, getScanById, submitScan |
+| **Scans** | 4 | getScans, getScanById, submitScan, uploadScanFile |
 | **Reports** | 4 | getReport, getReportSummary, generateReportPDF, getCIDecision |
 | **Webhooks** | 5 | createWebhook, listWebhooks, getWebhook, updateWebhook, deleteWebhook |
 | **Billing** | 2 | getCustomerPortalUrl, generateCheckoutSession |
-| **Total** | **21** | Full-stack Wasp operations |
+| **Total** | **22** | Full-stack Wasp operations |
 
 ---
 
@@ -568,6 +568,45 @@ const result = await submitScan({
 - `413`: File too large (max 100MB)
 - `422`: Invalid input (missing required fields)
 - `429`: Rate limited (max 10 scans/hour)
+
+---
+
+### 10. uploadScanFile
+
+**Type**: Action (mutation)  
+**Auth Required**: Yes  
+**Scope**: Upload a local file (SBOM JSON/XML or source ZIP) to the server temp storage to prepare for scanning.
+
+**Usage**:
+```typescript
+import { uploadScanFile } from 'wasp/client/operations'
+
+const result = await uploadScanFile({
+  fileName: 'sbom.json',
+  fileContent: 'ey...base64...' // Base64 encoded string
+})
+
+console.log('Uploaded unique file name:', result.uniqueName)
+```
+
+**Parameters**:
+```typescript
+{
+  fileName: string              // Original filename (required)
+  fileContent: string           // Base64 encoded file content (required)
+}
+```
+
+**Response**:
+```typescript
+{
+  uniqueName: string            // Sanitized unique filename inside temp scan inputs directory
+}
+```
+
+**Error Codes**:
+- `401`: Unauthorized / User not logged in or active workspace missing
+- `422`: Invalid input (missing or invalid fileName/fileContent)
 
 ---
 

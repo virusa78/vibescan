@@ -85,6 +85,7 @@ app OpenSaaS {
 
   server: {
     envValidationSchema: import { serverEnvValidationSchema } from "@src/env",
+    middlewareConfigFn: import { serverMiddlewareConfigFn } from "@src/server/middleware",
   },
 
   emailSender: {
@@ -282,6 +283,12 @@ query getScanById {
 action submitScan {
   fn: import { submitScan } from "@src/scans/operations",
   entities: [User, Scan, Finding, FindingHistory, ScanDelta],
+  auth: true
+}
+
+action uploadScanFile {
+  fn: import { uploadScanFile } from "@src/scans/operations",
+  entities: [User],
   auth: true
 }
 

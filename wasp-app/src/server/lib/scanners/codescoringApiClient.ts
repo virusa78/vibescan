@@ -4,7 +4,7 @@
  * Local configuration only requires SSH host, user, and private key.
  */
 
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
 import { readFileSync, mkdirSync, rmSync } from 'fs';
 import { resolve, join } from 'path';
 import type { NormalizedComponent } from '../../services/inputAdapterService.js';
@@ -86,7 +86,7 @@ class CodescoringSshClient {
     this.keyPath = keyPath;
   }
 
-  private runSsh(command: string): string {
+  private runSsh(command: string): Promise<string> {
     const args = [
       '-o', 'BatchMode=yes',
       '-o', 'StrictHostKeyChecking=no',
@@ -95,15 +95,19 @@ class CodescoringSshClient {
       command
     ];
     
-    try {
-      return execFileSync('ssh', args, { encoding: 'utf8', timeout: 300000 });
-    } catch (error) {
-      console.error(`[Codescoring-SSH] SSH command failed: ${command}`, error);
-      throw new Error(`SSH execution failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    return new Promise((resolvePromise, rejectPromise) => {
+      execFile('ssh', args, { encoding: 'utf8', timeout: 300000 }, (error, stdout, _stderr) => {
+        if (error) {
+          console.error(`[Codescoring-SSH] SSH command failed: ${command}`, error);
+          rejectPromise(new Error(`SSH execution failed: ${error.message}`));
+        } else {
+          resolvePromise(stdout);
+        }
+      });
+    });
   }
 
-  private runScpToRemote(localPath: string, remotePath: string) {
+  private runScpToRemote(localPath: string, remotePath: string): Promise<void> {
     const args = [
       '-o', 'BatchMode=yes',
       '-o', 'StrictHostKeyChecking=no',
@@ -112,15 +116,19 @@ class CodescoringSshClient {
       `${this.user}@${this.host}:${remotePath}`
     ];
     
-    try {
-      execFileSync('scp', args, { stdio: 'ignore', timeout: 60000 });
-    } catch (error) {
-      console.error(`[Codescoring-SSH] SCP to remote failed: ${localPath} -> ${remotePath}`, error);
-      throw new Error(`SCP transfer failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    return new Promise((resolvePromise, rejectPromise) => {
+      execFile('scp', args, { timeout: 60000 }, (error) => {
+        if (error) {
+          console.error(`[Codescoring-SSH] SCP to remote failed: ${localPath} -> ${remotePath}`, error);
+          rejectPromise(new Error(`SCP transfer failed: ${error.message}`));
+        } else {
+          resolvePromise();
+        }
+      });
+    });
   }
 
-  private runScpFromRemote(remotePath: string, localPath: string) {
+  private runScpFromRemote(remotePath: string, localPath: string): Promise<void> {
     const args = [
       '-o', 'BatchMode=yes',
       '-o', 'StrictHostKeyChecking=no',
@@ -129,12 +137,16 @@ class CodescoringSshClient {
       localPath
     ];
     
-    try {
-      execFileSync('scp', args, { stdio: 'ignore', timeout: 60000 });
-    } catch (error) {
-      console.error(`[Codescoring-SSH] SCP from remote failed: ${remotePath} -> ${localPath}`, error);
-      throw new Error(`SCP transfer failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    return new Promise((resolvePromise, rejectPromise) => {
+      execFile('scp', args, { timeout: 60000 }, (error) => {
+        if (error) {
+          console.error(`[Codescoring-SSH] SCP from remote failed: ${remotePath} -> ${localPath}`, error);
+          rejectPromise(new Error(`SCP transfer failed: ${error.message}`));
+        } else {
+          resolvePromise();
+        }
+      });
+    });
   }
 
   async scan(scanId: string, input: { inputType: string; inputRef: string }): Promise<CodescoringRawOutput> {
@@ -142,7 +154,8 @@ class CodescoringSshClient {
     console.log(`[Codescoring-SSH] Starting remote scan ${scanId} (type: ${inputType})`);
 
     // 1. Create remote temp directory
-    const remoteTempDir = this.runSsh('mktemp -d').trim();
+    const remoteTempDirRaw = await this.runSsh('mktemp -d');
+    const remoteTempDir = remoteTempDirRaw.trim();
     console.log(`[Codescoring-SSH] Created remote temp dir: ${remoteTempDir}`);
 
     try {
@@ -152,26 +165,26 @@ class CodescoringSshClient {
       // 2. Deliver the scan script to remote
       const localScriptPath = resolve(process.cwd(), 'src', 'server', 'scripts', 'codescoring-remote-scan.sh');
       console.log(`[Codescoring-SSH] Delivering scan script: ${localScriptPath} -> ${remoteScriptPath}`);
-      this.runScpToRemote(localScriptPath, remoteScriptPath);
+      await this.runScpToRemote(localScriptPath, remoteScriptPath);
 
       // 3. Prepare remote input
       if (inputType === 'source_zip') {
         const localZipPath = resolveTrustedScanInputPath(inputRef);
         const remoteZipPath = `${remoteTempDir}/source.zip`;
         console.log(`[Codescoring-SSH] Uploading ZIP to remote: ${localZipPath}`);
-        this.runScpToRemote(localZipPath, remoteZipPath);
+        await this.runScpToRemote(localZipPath, remoteZipPath);
       } else if (inputType === 'sbom') {
         const localSbomPath = resolveTrustedScanInputPath(inputRef);
         const remoteSbomPath = `${remoteTempDir}/sbom.json`;
         console.log(`[Codescoring-SSH] Uploading SBOM to remote: ${localSbomPath}`);
-        this.runScpToRemote(localSbomPath, remoteSbomPath);
+        await this.runScpToRemote(localSbomPath, remoteSbomPath);
       } else if (inputType !== 'github') {
         throw new Error(`Unsupported input type for Codescoring-SSH: ${inputType}`);
       }
 
       // 4. Run the scan script on remote via SSH
       console.log(`[Codescoring-SSH] Executing remote scan script...`);
-      this.runSsh(`bash "${remoteScriptPath}" "${inputType}" "${inputRef}" "${remoteOutputFile}"`);
+      await this.runSsh(`bash "${remoteScriptPath}" "${inputType}" "${inputRef}" "${remoteOutputFile}"`);
 
       // 5. Download results via SCP
       const localResultDir = resolve(process.cwd(), '.cache', 'codescoring');
@@ -179,7 +192,7 @@ class CodescoringSshClient {
       const localResultPath = join(localResultDir, `result-${scanId}.json`);
       
       console.log(`[Codescoring-SSH] Downloading results to ${localResultPath}`);
-      this.runScpFromRemote(remoteOutputFile, localResultPath);
+      await this.runScpFromRemote(remoteOutputFile, localResultPath);
 
       // 4. Read and parse results
       const resultJson = readFileSync(localResultPath, 'utf8');
@@ -196,7 +209,11 @@ class CodescoringSshClient {
     } finally {
       // 5. Remote Cleanup
       console.log(`[Codescoring-SSH] Cleaning up remote temp dir: ${remoteTempDir}`);
-      this.runSsh(`rm -rf "${remoteTempDir}"`);
+      try {
+        await this.runSsh(`rm -rf "${remoteTempDir}"`);
+      } catch (err) {
+        console.warn(`[Codescoring-SSH] Failed to cleanup remote temp dir: ${remoteTempDir}`, err);
+      }
     }
   }
 }

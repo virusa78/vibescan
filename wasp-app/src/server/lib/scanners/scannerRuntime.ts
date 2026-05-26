@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
 import { statSync } from 'fs';
 import { basename, dirname, resolve } from 'path';
 
@@ -21,21 +21,32 @@ function getRuntimeMode(): 'auto' | 'docker' | 'local' {
   return 'auto';
 }
 
-function defaultExecutor(command: string, args: string[], timeoutMs: number): string {
-  return execFileSync(command, args, {
-    encoding: 'utf8',
-    timeout: timeoutMs,
-    stdio: 'pipe',
+function defaultExecutor(command: string, args: string[], timeoutMs: number): Promise<string> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    execFile(
+      command,
+      args,
+      {
+        encoding: 'utf8',
+        timeout: timeoutMs,
+        maxBuffer: 20 * 1024 * 1024, // 20MB buffer to prevent overflow
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          (error as any).stdout = stdout;
+          (error as any).stderr = stderr;
+          rejectPromise(error);
+        } else {
+          resolvePromise(stdout);
+        }
+      }
+    );
   });
 }
 
-export function isToolAvailable(tool: ScannerTool): boolean {
+export async function isToolAvailable(tool: ScannerTool): Promise<boolean> {
   try {
-    execFileSync(tool, ['--version'], {
-      encoding: 'utf8',
-      timeout: 5000,
-      stdio: 'ignore',
-    });
+    await defaultExecutor(tool, ['--version'], 5000);
     return true;
   } catch {
     return false;
@@ -102,16 +113,16 @@ function buildPlan(plan: ScannerExecutionPlan): { dockerCommand: string; dockerA
   };
 }
 
-export function runScannerTool(
+export async function runScannerTool(
   plan: ScannerExecutionPlan,
-  executor: typeof defaultExecutor = defaultExecutor,
-): string {
+  executor: (command: string, args: string[], timeoutMs: number) => Promise<string> = defaultExecutor,
+): Promise<string> {
   const runtimeMode = getRuntimeMode();
   const commands = buildPlan(plan);
 
   if (runtimeMode !== 'local') {
     try {
-      return executor(commands.dockerCommand, commands.dockerArgs, plan.timeoutMs);
+      return await executor(commands.dockerCommand, commands.dockerArgs, plan.timeoutMs);
     } catch (error) {
       if (runtimeMode === 'docker') {
         throw error;
@@ -125,15 +136,15 @@ export function runScannerTool(
     }
   }
 
-  return executor(commands.localCommand, commands.localArgs, plan.timeoutMs);
+  return await executor(commands.localCommand, commands.localArgs, plan.timeoutMs);
 }
 
-export function runSyftCycloneDxScan(
+export async function runSyftCycloneDxScan(
   targetPath: string,
   timeoutMs: number,
-  executor: typeof defaultExecutor = defaultExecutor,
-): string {
-  return runScannerTool(
+  executor: (command: string, args: string[], timeoutMs: number) => Promise<string> = defaultExecutor,
+): Promise<string> {
+  return await runScannerTool(
     {
       tool: 'syft',
       targetPath,
@@ -146,12 +157,12 @@ export function runSyftCycloneDxScan(
   );
 }
 
-export function runGrypeCycloneDxScan(
+export async function runGrypeCycloneDxScan(
   sbomPath: string,
   timeoutMs: number,
-  executor: typeof defaultExecutor = defaultExecutor,
-): string {
-  return runScannerTool(
+  executor: (command: string, args: string[], timeoutMs: number) => Promise<string> = defaultExecutor,
+): Promise<string> {
+  return await runScannerTool(
     {
       tool: 'grype',
       targetPath: sbomPath,
@@ -164,12 +175,12 @@ export function runGrypeCycloneDxScan(
   );
 }
 
-export function runTrivySbomScan(
+export async function runTrivySbomScan(
   sbomPath: string,
   timeoutMs: number,
-  executor: typeof defaultExecutor = defaultExecutor,
-): string {
-  return runScannerTool(
+  executor: (command: string, args: string[], timeoutMs: number) => Promise<string> = defaultExecutor,
+): Promise<string> {
+  return await runScannerTool(
     {
       tool: 'trivy',
       targetPath: sbomPath,

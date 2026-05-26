@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../client/components/u
 import { Badge } from '../client/components/ui/badge';
 import { AlertTriangle, ArrowLeft, CheckCircle, CheckCircle2, Clock, XCircle, Zap } from 'lucide-react';
 import { getReport } from 'wasp/client/operations';
+import { Alert, AlertDescription } from '../client/components/ui/alert';
 import { ScannerLineupCard } from '../client/components/common/ScannerLineupCard';
 import { getScannerLineupEntry, type ScannerSource } from '../client/utils/scannerLineup';
 import { getScannerBadgeClass, getScannerDotClass } from '../client/utils/scannerColors';
@@ -168,42 +169,7 @@ export function ScanDetailsPage() {
     );
   }
 
-  // Error state
-  if (status === 'error' || (status === 'failed' && scan?.errorMessage)) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-2 mb-8">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="flex items-center gap-2 text-blue-400 hover:text-blue-300"
-            >
-              <ArrowLeft size={20} />
-              Back to Dashboard
-            </button>
-          </div>
 
-          <Card className="border-red-700 bg-red-900/20" data-testid="scan-status-failed">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="text-red-500" size={24} />
-                <CardTitle>Scan Failed</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-red-400">{scan?.errorMessage || error}</p>
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
-              >
-                Return to Dashboard
-              </button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
 
   // Scanning state
   if (isPolling && status === 'running') {
@@ -291,9 +257,23 @@ export function ScanDetailsPage() {
     );
   }
 
-  // Completed state
-  if (status === 'completed' && report) {
-    const totalVulnerabilities = report.total_free + report.total_enterprise;
+  const isFailed = status === 'failed' || status === 'error';
+
+  // Completed or Failed state
+  if ((status === 'completed' && report) || isFailed) {
+    const displayReport = report || {
+      total_free: 0,
+      total_enterprise: 0,
+      severity_breakdown: {
+        critical: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+        info: 0,
+      },
+      vulnerabilities: [],
+    };
+    const totalVulnerabilities = displayReport.total_free + displayReport.total_enterprise;
     const scanDetails = scanDetailsQuery.data;
     const scanResults = (scanDetails?.scanResults ?? []) as ScanResultRow[];
     const scanDeltas = scanDetails?.scanDeltas ?? [];
@@ -343,21 +323,36 @@ export function ScanDetailsPage() {
           </div>
 
           {/* Header */}
-          <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-testid="scan-status-completed">
+          <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-testid={isFailed ? "scan-status-failed" : "scan-status-completed"}>
             <div className="flex items-center gap-3">
-              <CheckCircle className="text-green-500" size={32} />
+              {isFailed ? (
+                <XCircle className="text-red-500" size={32} />
+              ) : (
+                <CheckCircle className="text-green-500" size={32} />
+              )}
               <div>
-                <h1 className="text-3xl font-bold text-white">Scan Complete</h1>
+                <h1 className="text-3xl font-bold text-white">{isFailed ? "Scan Failed" : "Scan Complete"}</h1>
                 <p className="text-slate-400">{scan?.inputRef}</p>
               </div>
             </div>
             {scan && (
               <div className="sm:text-right">
-                <p className="text-slate-400 text-sm">Done</p>
+                <p className="text-slate-400 text-sm">{isFailed ? "Failed At" : "Done"}</p>
                 <p className="font-medium text-white">{formatDate(scan.completedAt || new Date())}</p>
               </div>
             )}
           </div>
+
+          {/* Failure Alert Banner */}
+          {isFailed && scan?.errorMessage && (
+            <Alert className="border-red-500/30 bg-red-950/20 text-red-200 mb-8">
+              <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+              <AlertDescription className="text-sm">
+                <span className="font-semibold block text-red-100 mb-1">Scan Failure Details:</span>
+                {scan.errorMessage}
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Severity Breakdown */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
@@ -373,7 +368,7 @@ export function ScanDetailsPage() {
             <Card className="border-red-700 bg-red-900/20">
               <CardContent className="pt-6">
                 <p className="text-red-400 text-xs uppercase mb-2">Critical</p>
-                <p className="text-3xl font-bold text-red-500">{report.severity_breakdown.critical}</p>
+                <p className="text-3xl font-bold text-red-500">{displayReport.severity_breakdown.critical}</p>
               </CardContent>
             </Card>
 
@@ -381,7 +376,7 @@ export function ScanDetailsPage() {
             <Card className="border-orange-700 bg-orange-900/20">
               <CardContent className="pt-6">
                 <p className="text-orange-400 text-xs uppercase mb-2">High</p>
-                <p className="text-3xl font-bold text-orange-500">{report.severity_breakdown.high}</p>
+                <p className="text-3xl font-bold text-orange-500">{displayReport.severity_breakdown.high}</p>
               </CardContent>
             </Card>
 
@@ -389,7 +384,7 @@ export function ScanDetailsPage() {
             <Card className="border-yellow-700 bg-yellow-900/20">
               <CardContent className="pt-6">
                 <p className="text-yellow-400 text-xs uppercase mb-2">Medium</p>
-                <p className="text-3xl font-bold text-yellow-500">{report.severity_breakdown.medium}</p>
+                <p className="text-3xl font-bold text-yellow-500">{displayReport.severity_breakdown.medium}</p>
               </CardContent>
             </Card>
 
@@ -397,7 +392,7 @@ export function ScanDetailsPage() {
             <Card className="border-green-700 bg-green-900/20">
               <CardContent className="pt-6">
                 <p className="text-green-400 text-xs uppercase mb-2">Low</p>
-                <p className="text-3xl font-bold text-green-500">{report.severity_breakdown.low}</p>
+                <p className="text-3xl font-bold text-green-500">{displayReport.severity_breakdown.low}</p>
               </CardContent>
             </Card>
           </div>
@@ -497,7 +492,7 @@ export function ScanDetailsPage() {
           </div>
 
           {/* Vulnerabilities Table */}
-          {report.vulnerabilities && report.vulnerabilities.length > 0 ? (
+          {displayReport.vulnerabilities && displayReport.vulnerabilities.length > 0 ? (
             <Card className="border-slate-700 bg-slate-800/50">
               <CardHeader>
                 <CardTitle>Vulnerabilities</CardTitle>
@@ -518,7 +513,7 @@ export function ScanDetailsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {report.vulnerabilities.map((vuln, idx: number) => (
+                      {displayReport.vulnerabilities.map((vuln, idx: number) => (
                         <React.Fragment key={vuln.id ?? `${vuln.cveId}-${idx}`}>
                           <tr className="border-b border-slate-700 hover:bg-slate-700/20">
                             <td className="py-3 px-4 text-blue-400 font-mono">{vuln.cveId}</td>

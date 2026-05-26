@@ -1,4 +1,4 @@
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import { buildCycloneDxSbom, type NormalizedComponent } from '../../services/inputAdapterService.js';
 import type { NormalizedFinding } from '../../operations/scans/normalizeFindings.js';
 import { shellQuote, type RemoteCommandResult, runRemoteCommandViaSsh } from './remoteSsh.js';
@@ -24,22 +24,71 @@ function defaultLocalExecutor(
   input: string,
   timeoutMs: number,
   env: NodeJS.ProcessEnv = process.env,
-): RemoteCommandResult {
-  const result = spawnSync(command, args, {
-    input,
-    encoding: 'utf8',
-    timeout: timeoutMs,
-    maxBuffer: 20 * 1024 * 1024,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    env,
-  });
+): Promise<RemoteCommandResult> {
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(command, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env,
+      });
 
-  return {
-    status: result.status,
-    stdout: typeof result.stdout === 'string' ? result.stdout : '',
-    stderr: typeof result.stderr === 'string' ? result.stderr : '',
-    error: result.error instanceof Error ? result.error : null,
-  };
+      let stdout = '';
+      let stderr = '';
+      let error: Error | null = null;
+      let killedDueToTimeout = false;
+
+      const timeout = setTimeout(() => {
+        killedDueToTimeout = true;
+        child.kill('SIGTERM');
+        error = new Error(`Snyk local execution timed out after ${timeoutMs}ms`);
+      }, timeoutMs);
+
+      if (child.stdin) {
+        child.stdin.on('error', (err) => {
+          if ((err as any).code !== 'EPIPE') {
+            error = err;
+          }
+        });
+        child.stdin.write(input);
+        child.stdin.end();
+      }
+
+      if (child.stdout) {
+        child.stdout.setEncoding('utf8');
+        child.stdout.on('data', (data) => {
+          stdout += data;
+        });
+      }
+
+      if (child.stderr) {
+        child.stderr.setEncoding('utf8');
+        child.stderr.on('data', (data) => {
+          stderr += data;
+        });
+      }
+
+      child.on('error', (err) => {
+        error = err;
+      });
+
+      child.on('close', (status) => {
+        clearTimeout(timeout);
+        resolve({
+          status: killedDueToTimeout ? null : status,
+          stdout,
+          stderr,
+          error: error || (killedDueToTimeout ? new Error('Timeout') : null),
+        });
+      });
+    } catch (err) {
+      resolve({
+        status: null,
+        stdout: '',
+        stderr: '',
+        error: err instanceof Error ? err : new Error(String(err)),
+      });
+    }
+  });
 }
 
 function getRuntimeMode(): SnykRuntimeMode {
@@ -59,8 +108,8 @@ function getSnykRuntimeConfig(): SnykRuntimeConfig {
   return {
     mode: getRuntimeMode(),
     commandTemplate:
-      process.env.SNYK_COMMAND?.trim()
-      || 'snyk sbom test --file="$VIBESCAN_BOM_PATH" --json',
+      process.env.SNYK_COMMAND?.trim() ||
+      'snyk sbom test --file="$VIBESCAN_BOM_PATH" --json',
     timeoutMs: getSnykTimeoutMs(),
     ssh: sshHost
       ? {
@@ -113,70 +162,68 @@ function buildNormalizedFindings(rawOutput: SnykRawOutput): NormalizedFinding[] 
   });
 }
 
-function parseSnykJson(stdout: string): SnykRawOutput {
-  const trimmed = stdout.trim();
-  if (!trimmed) {
-    return { ok: true, vulnerabilities: [] };
-  }
 
-  const parsed = JSON.parse(trimmed) as SnykRawOutput;
-  return {
-    ok: parsed.ok,
-    vulnerabilities: Array.isArray(parsed.vulnerabilities) ? parsed.vulnerabilities : [],
-  };
-}
 
 function resolveSnykResult(result: RemoteCommandResult): SnykRawOutput {
   if (result.error && result.status === null) {
     throw result.error;
   }
 
-  switch (result.status) {
-    case 0:
-    case 1:
-      return parseSnykJson(result.stdout);
-    case 2:
-      throw new Error(`Snyk credentials or authentication failed: ${result.stderr || 'authentication failure'}`);
-    default:
-      throw new Error(`Snyk scan failed with exit code ${result.status ?? 'unknown'}: ${result.stderr || 'no stderr output'}`);
+  // Snyk CLI exits with:
+  // 0: no vulnerabilities found
+  // 1: vulnerabilities found
+  // 2: failure/error
+  if (result.status === 0 || result.status === 1) {
+    try {
+      return JSON.parse(result.stdout) as SnykRawOutput;
+    } catch (parseError) {
+      throw new Error(`Failed to parse Snyk JSON output: ${parseError instanceof Error ? parseError.message : String(parseError)} - stdout: ${result.stdout}`);
+    }
   }
+
+  throw new Error(`Snyk execution failed with status ${result.status ?? 'unknown'}: ${result.stderr || 'no error details'}`);
 }
 
 function buildEnvForCredentials(credentials: SnykCredentials): NodeJS.ProcessEnv {
-  return {
+  const env: NodeJS.ProcessEnv = {
     ...process.env,
     SNYK_TOKEN: credentials.token,
-    ...(credentials.orgId ? { SNYK_ORG_ID: credentials.orgId } : {}),
   };
-}
-
-function buildSshShellCommand(commandTemplate: string, remoteBomPath: string, credentials: SnykCredentials): string {
-  const exports = [
-    `export VIBESCAN_BOM_PATH=${shellQuote(remoteBomPath)}`,
-    `export SNYK_TOKEN=${shellQuote(credentials.token)}`,
-  ];
 
   if (credentials.orgId) {
-    exports.push(`export SNYK_ORG_ID=${shellQuote(credentials.orgId)}`);
+    env.SNYK_ORG_ID = credentials.orgId;
   }
 
+  return env;
+}
+
+function buildSshShellCommand(
+  template: string,
+  remoteBomPath: string,
+  credentials: SnykCredentials,
+): string {
+  const snykOrgEnv = credentials.orgId ? `export SNYK_ORG_ID=${shellQuote(credentials.orgId)}; ` : '';
   return [
     'set -eu',
-    ...exports,
+    `export SNYK_TOKEN=${shellQuote(credentials.token)}`,
+    snykOrgEnv,
+    `export VIBESCAN_BOM_PATH=${shellQuote(remoteBomPath)}`,
     `trap 'rm -f "$VIBESCAN_BOM_PATH"' EXIT`,
     'cat > "$VIBESCAN_BOM_PATH"',
-    commandTemplate,
+    template,
   ].join('; ');
 }
 
-function runSnykLocally(
+
+
+async function runSnykLocally(
   bomJson: string,
   credentials: SnykCredentials,
   config: SnykRuntimeConfig,
   executor: SnykRuntimeExecutor,
-): SnykRawOutput {
+): Promise<SnykRawOutput> {
   const bomPath = `/tmp/vibescan-sbom-${Date.now()}.json`;
-  const result = executor(
+  const result = await executor(
     'sh',
     [
       '-lc',
@@ -194,16 +241,16 @@ function runSnykLocally(
   return resolveSnykResult(result);
 }
 
-function runSnykViaSsh(
+async function runSnykViaSsh(
   bomJson: string,
   credentials: SnykCredentials,
   config: SnykSshRuntimeConfig,
   scanId: string,
   executor: SnykSshExecutor,
-): SnykRawOutput {
+): Promise<SnykRawOutput> {
   const remoteBomPath = `${config.remoteTempDir.replace(/\/+$/, '')}/vibescan-snyk-${scanId}-${Date.now()}.json`;
   const command = buildSshShellCommand(config.commandTemplate, remoteBomPath, credentials);
-  const result = runRemoteCommandViaSsh(config, command, bomJson, config.timeoutMs, executor);
+  const result = await runRemoteCommandViaSsh(config, command, bomJson, config.timeoutMs, executor);
   return resolveSnykResult(result);
 }
 
@@ -242,7 +289,7 @@ export async function runSnykScan(
     if (!sshExecutor) {
       throw new Error('Snyk SSH executor is not configured');
     }
-    rawOutput = runSnykViaSsh(
+    rawOutput = await runSnykViaSsh(
       bomJson,
       credentials,
       { ...config.ssh, commandTemplate: config.commandTemplate, remoteTempDir: config.remoteTempDir, timeoutMs: config.timeoutMs },
@@ -250,15 +297,15 @@ export async function runSnykScan(
       sshExecutor,
     );
   } else if (config.mode === 'local' || !config.ssh) {
-    rawOutput = runSnykLocally(bomJson, credentials, config, localExecutor);
+    rawOutput = await runSnykLocally(bomJson, credentials, config, localExecutor);
   } else {
     try {
-      rawOutput = runSnykLocally(bomJson, credentials, config, localExecutor);
+      rawOutput = await runSnykLocally(bomJson, credentials, config, localExecutor);
     } catch {
       if (!sshExecutor) {
         throw new Error('Snyk SSH executor is not configured for fallback');
       }
-      rawOutput = runSnykViaSsh(
+      rawOutput = await runSnykViaSsh(
         bomJson,
         credentials,
         { ...config.ssh, commandTemplate: config.commandTemplate, remoteTempDir: config.remoteTempDir, timeoutMs: config.timeoutMs },

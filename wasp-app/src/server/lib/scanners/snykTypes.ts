@@ -59,6 +59,6 @@ export type SnykRuntimeExecutor = (
   input: string,
   timeoutMs: number,
   env?: NodeJS.ProcessEnv,
-) => RemoteCommandResult;
+) => Promise<RemoteCommandResult>;
 
 export type SnykSshExecutor = RemoteCommandExecutor;

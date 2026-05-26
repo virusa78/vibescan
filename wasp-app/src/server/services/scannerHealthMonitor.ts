@@ -169,7 +169,7 @@ async function runScannerHealthCheck(
     return;
   }
 
-  const result = runRemoteCommandViaSsh(
+  const result = await runRemoteCommandViaSsh(
     config.ssh,
     config.probeCommand,
     '',
@@ -230,9 +230,11 @@ export function startScannerHealthMonitor(): void {
   }, getIntervalMs());
 
   healthTimer.unref?.();
-  void refreshScannerHealth().catch((error) => {
-    console.error('[ScannerHealth] Initial refresh failed:', error);
-  });
+  if (process.env.NODE_ENV !== 'test') {
+    void refreshScannerHealth().catch((error) => {
+      console.error('[ScannerHealth] Initial refresh failed:', error);
+    });
+  }
 }
 
 export function stopScannerHealthMonitor(): void {

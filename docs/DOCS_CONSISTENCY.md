@@ -34,3 +34,15 @@ HubSpot guidance
 Notes
 
 This file exists to make the doc-sync process explicit. Keep it short and actionable; reference it in PR templates or developer checklists.
+
+## Recent Updates
+
+- **2026-05-26**: Documented the new `uploadScanFile` Wasp Action (added to support drag-and-drop SBOM/ZIP file upload in UI) and updated operation counts across `OPERATIONS.md`, `CLAUDE.md`, and `AGENTS.md`.
+- **2026-05-26**: Configured a custom Wasp server middleware `serverMiddlewareConfigFn` inside `wasp-app/src/server/middleware.ts` to increase the body parser limits to 35MB to prevent HTTP 413 (Payload Too Large) errors on larger SBOM and ZIP scan uploads.
+- **2026-05-26**: Improved scanner failure reporting by translating the raw `'Invalid SBOM format'` exception into a clean, helpful, user-friendly guidance message.
+- **2026-05-26**: Added an interactive "How to generate SBOM?" help Dialog to the New Scan page (under the SBOM Manifest tab) providing clear installation and command usage examples for Anchore Syft with one-click copy buttons.
+- **2026-05-26**: Redesigned ScanDetailsPage.tsx to display failed/error scans inline using the unified scan details layout instead of rendering a full-screen blocking error card. Added a neat red failure alert banner below the header to display specific error descriptions.
+- **2026-05-26**: Increased the client-side SBOM upload size validation limit from 5MB to 10MB inside NewScanPage.tsx and updated UI labels.
+- **2026-05-26**: Transitioned all scanner runtimes (Grype, Trivy, OWASP, Syft, Snyk, and SSH/SCP clients) to asynchronous process execution using `child_process` promises to avoid blocking the Node.js event loop.
+- **2026-05-26**: Implemented configurable scanner worker concurrency using `FREE_SCAN_CONCURRENCY` and `ENTERPRISE_SCAN_CONCURRENCY` env vars.
+- **2026-05-26**: Added support for skipping OWASP Dependency-Check database updates with `OWASP_NO_UPDATE=true` and authenticating updates with `NVD_API_KEY` to avoid rate limits.
