@@ -76,17 +76,21 @@ export function normalizeProjectTarget(inputType: ScanInputType, inputRef: strin
     }
   }
 
-  const basename = path.basename(trimmed).replace(/\.(json|xml|zip|tar|gz|tgz)$/i, '') || trimmed;
+  const base = path.basename(trimmed);
+  const cleanBase = base.startsWith('upload-') ? base.replace(/^upload-\d+-/, '') : base;
+  const basename = cleanBase.replace(/\.(json|xml|zip|tar|gz|tgz)$/i, '') || cleanBase;
   const targetType = normalizedType === 'dast' || normalizedType === 'source_zip' || normalizedType === 'sbom'
     ? normalizedType
     : 'other';
+
+  const targetRef = base.startsWith('upload-') ? cleanBase : trimmed;
 
   return {
     name: basename,
     slug: slugify(basename),
     targetType,
-    targetRef: trimmed,
-    normalizedTargetRef: `${targetType}:${trimmed.toLowerCase()}`,
+    targetRef,
+    normalizedTargetRef: `${targetType}:${targetRef.toLowerCase()}`,
     metadata: { inputType },
   };
 }

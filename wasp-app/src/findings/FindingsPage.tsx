@@ -175,6 +175,7 @@ export default function FindingsPage() {
   const [age, setAge] = useState<string>('all');
   const [sortField, setSortField] = useState<SortField>('severity');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [onlyLatestScan, setOnlyLatestScan] = useState<boolean>(true);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<{
@@ -197,8 +198,9 @@ export default function FindingsPage() {
     sla: sla === 'all' ? [] : [sla],
     age: age === 'all' ? [] : [age],
     sort: { field: sortField, direction: sortDirection },
+    onlyLatestScan,
     limit: 250,
-  }), [age, fixable, groupBy, projectId, query, scanner, severity, sla, sortDirection, sortField, status]);
+  }), [age, fixable, groupBy, projectId, query, scanner, severity, sla, sortDirection, sortField, status, onlyLatestScan]);
 
   const { data, isLoading, error, refetch } = useQuery(getFindingsOverview, overviewArgs);
   const findings = Array.isArray(data?.findings) ? (data.findings as ProjectFindingRow[]) : [];
@@ -381,6 +383,18 @@ export default function FindingsPage() {
             >
               {sortDirection === 'asc' ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
             </Button>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2 border rounded-md bg-background">
+            <input
+              id="onlyLatestScan"
+              type="checkbox"
+              checked={onlyLatestScan}
+              onChange={(e) => setOnlyLatestScan(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary dark:border-slate-700 bg-background"
+            />
+            <label htmlFor="onlyLatestScan" className="text-xs font-medium text-foreground cursor-pointer select-none">
+              Hide duplicate findings (latest scan only)
+            </label>
           </div>
         </section>
 

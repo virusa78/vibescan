@@ -24,6 +24,7 @@ const getFindingsOverviewSchema = z.object({
   sla: z.array(slaSchema).default([]),
   age: z.array(z.enum(['new', '7d', '30d', '90d'])).default([]),
   groupBy: groupBySchema,
+  onlyLatestScan: z.boolean().default(true),
   sort: z.object({
     field: sortFieldSchema,
     direction: sortDirectionSchema,
@@ -122,6 +123,24 @@ export async function getFindingsOverview(rawArgs: unknown, context: any): Promi
         }
       : {}),
   };
+
+  if (args.onlyLatestScan) {
+    const latestScans = await prisma.scan.findMany({
+      where: {
+        workspaceId: user.workspaceId,
+        status: 'done',
+        projectId: { not: null },
+      },
+      orderBy: [
+        { projectId: 'asc' },
+        { completedAt: 'desc' },
+      ],
+      distinct: ['projectId'],
+      select: { id: true },
+    });
+    const latestScanIds = latestScans.map((s) => s.id);
+    where.lastScanId = { in: latestScanIds };
+  }
 
   const [rawFindings, projects] = await Promise.all([
     prisma.projectFinding.findMany({

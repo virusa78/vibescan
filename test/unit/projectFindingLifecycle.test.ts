@@ -50,6 +50,15 @@ describe('project finding lifecycle helpers', () => {
     expect(target.normalizedTargetRef).toBe('sbom:/tmp/uploads/service-a.cdx.json');
   });
 
+  it('normalizes upload inputs from unique names by cleaning upload timestamp prefix', () => {
+    const target = normalizeProjectTarget('sbom_upload', 'upload-1779789626772-service-a.cdx.json');
+
+    expect(target.name).toBe('service-a.cdx');
+    expect(target.targetType).toBe('sbom');
+    expect(target.targetRef).toBe('service-a.cdx.json');
+    expect(target.normalizedTargetRef).toBe('sbom:service-a.cdx.json');
+  });
+
   it('uses CVE package version and path for stable aggregate fingerprints', () => {
     const first = buildProjectFindingFingerprint({
       cveId: 'CVE-2026-1234',
