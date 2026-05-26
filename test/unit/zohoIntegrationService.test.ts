@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import * as crypto from 'crypto';
 import { prisma } from '../mocks/wasp-server';
 import { encryptSecret } from '../../wasp-app/src/server/utils/secretEncryption';
 
@@ -472,7 +473,7 @@ describe('zoho integration service', () => {
           integrationHealth: 'connected',
         },
       };
-      const summaryHash = require('crypto').createHash('sha256').update(JSON.stringify({
+      const summaryHash = crypto.createHash('sha256').update(JSON.stringify({
         snapshot,
         reason: 'manual_resync',
       })).digest('hex');

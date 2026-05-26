@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { prisma } from '../mocks/wasp-server';
-import { encryptSecret } from '../../wasp-app/src/server/utils/secretEncryption';
+import * as secretEncryption from '../../wasp-app/src/server/utils/secretEncryption';
 const getScannerHealthSnapshotMock = jest.fn();
 const getSnykScannerReadinessMock = jest.fn();
 
@@ -61,7 +61,7 @@ describe('scanner access settings operations', () => {
   });
 
   it('returns attachment state and preview for stored snyk key', async () => {
-    const encrypted = encryptSecret('snyk-token-1234567890');
+    const encrypted = secretEncryption.encryptSecret('snyk-token-1234567890');
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: 'user-1',
       plan: 'pro',
@@ -126,7 +126,7 @@ describe('scanner access settings operations', () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: 'user-1',
       plan: 'pro',
-      snykApiKeyEncrypted: encryptSecret('snyk-token-abcdef123456'),
+      snykApiKeyEncrypted: secretEncryption.encryptSecret('snyk-token-abcdef123456'),
     });
     prismaMock.user.update.mockResolvedValueOnce({});
     prismaMock.scannerUsageLedger.count.mockResolvedValueOnce(0);
@@ -187,7 +187,7 @@ describe('scanner access settings operations', () => {
   });
 
   it('returns exact short secret preview if key length <= 8', async () => {
-    const encrypted = encryptSecret('snyk-1');
+    const encrypted = secretEncryption.encryptSecret('snyk-1');
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: 'user-1',
       plan: 'pro',
@@ -275,7 +275,7 @@ describe('scanner access settings operations', () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: 'user-1',
       plan: 'pro',
-      snykApiKeyEncrypted: encryptSecret('snyk-token-abcdef123456'),
+      snykApiKeyEncrypted: secretEncryption.encryptSecret('snyk-token-abcdef123456'),
     });
     prismaMock.user.update.mockResolvedValueOnce({});
     prismaMock.scannerUsageLedger.count.mockResolvedValueOnce(0);
@@ -293,7 +293,7 @@ describe('scanner access settings operations', () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: 'user-1',
       plan: 'pro',
-      snykApiKeyEncrypted: encryptSecret('original-key'),
+      snykApiKeyEncrypted: secretEncryption.encryptSecret('original-key'),
     });
     prismaMock.scannerUsageLedger.count.mockResolvedValueOnce(0);
 
@@ -347,7 +347,7 @@ describe('scanner access settings operations', () => {
     prismaMock.scannerUsageLedger.count.mockResolvedValueOnce(0);
 
     // Mock encryptSecret to return a bad cipher that will fail decryption
-    const encryptMock = jest.spyOn(require('../../wasp-app/src/server/utils/secretEncryption'), 'encryptSecret');
+    const encryptMock = jest.spyOn(secretEncryption, 'encryptSecret');
     encryptMock.mockReturnValueOnce('bad-cipher-text');
 
     const result = await updateScannerAccessSettings(

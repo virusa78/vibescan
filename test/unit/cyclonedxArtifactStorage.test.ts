@@ -230,7 +230,7 @@ describe('cyclonedxArtifactStorage', () => {
       });
 
       expect(result.artifacts.length).toBe(1);
-      const { S3Client } = require('@aws-sdk/client-s3');
+      const { S3Client } = jest.requireMock('@aws-sdk/client-s3') as any;
       expect(S3Client).toHaveBeenCalledWith(
         expect.objectContaining({
           region: 'us-west-2',

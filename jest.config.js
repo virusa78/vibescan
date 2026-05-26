@@ -70,6 +70,7 @@ const config = {
         '^wasp/server$': '<rootDir>/test/mocks/wasp-server.ts',
         '^vitest$': '<rootDir>/test/vitest-shim.js',
         '^\.\./wasp-app/(.*)$': '<rootDir>/wasp-app/$1',
+        '^yaml$': '<rootDir>/node_modules/yaml',
         '^.+\\.(css|less|scss|sass)$': 'identity-obj-proxy',
     },
 

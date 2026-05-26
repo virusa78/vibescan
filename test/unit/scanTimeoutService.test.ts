@@ -201,7 +201,7 @@ describe('scanTimeoutService', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(setIntervalSpy).toHaveBeenCalled();
-    const sweepCallback = setIntervalSpy.mock.calls[0][0] as Function;
+    const sweepCallback = setIntervalSpy.mock.calls[0][0] as () => Promise<void>;
 
     // Next sweep will fail
     mockPrisma.scan.findMany.mockRejectedValueOnce(new Error('Interval sweep db error'));
