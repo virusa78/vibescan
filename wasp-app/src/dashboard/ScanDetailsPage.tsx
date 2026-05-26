@@ -397,7 +397,7 @@ export function ScanDetailsPage() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mb-8">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 mb-8">
             <ScannerLineupCard
               sources={expectedSources}
               statusBySource={lineupStatusBySource}
