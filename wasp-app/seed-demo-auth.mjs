@@ -4,7 +4,7 @@
  * Creates Auth and AuthIdentity records required by Wasp v0.23
  */
 
-import bcrypt from 'bcrypt';
+import { hashPassword } from './node_modules/@wasp.sh/lib-auth/dist/node.js';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
@@ -54,31 +54,44 @@ async function main() {
         where: { userId: existingUser.id }
       });
 
+      let authId;
       if (existingAuth) {
-        console.log(`⚠️  ${user.email} - auth already configured`);
-        continue;
+        authId = existingAuth.id;
+      } else {
+        // Create Auth record
+        authId = randomUUID();
+        await prisma.auth.create({
+          data: {
+            id: authId,
+            userId: existingUser.id
+          }
+        });
       }
 
-      // Create Auth record
-      const authId = randomUUID();
-      await prisma.auth.create({
-        data: {
-          id: authId,
-          userId: existingUser.id
-        }
-      });
-
-      // Hash password
-      const passwordHash = await bcrypt.hash(user.password, 10);
+      // Hash password using Wasp's Argon2id helper
+      const passwordHash = await hashPassword(user.password);
 
       // Create AuthIdentity record for email provider
-      await prisma.authIdentity.create({
-        data: {
+      const providerData = JSON.stringify({
+        email: user.email,
+        hashedPassword: passwordHash,
+        isEmailVerified: true
+      });
+
+      await prisma.authIdentity.upsert({
+        where: {
+          providerName_providerUserId: {
+            providerName: 'email',
+            providerUserId: user.email
+          }
+        },
+        update: {
+          providerData
+        },
+        create: {
           providerName: 'email',
           providerUserId: user.email,
-          providerData: JSON.stringify({
-            password: passwordHash
-          }),
+          providerData,
           authId: authId
         }
       });

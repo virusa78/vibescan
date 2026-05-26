@@ -137,15 +137,6 @@ async function main() {
   for (const ud of DEMO_USERS) {
     const existing = await prisma.user.findUnique({ where: { email: ud.email } });
 
-    if (existing) {
-      await prisma.user.update({
-        where: { id: existing.id },
-        data: { plan: ud.plan, region: ud.region, displayName: ud.name, monthlyQuotaLimit: ud.quotaLimit },
-      });
-      console.log(`Upserted user: ${ud.email} (${ud.plan})`);
-      continue;
-    }
-
     const hashedPassword = await hashPassword(ud.password);
     const providerData = JSON.stringify({
       hashedPassword,
@@ -153,6 +144,43 @@ async function main() {
       emailVerificationSentAt: null,
       passwordResetSentAt: null,
     });
+
+    if (existing) {
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: { plan: ud.plan, region: ud.region, displayName: ud.name, monthlyQuotaLimit: ud.quotaLimit },
+      });
+
+      let auth = await prisma.auth.findUnique({ where: { userId: existing.id } });
+      if (!auth) {
+        auth = await prisma.auth.create({
+          data: {
+            userId: existing.id,
+          },
+        });
+      }
+
+      await prisma.authIdentity.upsert({
+        where: {
+          providerName_providerUserId: {
+            providerName: 'email',
+            providerUserId: ud.email,
+          },
+        },
+        update: {
+          providerData,
+        },
+        create: {
+          providerName: 'email',
+          providerUserId: ud.email,
+          providerData,
+          authId: auth.id,
+        },
+      });
+
+      console.log(`Upserted user and updated password hash: ${ud.email} (${ud.plan})`);
+      continue;
+    }
 
     await prisma.user.create({
       data: {
