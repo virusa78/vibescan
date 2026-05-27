@@ -166,6 +166,14 @@
   scrollbar-width: none; /* Firefox */
 }
 
+@utility no-scrollbar-y {
+  /* Hide vertical scrollbar but keep horizontal */
+  &::-webkit-scrollbar:vertical {
+    display: none;
+  }
+}
+
+
 @utility chat-height {
   @apply h-[calc(100vh-8.125rem)] lg:h-[calc(100vh-5.625rem)];
 }

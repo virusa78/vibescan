@@ -35,7 +35,7 @@ const BASE_PLAN_EXECUTIONS: PlannedScannerExecution[] = [
   },
   {
     provider: 'owasp',
-    queueTarget: 'enterprise',
+    queueTarget: 'free',
     resultSource: 'owasp',
     credentialSource: { mode: 'environment' },
   },

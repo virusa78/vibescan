@@ -560,7 +560,7 @@ export default function NewScanPage() {
               </div>
             )}
             {!isRecentLoading && !recentError && normalizedScans.length > 0 && (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overflow-y-hidden no-scrollbar-y">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-border/60 border-b text-left">

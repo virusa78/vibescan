@@ -499,7 +499,7 @@ export function ScanDetailsPage() {
                 <CardTitle>Vulnerabilities</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto overflow-y-hidden">
+                <div className="overflow-x-auto overflow-y-hidden no-scrollbar-y">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-700">

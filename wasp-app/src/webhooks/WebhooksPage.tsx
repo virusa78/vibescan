@@ -378,7 +378,7 @@ export default function WebhooksPage() {
 
             {drawerTab === 'deliveries' && (
               <div className="space-y-3">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overflow-y-hidden no-scrollbar-y">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border/30">
