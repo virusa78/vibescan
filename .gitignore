@@ -7,3 +7,6 @@ smoke-flow.log
 bin/trivy
 test-results/
 .vibescan/
+wasp-app/.env.server
+wasp-app/.env.client
+wasp-app/.env
