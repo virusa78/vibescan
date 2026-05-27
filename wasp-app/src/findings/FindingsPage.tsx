@@ -417,7 +417,7 @@ export default function FindingsPage() {
         </section>
 
         <section className="overflow-hidden rounded-lg border bg-card/30">
-          <div className="overflow-x-auto w-full">
+          <div className="overflow-x-auto overflow-y-hidden w-full">
             <div className="min-w-[900px] lg:min-w-full">
               <div className="grid grid-cols-[minmax(180px,1.2fr)_minmax(140px,0.9fr)_minmax(130px,1fr)_90px_90px_100px_70px_100px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-semibold uppercase text-muted-foreground">
                 <span>Project / CVE</span>

@@ -356,7 +356,7 @@ export function ScanTable({
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="overflow-x-auto pb-1">
+          <div className="overflow-x-auto overflow-y-hidden pb-1">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/30">
@@ -389,7 +389,7 @@ export function ScanTable({
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/30">
