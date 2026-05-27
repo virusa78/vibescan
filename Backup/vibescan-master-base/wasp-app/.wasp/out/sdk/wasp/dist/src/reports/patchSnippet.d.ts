@@ -1,2 +1,0 @@
-export declare function buildPatchSnippet(ecosystem: string | null | undefined, packageName: string | null | undefined, fixedVersion: string | null | undefined): string;
-//# sourceMappingURL=patchSnippet.d.ts.map

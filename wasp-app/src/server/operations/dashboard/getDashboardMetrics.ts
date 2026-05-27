@@ -89,15 +89,30 @@ export async function getDashboardMetrics(
     },
   });
 
+  // Get latest completed scans for each project in the workspace
+  const latestScans = await prisma.scan.findMany({
+    where: {
+      workspaceId: user.workspaceId,
+      status: 'done',
+      projectId: { not: null },
+    },
+    orderBy: [
+      { projectId: 'asc' },
+      { completedAt: 'desc' },
+    ],
+    distinct: ['projectId'],
+    select: { id: true },
+  });
+  const latestScanIds = latestScans.map((s) => s.id);
+
   // Count total vulnerabilities across all scans in time range
   const [findings, scanResults] = await Promise.all([
-    prisma.finding.findMany({
+    prisma.projectFinding.findMany({
       where: {
-        scan: {
-          ...buildNestedScanWorkspaceWhere(user),
-          createdAt: createdAtFilter,
-        },
+        workspaceId: user.workspaceId,
         status: 'active', // Only count active findings
+        lastSeenAt: createdAtFilter,
+        lastScanId: { in: latestScanIds },
       },
       select: {
         severity: true,

@@ -204,7 +204,7 @@ export async function logoutUser(page: Page): Promise<void> {
   }
   
   // Click logout
-  const logoutButton = page.locator('button:has-text("Log out"), button:has-text("Logout"), button:has-text("Sign out")');
+  const logoutButton = page.locator('button[aria-label="Log out"], button:has-text("Logout"), button:has-text("Sign out")').first();
   await logoutButton.click();
   
   // Wait for redirect to login
@@ -219,57 +219,25 @@ export async function waitForScanCompletion(
   maxWaitTime: number = 120000,
   pollInterval: number = 2000
 ): Promise<boolean> {
+  // 1. Wait for loading spinner/state to disappear
+  await page.locator('text=/loading scan details/i').waitFor({ state: 'detached', timeout: 15000 }).catch(() => {});
+
+  // 2. Wait for either completed or failed status card to appear
+  const completedLocator = page.locator('[data-testid="scan-status-completed"]');
+  const failedLocator = page.locator('[data-testid="scan-status-failed"]');
+
   const startTime = Date.now();
-  
   while (Date.now() - startTime < maxWaitTime) {
-    const completedHeading = page.getByRole("heading", { name: /scan complete/i });
-    if (await completedHeading.isVisible().catch(() => false)) {
+    if (await completedLocator.isVisible()) {
       return true;
     }
-
-    const failedCard = page.locator('[data-testid="scan-status-failed"]');
-    if (await failedCard.isVisible().catch(() => false)) {
-      throw new Error("Scan failed");
+    if (await failedLocator.isVisible()) {
+      const errorMsg = await page.locator('[data-testid="scan-error-message"], .text-red-200').first().textContent().catch(() => '');
+      throw new Error(`Scan failed: ${errorMsg || 'Unknown error'}`);
     }
-
-    const runningCard = page.locator('[data-testid="scan-status-running"]');
-    if (await runningCard.isVisible().catch(() => false)) {
-      await page.waitForTimeout(pollInterval);
-      await page.reload({ waitUntil: "domcontentloaded" });
-      continue;
-    }
-
-    const statusLocator = page.locator('[data-testid="scan-status"]').first();
-    if (await statusLocator.count()) {
-      const statusText = (await statusLocator.textContent()) ?? "";
-      const normalizedStatus = statusText.trim().toLowerCase();
-      if (normalizedStatus.includes("done") || normalizedStatus.includes("completed")) {
-        return true;
-      }
-      if (normalizedStatus.includes("error") || normalizedStatus.includes("failed") || normalizedStatus.includes("cancelled")) {
-        throw new Error(`Scan failed with status: ${statusText}`);
-      }
-    }
-
-    const statusRow = page.locator('text=Status:').locator('..').locator('span').last();
-    if (await statusRow.count()) {
-      const statusText = (await statusRow.textContent()) ?? "";
-      const normalizedStatus = statusText.trim().toLowerCase();
-      if (normalizedStatus.includes("done") || normalizedStatus.includes("completed")) {
-        return true;
-      }
-      if (normalizedStatus.includes("error") || normalizedStatus.includes("failed") || normalizedStatus.includes("cancelled")) {
-        throw new Error(`Scan failed with status: ${statusText}`);
-      }
-    }
-    
-    // Wait before polling again
-    await page.waitForTimeout(pollInterval);
-    
-    // Refresh the page to check for updates
-    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1000);
   }
-  
+
   throw new Error(`Scan did not complete within ${maxWaitTime}ms`);
 }
 
@@ -290,14 +258,20 @@ export async function submitScanFromForm(
   const inputTypeLabels: Record<typeof inputType, string> = {
     github: "GitHub repository",
     sbom: "SBOM file",
-    source_zip: "Source ZIP",
+    source_zip: "Source archive",
   };
 
   const optionButton = page.getByRole("button", { name: new RegExp(inputTypeLabels[inputType], "i") }).first();
   await optionButton.click();
-  await page.getByLabel("Input Reference").fill(trustedInputRef);
 
-  const submitButton = page.getByRole("button", { name: /start scan/i });
+  if (inputType === "github") {
+    await page.locator("input#inputRef").fill(trustedInputRef);
+  } else {
+    await page.locator("input#file-upload").setInputFiles(inputRef);
+    await expect(page.locator('span:has-text("Ready")').first()).toBeVisible({ timeout: 20000 });
+  }
+
+  const submitButton = page.getByRole("button", { name: /run scan|start scan/i });
   const submitResponsePromise = page
     .waitForResponse(
       (response) =>
@@ -354,7 +328,7 @@ export async function submitScanFromForm(
       }
     }
     await page.waitForTimeout(2000);
-    await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+    await page.reload({ waitUntil: "networkidle" }).catch(() => {});
   }
 
   const databaseScanId = await findLatestScanIdByInputRef(inputRef);

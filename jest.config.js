@@ -55,18 +55,20 @@ const config = {
             tsconfig: 'tsconfig.test.json',
             diagnostics: {
                 warnOnly: true
-            }
+            },
+            isolatedModules: true
         }
     },
     transform: {
-        '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.test.json', useESM: false }]
+        '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.test.json', useESM: false, isolatedModules: true }]
     },
     transformIgnorePatterns: ['node_modules/(?!bullmq)'],
-    moduleFileExtensions: ['ts', 'js', 'json'],
+    moduleFileExtensions: ['js', 'ts', 'json'],
     moduleDirectories: ['node_modules', '<rootDir>/wasp-app/node_modules'],
-    modulePathIgnorePatterns: ['<rootDir>/wasp-app/.wasp/out'],
+    modulePathIgnorePatterns: ['<rootDir>/wasp-app/.wasp/out', 'node_modules/.*\\.ts$'],
     moduleNameMapper: {
         '^(\\.{1,2}/.*)\\.js$': '$1',
+        '^@prisma/client$': '<rootDir>/wasp-app/node_modules/@prisma/client',
         '^wasp/server$': '<rootDir>/test/mocks/wasp-server.ts',
         '^vitest$': '<rootDir>/test/vitest-shim.js',
         '^\.\./wasp-app/(.*)$': '<rootDir>/wasp-app/$1',

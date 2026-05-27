@@ -184,7 +184,6 @@ test("Dashboard scan proofpack - GitHub, SBOM, ZIP, repeat GitHub", async ({ pag
 
   try {
     await registerUser(page, email, password);
-    await loginUser(page, email, password);
     await promoteEnterpriseUser(email);
 
     await page.goto("/dashboard");

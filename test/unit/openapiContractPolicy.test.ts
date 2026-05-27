@@ -1,6 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, jest } from '@jest/globals';
+
+jest.mock('@apidevtools/json-schema-ref-parser/lib/util/url.js', () => ({
+  default: {
+    resolve: (path1: string, path2?: string) => path1,
+    __vibescanResolvePatched: true,
+  },
+}), { virtual: true });
+
+jest.mock('@apidevtools/json-schema-ref-parser/dist/lib/util/url.js', () => ({
+  default: {
+    resolve: (path1: string, path2?: string) => path1,
+    __vibescanResolvePatched: true,
+  },
+}), { virtual: true });
 import {
   generateOpenApiSpec,
   getOpenApiFallbackApis,

@@ -76,6 +76,7 @@ describe('snykRuntime', () => {
 
   it('returns empty findings in mock mode', async () => {
     process.env.SNYK_RUNTIME = 'mock';
+    process.env.VIBESCAN_SNYK_CREDENTIAL_MODE = 'environment';
 
     const result = await runSnykScan(
       [{ name: 'express', version: '4.18.2' }],

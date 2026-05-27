@@ -133,7 +133,7 @@ describe('github integration harness', () => {
       id: 100,
       status: 'completed',
       conclusion: 'success',
-      detailsUrl: 'https://app.vibescan.example/scans/scan-1',
+      detailsUrl: 'https://app.vibescan.example/reports/scan-1',
     });
   });
 

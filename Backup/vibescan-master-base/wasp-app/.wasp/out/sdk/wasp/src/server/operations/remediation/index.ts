@@ -1,1 +1,0 @@
-export { generateCveRemediation } from './generateCveRemediation';

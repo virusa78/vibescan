@@ -432,6 +432,7 @@ export function ScanDetailsPage() {
                     return (
                       <div
                         key={result.id}
+                        data-testid={`scanner-${result.source}`}
                         className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 ${borderClass}`}
                       >
                         <div className="min-w-0">
@@ -477,7 +478,7 @@ export function ScanDetailsPage() {
                       </div>
                       <div className="rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-3">
                         <p className="text-xs uppercase tracking-wide text-slate-400">Delta</p>
-                        <p className="text-xl font-bold text-indigo-400">{latestDelta.deltaCount}</p>
+                        <p className="text-xl font-bold text-indigo-400" data-testid="delta-count">{latestDelta.deltaCount}</p>
                       </div>
                     </div>
                     <div className="text-sm text-slate-400">
@@ -502,36 +503,36 @@ export function ScanDetailsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-700">
-                        <th className="text-left py-3 px-4 text-slate-400 font-medium">CVE ID</th>
-                        <th className="text-left py-3 px-4 text-slate-400 font-medium">Package</th>
-                        <th className="text-left py-3 px-4 text-slate-400 font-medium">Installed</th>
-                        <th className="text-left py-3 px-4 text-slate-400 font-medium">Fixed</th>
-                        <th className="text-left py-3 px-4 text-slate-400 font-medium">Severity</th>
-                        <th className="text-left py-3 px-4 text-slate-400 font-medium">CVSS</th>
-                        <th className="text-left py-3 px-4 text-slate-400 font-medium">Status</th>
-                        <th className="text-left py-3 px-4 text-slate-400 font-medium">Source</th>
+                        <th className="text-left py-3 px-2.5 sm:px-3 text-slate-400 font-medium">CVE ID</th>
+                        <th className="text-left py-3 px-2.5 sm:px-3 text-slate-400 font-medium">Package</th>
+                        <th className="text-left py-3 px-2.5 sm:px-3 text-slate-400 font-medium">Installed</th>
+                        <th className="text-left py-3 px-2.5 sm:px-3 text-slate-400 font-medium">Fixed</th>
+                        <th className="text-left py-3 px-2.5 sm:px-3 text-slate-400 font-medium">Severity</th>
+                        <th className="text-left py-3 px-2.5 sm:px-3 text-slate-400 font-medium">CVSS</th>
+                        <th className="text-left py-3 px-2.5 sm:px-3 text-slate-400 font-medium">Status</th>
+                        <th className="text-left py-3 px-2.5 sm:px-3 text-slate-400 font-medium">Source</th>
                       </tr>
                     </thead>
                     <tbody>
                       {displayReport.vulnerabilities.map((vuln, idx: number) => (
                         <React.Fragment key={vuln.id ?? `${vuln.cveId}-${idx}`}>
                           <tr className="border-b border-slate-700 hover:bg-slate-700/20">
-                            <td className="py-3 px-4 text-blue-400 font-mono">{vuln.cveId}</td>
-                            <td className="py-3 px-4 text-white">{vuln.packageName}</td>
-                            <td className="py-3 px-4 text-slate-300">{vuln.installedVersion}</td>
-                            <td className="py-3 px-4 text-green-400">{vuln.fixedVersion || '-'}</td>
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-2.5 sm:px-3 text-blue-400 font-mono">{vuln.cveId}</td>
+                            <td className="py-3 px-2.5 sm:px-3 text-white">{vuln.packageName}</td>
+                            <td className="py-3 px-2.5 sm:px-3 text-slate-300">{vuln.installedVersion}</td>
+                            <td className="py-3 px-2.5 sm:px-3 text-green-400">{vuln.fixedVersion || '-'}</td>
+                            <td className="py-3 px-2.5 sm:px-3">
                               <span className={`px-2 py-1 text-xs rounded font-semibold border ${getSeverityColor(vuln.severity)}`}>
                                 {vuln.severity}
                               </span>
                             </td>
-                            <td className="py-3 px-4 text-slate-300">{vuln.cvssScore || '-'}</td>
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-2.5 sm:px-3 text-slate-300">{vuln.cvssScore || '-'}</td>
+                            <td className="py-3 px-2.5 sm:px-3">
                               <span className="px-2 py-1 text-xs rounded bg-slate-700 text-slate-300 capitalize">
                                 {vuln.status || 'active'}
                               </span>
                             </td>
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-2.5 sm:px-3">
                               <span className={`px-2 py-1 text-xs rounded ${getScannerBadgeClass(vuln.source)}`}>
                                 {getScannerLineupEntry(vuln.source).label}
                               </span>

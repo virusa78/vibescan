@@ -248,15 +248,20 @@ function countV1Operations(spec: OpenApiDocument): number {
 
 async function createSwaggerGenerator(): Promise<SwaggerGenerator> {
   const refParserModulePath = '@apidevtools/json-schema-ref-parser/lib/util/url.js';
-  const refParserModule = await import(refParserModulePath) as {
-    default?: {
-      resolve(path1: string, path2?: string): string;
+  let refParserUrl: any = null;
+  try {
+    const refParserModule = await import(refParserModulePath) as {
+      default?: {
+        resolve(path1: string, path2?: string): string;
+        __vibescanResolvePatched?: boolean;
+      };
+      resolve?: (path1: string, path2?: string) => string;
       __vibescanResolvePatched?: boolean;
     };
-    resolve?: (path1: string, path2?: string) => string;
-    __vibescanResolvePatched?: boolean;
-  };
-  const refParserUrl = refParserModule.default ?? refParserModule;
+    refParserUrl = refParserModule.default ?? refParserModule;
+  } catch (error: any) {
+    console.warn('[OpenAPI Spec] Could not load ref-parser url utility, skipping patch:', error.message);
+  }
 
   if (refParserUrl && !refParserUrl.__vibescanResolvePatched && !Object.isFrozen(refParserUrl)) {
     try {

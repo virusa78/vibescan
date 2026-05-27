@@ -4,7 +4,7 @@
  * Handles quota deduction and scan state management
  */
 
-import { PrismaClient } from '@prisma/client';
+import { prisma } from 'wasp/server';
 import type { Job, JobState } from 'bullmq';
 import { freeScanQueue, enterpriseScanQueue, initializeWorkers } from '../../queues/config';
 import type { ScanJob } from '../../queues/jobContract';
@@ -18,8 +18,6 @@ import type {
   ScanQueueJob,
   ScanQueueStatusResponse,
 } from './orchestratorTypes.js';
-
-const prisma = new PrismaClient();
 
 /**
  * Orchestrate scan submission - enqueue both scanners

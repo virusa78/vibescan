@@ -249,7 +249,11 @@ export async function ensureWorkspaceFoundationForUser(
   db: WorkspaceFoundationDatabase,
   userId: string,
 ): Promise<EnsuredWorkspaceFoundation> {
-  return db.$transaction(async (tx) => {
+  let attempts = 0;
+  const maxAttempts = 3;
+  while (true) {
+    try {
+      return await db.$transaction(async (tx) => {
     const user = await tx.user.findUnique({
       where: { id: userId },
       select: {
@@ -422,6 +426,17 @@ export async function ensureWorkspaceFoundationForUser(
       workspaceId: workspace.id,
     };
   });
+    } catch (error: any) {
+      attempts++;
+      const isUniqueConstraintError = error.code === 'P2002';
+      if (isUniqueConstraintError && attempts < maxAttempts) {
+        console.warn(`⚠️ Concurrency conflict during workspace foundation setup for user ${userId}, retrying (attempt ${attempts})...`);
+        await new Promise((resolve) => setTimeout(resolve, Math.random() * 50 + 10));
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 export async function getWorkspaceContextForUser(

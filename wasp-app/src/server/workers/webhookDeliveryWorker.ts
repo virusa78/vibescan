@@ -6,14 +6,12 @@
 
 import * as http from 'http';
 import * as https from 'https';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from 'wasp/server';
 import type { Job } from 'bullmq';
 import { signWebhookPayload } from '../services/webhookSigner.js';
 import type { WebhookDeliveryJob } from '../queues/jobContract.js';
 import { validateWebhookTargetUrl } from '../../shared/webhookTarget';
 import { isProductionEnvironment } from '../config/env.js';
-
-const prisma = new PrismaClient();
 
 const DELIVERY_TIMEOUT = 30000; // 30 seconds
 const MAX_RETRIES = 5;

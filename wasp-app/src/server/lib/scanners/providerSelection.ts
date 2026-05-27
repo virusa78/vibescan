@@ -56,17 +56,24 @@ function buildSnykExecution(credentialSource: ScannerCredentialSource): PlannedS
 }
 
 export function resolvePlannedScannerExecutions(
-  _planAtSubmission: string,
+  planAtSubmission: string,
   context?: ScannerPlanningContext,
   selectedSources?: ScannerResultSource[],
 ): PlannedScannerExecution[] {
   const selectedSet = selectedSources === undefined ? null : new Set(selectedSources);
-  const executions = BASE_PLAN_EXECUTIONS.filter((execution) => !selectedSet || selectedSet.has(execution.resultSource));
+  let executions = BASE_PLAN_EXECUTIONS.filter((execution) => !selectedSet || selectedSet.has(execution.resultSource));
+
+  // Filter by plan: non-enterprise plans cannot run enterprise queue targets
+  if (planAtSubmission !== "enterprise") {
+    executions = executions.filter((e) => e.queueTarget === "free");
+  }
 
   if (context?.snykReadiness?.enabled && context.snykReadiness.ready && context.snykReadiness.credentialSource) {
     const snykExecution = buildSnykExecution(context.snykReadiness.credentialSource);
     if (!selectedSet || selectedSet.has(snykExecution.resultSource)) {
-      executions.push(snykExecution);
+      if (planAtSubmission === "enterprise") {
+        executions.push(snykExecution);
+      }
     }
   }
 

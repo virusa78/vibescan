@@ -46,16 +46,31 @@ export async function getSeverityBreakdown(
   const args = ensureArgsSchemaOrThrowHttpError(getSeverityBreakdownInputSchema, rawArgs);
   const dateRangeStart = getDateRangeStart(args.time_range);
 
-  // Query all findings for user's scans in the time range
-  const findings = await prisma.finding.findMany({
+  // Get latest completed scans for each project in the workspace
+  const latestScans = await prisma.scan.findMany({
     where: {
+      workspaceId: user.workspaceId,
+      status: 'done',
+      projectId: { not: null },
+    },
+    orderBy: [
+      { projectId: 'asc' },
+      { completedAt: 'desc' },
+    ],
+    distinct: ['projectId'],
+    select: { id: true },
+  });
+  const latestScanIds = latestScans.map((s) => s.id);
+
+  // Query all findings for user's scans in the time range
+  const findings = await prisma.projectFinding.findMany({
+    where: {
+      workspaceId: user.workspaceId,
       status: 'active', // Only count active findings
-      scan: {
-        ...buildNestedScanWorkspaceWhere(user),
-        createdAt: {
-          gte: args.time_range === 'all' ? undefined : dateRangeStart,
-        },
+      lastSeenAt: {
+        gte: args.time_range === 'all' ? undefined : dateRangeStart,
       },
+      lastScanId: { in: latestScanIds },
     },
     select: {
       severity: true,

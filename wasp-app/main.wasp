@@ -84,6 +84,7 @@ app OpenSaaS {
   },
 
   server: {
+    setupFn: import { initializeServer } from "@src/server/init",
     envValidationSchema: import { serverEnvValidationSchema } from "@src/env",
     middlewareConfigFn: import { serverMiddlewareConfigFn } from "@src/server/middleware",
   },
@@ -330,7 +331,7 @@ api cancelScanApi {
 // GET /api/v1/scans/stats - Get scan statistics
 api getScanStatsApi {
   fn: import { getScanStatsApiHandler } from "@src/server/operations/scans/handlers",
-  entities: [User, Scan, Finding],
+  entities: [User, Scan, Finding, ProjectFinding],
   httpRoute: (GET, "/api/v1/scans/stats")
 }
 
@@ -343,7 +344,7 @@ api githubWebhookApi {
 //#region Dashboard & Analytics
 query getDashboardMetrics {
   fn: import { getDashboardMetrics } from "@src/server/operations/dashboardOperations",
-  entities: [User, Scan, Finding],
+  entities: [User, Scan, Finding, ProjectFinding],
   auth: true
 }
 
@@ -355,7 +356,7 @@ query getRecentScans {
 
 query getSeverityBreakdown {
   fn: import { getSeverityBreakdown } from "@src/server/operations/dashboardOperations",
-  entities: [User, Finding],
+  entities: [User, Finding, ProjectFinding],
   auth: true
 }
 

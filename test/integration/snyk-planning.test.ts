@@ -131,7 +131,7 @@ describe('Snyk scan planning integration', () => {
     await prisma.$disconnect();
   });
 
-  it('schedules all scanners for pro scans when snyk is enabled and ready', async () => {
+  it('schedules only free scanners for pro scans even when snyk is enabled and ready', async () => {
     const result = await submitScanSubmission({
       userId,
       workspaceId,
@@ -143,9 +143,6 @@ describe('Snyk scan planning integration', () => {
     expect(result.scan.plannedSources).toEqual([
       'grype',
       'trivy',
-      'codescoring_johnny',
-      'owasp',
-      'snyk',
     ]);
     expect(mockedOrchestrateScan).toHaveBeenCalledTimes(1);
 
@@ -154,16 +151,7 @@ describe('Snyk scan planning integration', () => {
     expect(orchestratorArgs.plannedExecutions.map((execution) => execution.provider)).toEqual([
       'grype',
       'trivy',
-      'codescoring-johnny',
-      'owasp',
-      'snyk',
     ]);
-    expect(orchestratorArgs.plannedExecutions.find((execution) => execution.provider === 'snyk'))
-      .toMatchObject({
-        provider: 'snyk',
-        resultSource: 'snyk',
-        queueTarget: 'enterprise',
-      });
   });
 
   it('schedules snyk for enterprise scans when snyk is enabled and ready', async () => {
@@ -200,10 +188,17 @@ describe('Snyk scan planning integration', () => {
       });
   });
 
-  it('enforces starter-level codescoring limit through the backend ledger', async () => {
+  it('enforces enterprise-level codescoring limit through the backend ledger when Snyk is disabled', async () => {
+    process.env.VIBESCAN_ENABLE_SNYK_SCANNER = 'false';
+    process.env.VIBESCAN_SCANNER_MONTHLY_LIMITS_JSON = JSON.stringify({
+      enterprise: {
+        'codescoring-johnny': 1,
+      },
+    });
+
     await prisma.user.update({
       where: { id: userId },
-      data: { plan: 'starter' },
+      data: { plan: 'enterprise' },
     });
 
     const first = await submitScanSubmission({
@@ -217,8 +212,6 @@ describe('Snyk scan planning integration', () => {
       'grype',
       'trivy',
       'codescoring_johnny',
-      'owasp',
-      'snyk',
     ]);
 
     await expect(

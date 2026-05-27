@@ -165,6 +165,7 @@ function SlaBadge({ state, dueAt }: { state: ProjectFindingRow['slaState']; dueA
 
 export default function FindingsPage() {
   const [query, setQuery] = useState('');
+  const [searchVal, setSearchVal] = useState('');
   const [groupBy, setGroupBy] = useState<FindingsGroupBy>('project');
   const [severity, setSeverity] = useState<string>('all');
   const [status, setStatus] = useState<string>('active');
@@ -182,6 +183,15 @@ export default function FindingsPage() {
     findingId: string;
     action: 'accept' | 'snooze' | 'reject' | 'reopen';
   } | null>(null);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setQuery(searchVal);
+    }, 300);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchVal]);
 
   useEffect(() => {
     setExpandedProjects(new Set());
@@ -276,12 +286,12 @@ export default function FindingsPage() {
 
         <section className="grid gap-3 rounded-lg border bg-background p-3 md:grid-cols-2 xl:grid-cols-4">
           <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            value={searchVal}
+            onChange={(event) => setSearchVal(event.target.value)}
             placeholder="Search CVE, package, project, or path"
             className="md:col-span-2 xl:col-span-2"
           />
-          <Select value={groupBy} onValueChange={(value) => setGroupBy(value as FindingsGroupBy)}>
+          <Select disabled={isLoading} value={groupBy} onValueChange={(value) => setGroupBy(value as FindingsGroupBy)}>
             <SelectTrigger>
               <SelectValue placeholder="Group by" />
             </SelectTrigger>
@@ -290,7 +300,7 @@ export default function FindingsPage() {
               <SelectItem value="cve">Group by CVE</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={projectId} onValueChange={setProjectId}>
+          <Select disabled={isLoading} value={projectId} onValueChange={setProjectId}>
             <SelectTrigger>
               <SelectValue placeholder="Project" />
             </SelectTrigger>
@@ -303,7 +313,7 @@ export default function FindingsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={severity} onValueChange={setSeverity}>
+          <Select disabled={isLoading} value={severity} onValueChange={setSeverity}>
             <SelectTrigger>
               <SelectValue placeholder="Severity" />
             </SelectTrigger>
@@ -312,7 +322,7 @@ export default function FindingsPage() {
               {(['critical', 'high', 'medium', 'low', 'info'] as Severity[]).map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={status} onValueChange={setStatus}>
+          <Select disabled={isLoading} value={status} onValueChange={setStatus}>
             <SelectTrigger>
               <SelectValue placeholder="Status" />
             </SelectTrigger>
@@ -321,7 +331,7 @@ export default function FindingsPage() {
               {(['active', 'accepted', 'snoozed', 'rejected', 'mitigated'] as FindingStatus[]).map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={scanner} onValueChange={setScanner}>
+          <Select disabled={isLoading} value={scanner} onValueChange={setScanner}>
             <SelectTrigger>
               <SelectValue placeholder="Scanner" />
             </SelectTrigger>
@@ -330,7 +340,7 @@ export default function FindingsPage() {
               {SCANNER_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={fixable} onValueChange={setFixable}>
+          <Select disabled={isLoading} value={fixable} onValueChange={setFixable}>
             <SelectTrigger>
               <SelectValue placeholder="Fixability" />
             </SelectTrigger>
@@ -340,7 +350,7 @@ export default function FindingsPage() {
               <SelectItem value="unfixable">Unfixed only</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={age} onValueChange={setAge}>
+          <Select disabled={isLoading} value={age} onValueChange={setAge}>
             <SelectTrigger>
               <SelectValue placeholder="Age" />
             </SelectTrigger>
@@ -352,7 +362,7 @@ export default function FindingsPage() {
               <SelectItem value="90d">90d+</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={sla} onValueChange={setSla}>
+          <Select disabled={isLoading} value={sla} onValueChange={setSla}>
             <SelectTrigger>
               <SelectValue placeholder="SLA" />
             </SelectTrigger>
@@ -365,7 +375,7 @@ export default function FindingsPage() {
             </SelectContent>
           </Select>
           <div className="flex gap-2">
-            <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)}>
+            <Select disabled={isLoading} value={sortField} onValueChange={(value) => setSortField(value as SortField)}>
               <SelectTrigger className="flex-1">
                 <SelectValue placeholder="Sort field" />
               </SelectTrigger>
@@ -374,6 +384,7 @@ export default function FindingsPage() {
               </SelectContent>
             </Select>
             <Button
+              disabled={isLoading}
               type="button"
               variant="outline"
               size="icon"
@@ -389,84 +400,104 @@ export default function FindingsPage() {
               id="onlyLatestScan"
               type="checkbox"
               checked={onlyLatestScan}
+              disabled={isLoading}
               onChange={(e) => setOnlyLatestScan(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary dark:border-slate-700 bg-background"
+              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary dark:border-slate-700 bg-background disabled:opacity-50 disabled:cursor-not-allowed"
             />
-            <label htmlFor="onlyLatestScan" className="text-xs font-medium text-foreground cursor-pointer select-none">
+            <label htmlFor="onlyLatestScan" className={`text-xs font-medium text-foreground select-none ${isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
               Hide duplicate findings (latest scan only)
             </label>
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-lg border">
-          <div className="grid grid-cols-[minmax(240px,1.3fr)_minmax(170px,0.9fr)_minmax(180px,1fr)_120px_120px_130px_110px_130px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-semibold uppercase text-muted-foreground">
-            <span>Project / CVE</span>
-            <span>Package</span>
-            <span>Scanners</span>
-            <span>Severity</span>
-            <span>Status</span>
-            <span>Seen</span>
-            <span>Scans</span>
-            <span>SLA</span>
-          </div>
-          {isLoading ? (
-            <div className="p-8 text-sm text-muted-foreground">Loading findings...</div>
-          ) : error ? (
-            <div className="p-8 text-sm text-destructive">Unable to load findings.</div>
-          ) : groups.length === 0 ? (
-            <div className="p-8 text-sm text-muted-foreground">No findings match the current filters.</div>
-          ) : groups.map((group) => {
-            const expanded = expandedProjects.has(group.key);
-            return (
-              <div key={group.key}>
-                <button
-                  type="button"
-                  onClick={() => setExpandedProjects((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(group.key)) next.delete(group.key);
-                    else next.add(group.key);
-                    return next;
-                  })}
-                  className="flex w-full items-center justify-between gap-4 border-b bg-background px-4 py-3 text-left hover:bg-muted/40"
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-                    <span className="truncate font-medium">{group.title}</span>
-                    <Badge variant="secondary">{group.count}</Badge>
-                  </span>
-                  <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                    <span className="truncate">{group.subtitle}</span>
-                    <Badge variant="outline" className="shrink-0">{group.activeCount} active</Badge>
-                    <Badge variant="outline" className="shrink-0">{group.criticalHighCount} high+</Badge>
-                  </span>
-                </button>
-                {expanded ? (group.findings ?? []).map((finding) => (
-                  <button
-                    key={finding.id}
-                    type="button"
-                    onClick={() => setSelectedFindingId(finding.id)}
-                    className="grid w-full grid-cols-[minmax(240px,1.3fr)_minmax(170px,0.9fr)_minmax(180px,1fr)_120px_120px_130px_110px_130px] gap-3 border-b px-4 py-3 text-left text-sm hover:bg-muted/30"
-                  >
-                    <span className="min-w-0 border-l-4 pl-3">
-                      <span className="block truncate font-medium">{finding.project.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{finding.cveId}</span>
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate">{finding.packageName}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{finding.installedVersion} → {finding.fixedVersion || 'unfixed'}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">{finding.filePath || finding.project.targetRef}</span>
-                    </span>
-                    <ScannerBadges cveId={finding.cveId} reportedBy={finding.reportedBy} />
-                    <span><Badge variant="outline" className={`border-l-4 ${severityClasses[finding.severity]}`}>{finding.severity}</Badge></span>
-                    <span><StatusBadge status={finding.status} /></span>
-                    <span className="text-xs text-muted-foreground">{formatDate(finding.firstSeenAt)}<br />{finding.ageDays}d old</span>
-                    <span>{finding.scanCount}</span>
-                    <span><SlaBadge state={finding.slaState} dueAt={finding.slaDueAt} /></span>
-                  </button>
-                )) : null}
+        <section className="overflow-hidden rounded-lg border bg-card/30">
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[1000px]">
+              <div className="grid grid-cols-[minmax(180px,1.2fr)_minmax(130px,0.8fr)_minmax(120px,0.9fr)_85px_85px_95px_70px_90px_48px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-semibold uppercase text-muted-foreground">
+                <span>Project / CVE</span>
+                <span>Package</span>
+                <span>Scanners</span>
+                <span>Severity</span>
+                <span>Status</span>
+                <span>Seen</span>
+                <span>Scans</span>
+                <span>SLA</span>
+                <span className="text-right">Info</span>
               </div>
-            );
-          })}
+              {isLoading ? (
+                <div className="p-8 text-sm text-muted-foreground">Loading findings...</div>
+              ) : error ? (
+                <div className="p-8 text-sm text-destructive">Unable to load findings.</div>
+              ) : groups.length === 0 ? (
+                <div className="p-8 text-sm text-muted-foreground">No findings match the current filters.</div>
+              ) : groups.map((group) => {
+                const expanded = expandedProjects.has(group.key);
+                return (
+                  <div key={group.key}>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedProjects((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(group.key)) next.delete(group.key);
+                        else next.add(group.key);
+                        return next;
+                      })}
+                      className="flex w-full items-center justify-between gap-4 border-b bg-background px-4 py-3 text-left hover:bg-muted/40"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                        <span className="truncate font-medium">{group.title}</span>
+                        <Badge variant="secondary">{group.count}</Badge>
+                      </span>
+                      <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                        <span className="truncate">{group.subtitle}</span>
+                        <Badge variant="outline" className="shrink-0">{group.activeCount} active</Badge>
+                        <Badge variant="outline" className="shrink-0">{group.criticalHighCount} high+</Badge>
+                      </span>
+                    </button>
+                    {expanded ? (group.findings ?? []).map((finding) => (
+                      <div
+                        key={finding.id}
+                        onClick={() => setSelectedFindingId(finding.id)}
+                        className="grid w-full grid-cols-[minmax(180px,1.2fr)_minmax(130px,0.8fr)_minmax(120px,0.9fr)_85px_85px_95px_70px_90px_48px] gap-3 border-b px-4 py-3 text-left text-sm hover:bg-muted/30 cursor-pointer items-center group/row"
+                      >
+                        <span className="min-w-0 border-l-4 pl-3">
+                          <span className="block truncate font-medium">{finding.project.name}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{finding.cveId}</span>
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate">{finding.packageName}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{finding.installedVersion} → {finding.fixedVersion || 'unfixed'}</span>
+                          <span className="block truncate text-[11px] text-muted-foreground">{finding.filePath || finding.project.targetRef}</span>
+                        </span>
+                        <ScannerBadges cveId={finding.cveId} reportedBy={finding.reportedBy} />
+                        <span><Badge variant="outline" className={`border-l-4 ${severityClasses[finding.severity]}`}>{finding.severity}</Badge></span>
+                        <span><StatusBadge status={finding.status} /></span>
+                        <span className="text-xs text-muted-foreground">{formatDate(finding.firstSeenAt)}<br />{finding.ageDays}d old</span>
+                        <span>{finding.scanCount}</span>
+                        <span><SlaBadge state={finding.slaState} dueAt={finding.slaDueAt} /></span>
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8 border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground shadow-sm transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedFindingId(finding.id);
+                            }}
+                            aria-label="View details"
+                          >
+                            <ChevronRight className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </section>
       </div>
 

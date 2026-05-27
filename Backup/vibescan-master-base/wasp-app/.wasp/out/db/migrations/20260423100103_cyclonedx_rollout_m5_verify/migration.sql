@@ -1,4 +1,0 @@
--- Verification migration placeholder.
--- This directory was left without a migration.sql file, which causes Wasp
--- to fail during migrate-dev. Keep the artifact present so the migration set
--- remains readable and the dev contour can complete startup checks.

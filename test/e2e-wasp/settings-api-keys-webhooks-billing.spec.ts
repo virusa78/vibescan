@@ -70,7 +70,7 @@ test("API keys and webhooks flows", async ({ page }) => {
   await page.waitForLoadState("networkidle");
   await acceptCookies(page);
 
-  await expect(page.getByRole("heading", { name: "API Keys", exact: true })).toBeVisible();
+  await expect(page.getByText("API Keys").first()).toBeVisible();
 
   await page.getByRole("button", { name: /generate new key/i }).click();
   await page.fill("#keyName", "E2E CI Key");

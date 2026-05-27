@@ -85,12 +85,12 @@ test("NTN smoke - full surface coverage with soft non-core checks", async ({ pag
     await softCheck("input type cards", async () => {
       await expect(page.getByRole("button", { name: /github repository/i })).toBeVisible();
       await expect(page.getByRole("button", { name: /sbom file/i })).toBeVisible();
-      await expect(page.getByRole("button", { name: /source zip/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /source archive/i })).toBeVisible();
     }, issues);
 
     await softCheck("form controls", async () => {
-      await expect(page.getByLabel("Input Reference")).toBeVisible();
-      await expect(page.getByRole("button", { name: /start scan/i })).toBeVisible();
+      await expect(page.locator("input#inputRef")).toBeVisible();
+      await expect(page.getByRole("button", { name: /run scan|start scan/i })).toBeVisible();
     }, issues);
   });
 

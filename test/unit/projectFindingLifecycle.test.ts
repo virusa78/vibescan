@@ -1,4 +1,6 @@
 import { describe, expect, it, jest } from '@jest/globals';
+import fs from 'fs';
+import path from 'path';
 import {
   buildProjectFindingFingerprint,
   calculateSlaDueAt,
@@ -57,6 +59,48 @@ describe('project finding lifecycle helpers', () => {
     expect(target.targetType).toBe('sbom');
     expect(target.targetRef).toBe('service-a.cdx.json');
     expect(target.normalizedTargetRef).toBe('sbom:service-a.cdx.json');
+  });
+
+  it('hashes the list of package names to fingerprint the project when the SBOM file exists', () => {
+    const runtimeTempRoot = process.env.VIBESCAN_RUNTIME_TMP_DIR
+      ?? path.join(process.cwd(), 'test-results', 'runtime-temp');
+    const rootDir = process.env.VIBESCAN_SCAN_INPUT_DIR ?? path.join(runtimeTempRoot, 'scan-inputs');
+    fs.mkdirSync(rootDir, { recursive: true });
+
+    const fileName = 'upload-999999-fingerprint-test.json';
+    const filePath = path.join(rootDir, fileName);
+    const mockSbom = {
+      bomFormat: 'CycloneDX',
+      components: [
+        { name: 'lodash', version: '4.17.21' },
+        { name: 'express', version: '4.18.2' },
+        { name: 'Express', version: '4.18.2' }
+      ]
+    };
+    fs.writeFileSync(filePath, JSON.stringify(mockSbom), 'utf8');
+
+    try {
+      const target = normalizeProjectTarget('sbom_upload', fileName);
+
+      expect(target.name).toBe('fingerprint-test (a0550b2b)');
+      expect(target.targetType).toBe('sbom');
+      const expectedHash = '8348682e36649a4f5663e99eb173a278895a3cf096a00e2a7c508374a0550b2b';
+      expect(target.targetRef).toBe(expectedHash);
+      expect(target.normalizedTargetRef).toBe(`sbom:${expectedHash}`);
+    } finally {
+      fs.rmSync(filePath, { force: true });
+    }
+  });
+
+  it('uses custom VIBESCAN_UPLOAD_PREFIX_PATTERN regex if provided', () => {
+    process.env.VIBESCAN_UPLOAD_PREFIX_PATTERN = '^custom_raw-\\d+-';
+    try {
+      const target = normalizeProjectTarget('sbom_upload', 'custom_raw-12345-service-a.cdx.json');
+      expect(target.name).toBe('service-a.cdx');
+      expect(target.targetRef).toBe('service-a.cdx.json');
+    } finally {
+      delete process.env.VIBESCAN_UPLOAD_PREFIX_PATTERN;
+    }
   });
 
   it('uses CVE package version and path for stable aggregate fingerprints', () => {

@@ -2,19 +2,8 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const queueAddMock = jest.fn();
 
-const prismaMock = {
-  webhook: {
-    findMany: jest.fn() as any,
-  },
-  webhookDelivery: {
-    findMany: jest.fn() as any,
-    create: jest.fn() as any,
-  },
-};
-
-jest.mock('@prisma/client', () => ({
-  PrismaClient: jest.fn(() => prismaMock),
-}));
+import { prisma } from '../mocks/wasp-server';
+const prismaMock = prisma as any;
 
 jest.mock('../../wasp-app/src/server/queues/config.js', () => ({
   webhookDeliveryQueue: {
@@ -26,10 +15,14 @@ import { emitWebhookEvent } from '../../wasp-app/src/server/services/webhookEven
 
 describe('webhookEventEmitter.emitWebhookEvent', () => {
   beforeEach(() => {
+    prismaMock.webhook = {
+      findMany: jest.fn() as any,
+    };
+    prismaMock.webhookDelivery = {
+      findMany: jest.fn() as any,
+      create: jest.fn() as any,
+    };
     queueAddMock.mockReset();
-    prismaMock.webhook.findMany.mockReset();
-    prismaMock.webhookDelivery.findMany.mockReset();
-    prismaMock.webhookDelivery.create.mockReset();
   });
 
   it('bulk-loads existing deliveries and skips duplicates without N+1 findFirst queries', async () => {

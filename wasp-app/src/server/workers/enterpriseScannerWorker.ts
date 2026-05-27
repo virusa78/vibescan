@@ -4,11 +4,9 @@
  */
 
 import { Job } from 'bullmq';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from 'wasp/server';
 import type { ScanJob } from '../queues/jobContract.js';
 import { executeScannerForScan } from '../services/scannerExecutionService.js';
-
-const prisma = new PrismaClient();
 
 export async function enterpriseScannerWorker(job: Job<ScanJob>) {
   const { scanId, userId } = job.data;

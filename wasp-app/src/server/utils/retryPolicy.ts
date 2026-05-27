@@ -8,9 +8,7 @@
  * - Database connection issues
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from 'wasp/server';
 
 /**
  * Retry configuration: 3 attempts with exponential backoff

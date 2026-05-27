@@ -15,8 +15,16 @@ describe('Scanner Integration Tests', () => {
   let testUserId: string;
 
   beforeEach(async () => {
-    testScanId = `test-scan-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    testUserId = `test-user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const crypto = await import('node:crypto');
+    testScanId = crypto.randomUUID();
+    
+    const user = await prisma.user.create({
+      data: {
+        email: `test-scanner-integration-${crypto.randomUUID()}@example.com`,
+        username: `test-scanner-integration-${crypto.randomUUID()}`,
+      },
+    });
+    testUserId = user.id;
   });
 
   afterEach(async () => {
@@ -26,6 +34,9 @@ describe('Scanner Integration Tests', () => {
       await prisma.scanResult.deleteMany({ where: { scanId: testScanId } });
       await prisma.scanDelta.deleteMany({ where: { scanId: testScanId } });
       await prisma.scan.deleteMany({ where: { id: testScanId } });
+      if (testUserId) {
+        await prisma.user.deleteMany({ where: { id: testUserId } });
+      }
     } catch (error) {
       console.error('Cleanup error:', error);
     }
@@ -39,7 +50,7 @@ describe('Scanner Integration Tests', () => {
         { name: 'express', version: '4.17.1' },
       ];
 
-      await prisma.scan.create({
+      const scan = await prisma.scan.create({
         data: {
           id: testScanId,
           userId: testUserId,
@@ -90,7 +101,7 @@ describe('Scanner Integration Tests', () => {
       const scanResult = await prisma.scanResult.create({
         data: {
           scanId: testScanId,
-          source: 'free',
+          source: 'grype',
           rawOutput: mockGrypOutput,
           vulnerabilities: mockGrypOutput.matches.map(m => ({
             cveId: m.vulnerability.id,
@@ -100,7 +111,7 @@ describe('Scanner Integration Tests', () => {
             cvssScore: m.vulnerability.cvssScore.baseScore,
             fixedVersion: m.vulnerability.fix.versions[0],
             description: m.vulnerability.description,
-            source: 'free',
+            source: 'grype',
           })),
           scannerVersion: 'grype-0.111.0',
           cveDbTimestamp: new Date(),
@@ -109,7 +120,7 @@ describe('Scanner Integration Tests', () => {
       });
 
       expect(scanResult).toBeDefined();
-      expect(scanResult.source).toBe('free');
+      expect(scanResult.source).toBe('grype');
       expect((scanResult.vulnerabilities as any).length).toBe(1);
     });
 
@@ -143,14 +154,14 @@ describe('Scanner Integration Tests', () => {
           cvssScore: 7.5,
           fixedVersion: '1.0.1',
           description: 'Test vulnerability',
-          source: 'free',
+          source: 'grype',
           detectedData: {} as any,
         },
       });
 
       expect(finding).toBeDefined();
       expect(finding.fingerprint).toBe(fingerprint);
-      expect(finding.source).toBe('free');
+      expect(finding.source).toBe('grype');
 
       // Verify fingerprint-based deduplication
       const finding2 = await prisma.finding.upsert({
@@ -171,7 +182,7 @@ describe('Scanner Integration Tests', () => {
           cvssScore: 7.5,
           fixedVersion: '1.0.2',
           description: 'Updated description',
-          source: 'free',
+          source: 'grype',
           detectedData: {} as any,
         },
         update: {
@@ -221,7 +232,7 @@ describe('Scanner Integration Tests', () => {
       const scanResult = await prisma.scanResult.create({
         data: {
           scanId: testScanId,
-          source: 'enterprise',
+          source: 'codescoring_johnny',
           rawOutput: mockCodescoringOutput,
           vulnerabilities: mockCodescoringOutput.components.flatMap(c =>
             c.vulnerabilities.map(v => ({
@@ -232,7 +243,7 @@ describe('Scanner Integration Tests', () => {
               cvssScore: v.cvssScore,
               fixedVersion: v.fixedVersion,
               description: v.description,
-              source: 'enterprise',
+              source: 'codescoring_johnny',
             }))
           ),
           scannerVersion: 'codescoring-1.0',
@@ -242,7 +253,7 @@ describe('Scanner Integration Tests', () => {
       });
 
       expect(scanResult).toBeDefined();
-      expect(scanResult.source).toBe('enterprise');
+      expect(scanResult.source).toBe('codescoring_johnny');
       expect((scanResult.vulnerabilities as any).length).toBe(1);
     });
   });
@@ -265,7 +276,7 @@ describe('Scanner Integration Tests', () => {
       await prisma.scanResult.create({
         data: {
           scanId: testScanId,
-          source: 'free',
+          source: 'grype',
           rawOutput: { matches: [] },
           vulnerabilities: [],
           scannerVersion: 'grype-0.111.0',
@@ -278,7 +289,7 @@ describe('Scanner Integration Tests', () => {
       await prisma.scanResult.create({
         data: {
           scanId: testScanId,
-          source: 'enterprise',
+          source: 'codescoring_johnny',
           rawOutput: { components: [] },
           vulnerabilities: [],
           scannerVersion: 'codescoring-1.0',
@@ -293,7 +304,7 @@ describe('Scanner Integration Tests', () => {
       });
 
       expect(results).toHaveLength(2);
-      expect(results.map(r => r.source).sort()).toEqual(['enterprise', 'free']);
+      expect(results.map(r => r.source).sort()).toEqual(['codescoring_johnny', 'grype']);
     });
 
     it('should mark scan complete when both scanners finish', async () => {
@@ -313,7 +324,7 @@ describe('Scanner Integration Tests', () => {
       await prisma.scanResult.create({
         data: {
           scanId: testScanId,
-          source: 'free',
+          source: 'grype',
           rawOutput: { matches: [] },
           vulnerabilities: [],
           scannerVersion: 'grype-0.111.0',
@@ -325,7 +336,7 @@ describe('Scanner Integration Tests', () => {
       await prisma.scanResult.create({
         data: {
           scanId: testScanId,
-          source: 'enterprise',
+          source: 'codescoring_johnny',
           rawOutput: { components: [] },
           vulnerabilities: [],
           scannerVersion: 'codescoring-1.0',
@@ -366,7 +377,7 @@ describe('Scanner Integration Tests', () => {
       await prisma.scanResult.create({
         data: {
           scanId: testScanId,
-          source: 'free',
+          source: 'grype',
           rawOutput: { matches: [] },
           vulnerabilities: [],
           scannerVersion: 'grype-0.111.0',
@@ -394,11 +405,11 @@ describe('Scanner Integration Tests', () => {
       });
 
       expect(results).toHaveLength(1);
-      expect(results[0].source).toBe('free');
+      expect(results[0].source).toBe('grype');
     });
 
     it('should handle both scanners failing', async () => {
-      await prisma.scan.create({
+      const scan = await prisma.scan.create({
         data: {
           id: testScanId,
           userId: testUserId,
@@ -453,7 +464,7 @@ describe('Scanner Integration Tests', () => {
           severity: 'HIGH',
           cvssScore: 7.5,
           description: 'Grype finding',
-          source: 'free',
+          source: 'grype',
           detectedData: {} as any,
         },
       });
@@ -476,13 +487,13 @@ describe('Scanner Integration Tests', () => {
           severity: 'CRITICAL',
           cvssScore: 8.5,
           description: 'Codescoring finding',
-          source: 'enterprise',
+          source: 'codescoring_johnny',
           detectedData: {} as any,
         },
         update: {
           severity: 'CRITICAL',
           cvssScore: 8.5,
-          source: 'enterprise',
+          source: 'codescoring_johnny',
         },
       });
 

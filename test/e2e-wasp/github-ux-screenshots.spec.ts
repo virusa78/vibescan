@@ -2,6 +2,10 @@ import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { PrismaClient } from "../../wasp-app/node_modules/@prisma/client/index.js";
+import {
+  resolveProjectForScanInput,
+  persistProjectFindingsForScan,
+} from "../../wasp-app/src/server/services/projectFindingLifecycleService.js";
 import { generateTestEmail } from "./helpers";
 import { getManagedContourDatabaseUrl } from "./managed-contour";
 
@@ -106,9 +110,6 @@ async function seedReviewWorkspace(
   email: string,
 ): Promise<SeededUxReviewData> {
   const user = await waitForUserByEmail(prisma, email);
-  if (!user.activeWorkspaceId) {
-    throw new Error(`User ${email} does not have an active workspace`);
-  }
 
   const suffix = randomUUID().slice(0, 8);
   const now = new Date();
@@ -152,70 +153,84 @@ async function seedReviewWorkspace(
     data: { activeWorkspaceId: workspace.id },
   });
 
-  const project = await prisma.project.create({
+  const project = await resolveProjectForScanInput(prisma, {
+    workspaceId: workspace.id,
+    inputType: "github",
+    inputRef: `https://github.com/acme/api-${suffix}`,
+  });
+
+  await prisma.project.update({
+    where: { id: project.id },
+    data: { name: `Acme API ${suffix}` },
+  });
+
+  const scanCompletedAt = new Date(now.getTime() - 25 * 86_400_000);
+  const scan = await prisma.scan.create({
     data: {
+      userId: user.id,
+      orgId: organization.id,
       workspaceId: workspace.id,
-      name: `Acme API ${suffix}`,
-      slug: `acme-api-${suffix}`,
-      targetType: "github",
-      targetRef: "https://github.com/acme/api",
-      normalizedTargetRef: `https://github.com/acme/api#${suffix}`,
-      metadata: {},
+      projectId: project.id,
+      inputType: "github",
+      inputRef: `https://github.com/acme/api-${suffix}`,
+      status: "done",
+      completedAt: scanCompletedAt,
+      planAtSubmission: "starter",
     },
   });
 
-  const finding = await prisma.projectFinding.create({
-    data: {
-      workspaceId: workspace.id,
+  await persistProjectFindingsForScan({
+    prisma,
+    scanId: scan.id,
+    source: "grype" as any,
+    findings: [
+      {
+        cveId: "CVE-2024-UX-0001",
+        package: "left-pad",
+        version: "1.0.0",
+        filePath: "package-lock.json",
+        severity: "critical",
+        cvssScore: 9.8,
+        fixedVersion: "1.1.0",
+        description: "Prototype pollution in a demo dependency chain.",
+      },
+    ],
+  });
+
+  await persistProjectFindingsForScan({
+    prisma,
+    scanId: scan.id,
+    source: "codescoring_johnny" as any,
+    findings: [
+      {
+        cveId: "CVE-2024-UX-0001",
+        package: "left-pad",
+        version: "1.0.0",
+        filePath: "package-lock.json",
+        severity: "critical",
+        cvssScore: 9.8,
+        fixedVersion: "1.1.0",
+        description: "Prototype pollution in a demo dependency chain.",
+      },
+      {
+        cveId: "CVE-2024-UX-0002",
+        package: "express",
+        version: "4.18.2",
+        filePath: "package-lock.json",
+        severity: "high",
+        cvssScore: 8.1,
+        fixedVersion: "4.18.3",
+        description: "Routing issue with a reachable request path.",
+      },
+    ],
+  });
+
+  const finding = await prisma.projectFinding.findFirstOrThrow({
+    where: {
       projectId: project.id,
-      fingerprint: `cve-2024-ux-${suffix}|left-pad|1.0.0|package-lock.json`,
       cveId: "CVE-2024-UX-0001",
-      packageName: "left-pad",
-      installedVersion: "1.0.0",
-      filePath: "package-lock.json",
-      severity: "CRITICAL",
-      cvssScore: "9.8",
-      fixedVersion: "1.1.0",
-      description: "Prototype pollution in a demo dependency chain.",
-      status: "active",
-      firstSeenAt: new Date(now.getTime() - 14 * 86_400_000),
-      lastSeenAt: now,
-      lastDetectedAt: now,
-      scanCount: 4,
-      reportedBy: ["grype", "codescoring_johnny"],
-      firstDetectedBy: "grype",
-      lastDetectedBy: "codescoring_johnny",
-      slaDueAt: new Date(now.getTime() - 2 * 86_400_000),
-      slaState: "overdue",
-      metadata: {},
     },
-  });
-
-  await prisma.projectFinding.create({
-    data: {
-      workspaceId: workspace.id,
-      projectId: project.id,
-      fingerprint: `cve-2024-ux-${suffix}|express|4.18.2|package-lock.json`,
-      cveId: "CVE-2024-UX-0002",
-      packageName: "express",
-      installedVersion: "4.18.2",
-      filePath: "package-lock.json",
-      severity: "HIGH",
-      cvssScore: "8.1",
-      fixedVersion: "4.18.3",
-      description: "Routing issue with a reachable request path.",
-      status: "active",
-      firstSeenAt: new Date(now.getTime() - 45 * 86_400_000),
-      lastSeenAt: now,
-      lastDetectedAt: now,
-      scanCount: 2,
-      reportedBy: ["codescoring_johnny"],
-      firstDetectedBy: "codescoring_johnny",
-      lastDetectedBy: "codescoring_johnny",
-      slaDueAt: new Date(now.getTime() + 5 * 86_400_000),
-      slaState: "due_soon",
-      metadata: {},
-    },
+    select: { id: true },
   });
 
   return { projectId: project.id, findingId: finding.id, workspaceId: workspace.id, email };
@@ -308,10 +323,10 @@ test("GitHub UX screenshot pack", async ({ page }) => {
     await page.unroute("**/operations/reject-project-finding*").catch(() => {});
     if (seeded) {
       await prisma.projectFindingAnnotation.deleteMany({
-        where: { projectFindingId: seeded.findingId },
+        where: { projectFinding: { projectId: seeded.projectId } },
       }).catch(() => {});
       await prisma.projectFinding.deleteMany({
-        where: { id: seeded.findingId },
+        where: { projectId: seeded.projectId },
       }).catch(() => {});
       await prisma.project.deleteMany({
         where: { id: seeded.projectId },

@@ -1,9 +1,6 @@
-/**
- * Integration tests for report visibility in getReport operation
- * Tests that every plan tier receives full vulnerability details
- */
-
-import { prisma } from 'wasp/server';
+import { describe, beforeAll, afterAll, it, expect } from '@jest/globals';
+import { PrismaClient } from '../../wasp-app/node_modules/@prisma/client';
+const prisma = new PrismaClient();
 import { getReport } from '../../wasp-app/src/server/operations/reports/getReport';
 
 // Mock context with user
@@ -14,21 +11,34 @@ const createMockContext = (userId: string) => ({
 
 describe('Report Visibility in getReport', () => {
   let userId: string;
+  let otherUserId: string;
 
   beforeAll(async () => {
-    // Create a test user
+    // Create test users
     const user = await prisma.user.create({
       data: {
-        email: `test-paywall-${Date.now()}@example.com`,
-        username: `test-paywall-${Date.now()}`,
+        email: `test-paywall-1-${Date.now()}@example.com`,
+        username: `test-paywall-1-${Date.now()}`,
       },
     });
     userId = user.id;
+
+    const otherUser = await prisma.user.create({
+      data: {
+        email: `test-paywall-2-${Date.now()}@example.com`,
+        username: `test-paywall-2-${Date.now()}`,
+      },
+    });
+    otherUserId = otherUser.id;
   });
 
   afterAll(async () => {
     // Cleanup
-    await prisma.user.deleteMany({ where: { id: userId } });
+    await prisma.user.deleteMany({
+      where: {
+        id: { in: [userId, otherUserId] },
+      },
+    });
   });
 
   describe('Starter Plan Visibility', () => {
@@ -55,7 +65,7 @@ describe('Report Visibility in getReport', () => {
             packageName: 'vulnerable-lib',
             installedVersion: '1.0.0',
             severity: 'CRITICAL',
-            source: 'free',
+            source: 'grype',
             cvssScore: 9.8,
           },
           {
@@ -66,7 +76,7 @@ describe('Report Visibility in getReport', () => {
             packageName: 'another-lib',
             installedVersion: '2.0.0',
             severity: 'HIGH',
-            source: 'enterprise',
+            source: 'codescoring_johnny',
             cvssScore: 8.5,
           },
         ],
@@ -114,7 +124,7 @@ describe('Report Visibility in getReport', () => {
             packageName: 'django',
             installedVersion: '3.2.0',
             severity: 'HIGH',
-            source: 'free',
+            source: 'grype',
             cvssScore: 8.0,
             description: 'SQL injection vulnerability',
             fixedVersion: '3.2.20',
@@ -165,7 +175,7 @@ describe('Report Visibility in getReport', () => {
             packageName: 'log4j',
             installedVersion: '2.14.0',
             severity: 'CRITICAL',
-            source: 'free',
+            source: 'grype',
             cvssScore: 10.0,
           },
           {
@@ -176,7 +186,7 @@ describe('Report Visibility in getReport', () => {
             packageName: 'custom-lib',
             installedVersion: '1.0.0',
             severity: 'MEDIUM',
-            source: 'enterprise',
+            source: 'codescoring_johnny',
             cvssScore: 6.5,
           },
         ],
@@ -220,7 +230,7 @@ describe('Report Visibility in getReport', () => {
           packageName: 'express',
           installedVersion: '4.17.0',
           severity: 'MEDIUM',
-          source: 'free',
+          source: 'grype',
           cvssScore: 5.5,
         },
       });
@@ -264,7 +274,7 @@ describe('Report Visibility in getReport', () => {
             packageName: 'critical-lib',
             installedVersion: '1.0.0',
             severity: 'CRITICAL',
-            source: 'free',
+            source: 'grype',
           },
           {
             scanId: scan.id,
@@ -274,7 +284,7 @@ describe('Report Visibility in getReport', () => {
             packageName: 'critical-lib2',
             installedVersion: '2.0.0',
             severity: 'CRITICAL',
-            source: 'free',
+            source: 'grype',
           },
           {
             scanId: scan.id,
@@ -284,7 +294,7 @@ describe('Report Visibility in getReport', () => {
             packageName: 'high-lib',
             installedVersion: '1.0.0',
             severity: 'HIGH',
-            source: 'enterprise',
+            source: 'codescoring_johnny',
           },
           {
             scanId: scan.id,
@@ -294,7 +304,7 @@ describe('Report Visibility in getReport', () => {
             packageName: 'med-lib',
             installedVersion: '1.0.0',
             severity: 'MEDIUM',
-            source: 'free',
+            source: 'grype',
           },
           {
             scanId: scan.id,
@@ -304,7 +314,7 @@ describe('Report Visibility in getReport', () => {
             packageName: 'low-lib',
             installedVersion: '1.0.0',
             severity: 'LOW',
-            source: 'free',
+            source: 'grype',
           },
           {
             scanId: scan.id,
@@ -314,7 +324,7 @@ describe('Report Visibility in getReport', () => {
             packageName: 'info-lib',
             installedVersion: '1.0.0',
             severity: 'INFO',
-            source: 'enterprise',
+            source: 'codescoring_johnny',
           },
         ],
       });
@@ -348,15 +358,14 @@ describe('Report Visibility in getReport', () => {
       });
 
       // Try to access as different user
-      const otherUserId = 'different-user-id';
       const unauthorizedContext = createMockContext(otherUserId);
 
-      // Should throw 403
+      // Should throw 404 (for security/data discovery prevention)
       await expect(
         getReport({ scanId: scan.id }, unauthorizedContext)
       ).rejects.toMatchObject({
-        statusCode: 403,
-        message: 'Unauthorized',
+        statusCode: 404,
+        message: 'Scan not found',
       });
 
       // Cleanup
@@ -373,7 +382,7 @@ describe('Report Visibility in getReport', () => {
         getReport({ scanId: 'any-id' }, context)
       ).rejects.toMatchObject({
         statusCode: 401,
-        message: 'Authentication required',
+        message: 'User not authenticated',
       });
     });
   });

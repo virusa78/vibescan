@@ -304,7 +304,7 @@ export default function DashboardPage() {
 
   const metrics = useMemo(() => {
     const completed = scans.filter((scan) => scan.status === 'done');
-    const totalVulnerabilities = completed.reduce((sum, scan) => sum + (scan.findingsCount || 0), 0);
+    const totalVulnerabilities = severity.total || 0;
     const running = scans.filter((scan) => scan.status === 'pending' || scan.status === 'scanning').length;
 
     const avgSeverity =

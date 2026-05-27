@@ -14,8 +14,8 @@ describe('providerSelection', () => {
     process.env.SNYK_TOKEN = trackedEnv.SNYK_TOKEN;
   });
 
-  it('returns all scanners for free plans when snyk is not ready', () => {
-    const executions = resolvePlannedScannerExecutions('free', {
+  it('returns all scanners for enterprise plans when snyk is not ready', () => {
+    const executions = resolvePlannedScannerExecutions('enterprise', {
       userId: 'user-1',
     });
 
@@ -31,7 +31,7 @@ describe('providerSelection', () => {
     delete process.env.VIBESCAN_ENABLE_SNYK_SCANNER;
     process.env.SNYK_TOKEN = 'snyk-token';
 
-    const executions = resolvePlannedScannerExecutions('pro', {
+    const executions = resolvePlannedScannerExecutions('enterprise', {
       userId: 'user-1',
     });
 
@@ -48,7 +48,7 @@ describe('providerSelection', () => {
     delete process.env.VIBESCAN_SNYK_CREDENTIAL_MODE;
     process.env.SNYK_TOKEN = 'snyk-token';
 
-    const executions = resolvePlannedScannerExecutions('starter', {
+    const executions = resolvePlannedScannerExecutions('enterprise', {
       userId: 'user-1',
       snykReadiness: {
         enabled: true,
@@ -104,7 +104,7 @@ describe('providerSelection', () => {
 
   it('filters planned executions to selected scanner sources', () => {
     const executions = resolvePlannedScannerExecutions(
-      'pro',
+      'enterprise',
       { userId: 'user-1' },
       ['grype', 'codescoring_johnny'],
     );

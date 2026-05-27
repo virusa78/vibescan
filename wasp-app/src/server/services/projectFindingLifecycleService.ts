@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import path from 'path';
+import fs from 'fs';
 import type { Prisma, PrismaClient, ScanSource } from '@prisma/client';
 import type { ScannerFindingForPersistence } from './scannerExecutionTypes.js';
 import type { PersistedFindingSource } from './findingPersistenceService.js';
@@ -32,6 +33,62 @@ function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80) || 'project';
+}
+
+const DEFAULT_UPLOAD_PREFIX_PATTERN = /^upload-\d+-/;
+
+export function getUploadPrefixPattern(): RegExp {
+  const customPattern = process.env.VIBESCAN_UPLOAD_PREFIX_PATTERN;
+  if (customPattern) {
+    try {
+      return new RegExp(customPattern);
+    } catch {
+      // fallback if regex is invalid
+    }
+  }
+  return DEFAULT_UPLOAD_PREFIX_PATTERN;
+}
+
+export function getSbomFingerprint(inputRef: string): string | null {
+  try {
+    const runtimeTempRoot = process.env.VIBESCAN_RUNTIME_TMP_DIR
+      ?? path.join(process.cwd(), 'test-results', 'runtime-temp');
+    const defaultTrustedScanInputRoot = path.join(runtimeTempRoot, 'scan-inputs');
+    const rootDir = process.env.VIBESCAN_SCAN_INPUT_DIR ?? defaultTrustedScanInputRoot;
+
+    const candidate = path.isAbsolute(inputRef) ? path.resolve(inputRef) : path.resolve(rootDir, inputRef);
+    if (!fs.existsSync(candidate)) {
+      return null;
+    }
+
+    const rawText = fs.readFileSync(candidate, 'utf8').trim();
+    const parsed = JSON.parse(rawText);
+
+    let components: any[] = [];
+    if (parsed && Array.isArray(parsed.components)) {
+      components = parsed.components;
+    }
+
+    if (components.length === 0) {
+      return null;
+    }
+
+    const names = Array.from(new Set(
+      components
+        .map((c: any) => c?.name)
+        .filter((name: any): name is string => typeof name === 'string' && name.trim().length > 0)
+        .map((name: string) => name.trim().toLowerCase())
+    )).sort();
+
+    if (names.length === 0) {
+      return null;
+    }
+
+    const fingerprintKey = names.join(',');
+    return createHash('sha256').update(fingerprintKey).digest('hex');
+  } catch {
+    return null;
+  }
 }
 
 export function normalizeProjectTarget(inputType: ScanInputType, inputRef: string): {
@@ -77,20 +134,35 @@ export function normalizeProjectTarget(inputType: ScanInputType, inputRef: strin
   }
 
   const base = path.basename(trimmed);
-  const cleanBase = base.startsWith('upload-') ? base.replace(/^upload-\d+-/, '') : base;
+  const uploadPattern = getUploadPrefixPattern();
+  const cleanBase = base.replace(uploadPattern, '');
+  const isUpload = cleanBase !== base;
   const basename = cleanBase.replace(/\.(json|xml|zip|tar|gz|tgz)$/i, '') || cleanBase;
   const targetType = normalizedType === 'dast' || normalizedType === 'source_zip' || normalizedType === 'sbom'
     ? normalizedType
     : 'other';
 
-  const targetRef = base.startsWith('upload-') ? cleanBase : trimmed;
+  let targetRef = isUpload ? cleanBase : trimmed;
+  let normalizedTargetRef = `${targetType}:${targetRef.toLowerCase()}`;
+  let nameSuffix = '';
+
+  if (targetType === 'sbom') {
+    const sbomHash = getSbomFingerprint(trimmed);
+    if (sbomHash) {
+      targetRef = sbomHash;
+      normalizedTargetRef = `sbom:${sbomHash}`;
+      nameSuffix = ` (${sbomHash.slice(-8)})`;
+    }
+  }
+
+  const name = basename + nameSuffix;
 
   return {
-    name: basename,
-    slug: slugify(basename),
+    name,
+    slug: slugify(name),
     targetType,
     targetRef,
-    normalizedTargetRef: `${targetType}:${targetRef.toLowerCase()}`,
+    normalizedTargetRef,
     metadata: { inputType },
   };
 }

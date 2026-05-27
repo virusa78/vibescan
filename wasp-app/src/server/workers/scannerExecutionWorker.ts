@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from 'wasp/server';
 import type { Job } from 'bullmq';
 import { getScannerProvider } from '../lib/scanners/scannerProviderRegistry.js';
 import type { QueueScannerTarget } from '../lib/scanners/providerSelection.js';
@@ -6,8 +6,6 @@ import type { ScanJob } from '../queues/jobContract.js';
 import { executeScannerForScan } from '../services/scannerExecutionService.js';
 import type { ScannerExecutionPrismaClient } from '../services/scannerExecutionTypes.js';
 import { handleJobFailure, SCAN_JOB_RETRY_CONFIG } from '../utils/retryPolicy.js';
-
-const prisma = new PrismaClient();
 
 function getLaneLabel(queueTarget: QueueScannerTarget): string {
   return queueTarget === 'enterprise' ? 'Enterprise Scanner' : 'Free Scanner';

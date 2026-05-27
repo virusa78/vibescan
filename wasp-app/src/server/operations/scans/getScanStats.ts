@@ -88,11 +88,29 @@ export async function getScanStats(
     }
   });
 
+  // Get latest completed scans for each project in the workspace
+  const latestScans = await prisma.scan.findMany({
+    where: {
+      workspaceId: user.workspaceId,
+      status: 'done',
+      projectId: { not: null },
+    },
+    orderBy: [
+      { projectId: 'asc' },
+      { completedAt: 'desc' },
+    ],
+    distinct: ['projectId'],
+    select: { id: true },
+  });
+  const latestScanIds = latestScans.map((s) => s.id);
+
   const [findings, scanResults] = await Promise.all([
-    prisma.finding.findMany({
+    prisma.projectFinding.findMany({
       where: {
-        scanId: { in: scans.map((scan) => scan.id) },
+        workspaceId: user.workspaceId,
         status: 'active',
+        lastSeenAt: { gte: fromDate },
+        lastScanId: { in: latestScanIds },
       },
       select: {
         severity: true,

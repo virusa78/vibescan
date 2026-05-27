@@ -122,8 +122,8 @@ describe('Real Scanner Integration Tests', () => {
     it('should detect known vulnerabilities in test fixtures', async () => {
       // Create a simple test with known vulnerable components
       const testComponents: NormalizedComponent[] = [
-        { name: 'lodash', version: '4.17.20' }, // Known to have vulnerabilities
-        { name: 'express', version: '4.16.0' },  // Known to have vulnerabilities
+        { name: 'lodash', version: '4.17.20', purl: 'pkg:npm/lodash@4.17.20' }, // Known to have vulnerabilities
+        { name: 'express', version: '4.16.0', purl: 'pkg:npm/express@4.16.0' },  // Known to have vulnerabilities
       ];
 
       const testSbomPath = '/tmp/vibescan-test-known-vulns.json';

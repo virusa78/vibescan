@@ -4,11 +4,10 @@
  */
 
 import * as crypto from 'crypto';
-import { PrismaClient, type Prisma } from '@prisma/client';
+import { type Prisma } from '@prisma/client';
+import { prisma } from 'wasp/server';
 import { webhookDeliveryQueue } from '../queues/config.js';
 import type { WebhookDeliveryJob } from '../queues/jobContract.js';
-
-const prisma = new PrismaClient();
 
 export type WebhookEventType = 'scan_complete' | 'scan_failed' | 'report_ready';
 

@@ -510,6 +510,7 @@ model Scan {
 
   @@index([workspaceId])
   @@index([projectId])
+  @@index([workspaceId, projectId, status, completedAt])
   @@map("scans")
 }
 

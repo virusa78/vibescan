@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, MoreHorizontal } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import {
@@ -9,6 +9,12 @@ import {
   formatRelativeTime,
 } from '../../utils/severity';
 import { isEditableTarget } from '../../utils/keyboard';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
 
 type DashboardSortField = 'submitted' | 'target' | 'type' | 'status' | 'findings';
 type DashboardSortDirection = 'asc' | 'desc';
@@ -203,11 +209,27 @@ export function ScanTable({
 
   const renderSkeletonRow = () => (
     <tr className="border-b border-border/20">
-      {[0, 1, 2, 3, 4, 5, 6].map((idx) => (
-        <td key={idx} className="py-3 px-4">
-          <div className="h-4 bg-muted rounded animate-pulse w-20" />
-        </td>
-      ))}
+      <td className="py-3 px-2 sm:px-3">
+        <div className="h-4 w-4 bg-muted rounded animate-pulse" />
+      </td>
+      <td className="py-3 px-2 sm:px-3">
+        <div className="h-4 bg-muted rounded animate-pulse w-32" />
+      </td>
+      <td className="py-3 px-2 sm:px-3">
+        <div className="h-4 bg-muted rounded animate-pulse w-16" />
+      </td>
+      <td className="py-3 px-2 sm:px-3">
+        <div className="h-4 bg-muted rounded animate-pulse w-16" />
+      </td>
+      <td className="py-3 px-2 sm:px-3">
+        <div className="h-4 bg-muted rounded animate-pulse w-8" />
+      </td>
+      <td className="py-3 px-2 sm:px-3">
+        <div className="h-4 bg-muted rounded animate-pulse w-24" />
+      </td>
+      <td className="py-3 px-2 sm:px-3 text-right">
+        <div className="h-8 w-8 bg-muted rounded animate-pulse ml-auto" />
+      </td>
     </tr>
   );
 
@@ -335,18 +357,18 @@ export function ScanTable({
       <CardContent>
         {loading ? (
           <div className="overflow-x-auto pb-1">
-            <table className="min-w-[980px] w-full text-sm">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/30">
-                  <th className="py-3 px-4">
-                    <input type="checkbox" aria-label="Select all scans" />
+                  <th className="py-3 px-2 sm:px-3 w-10">
+                    <input type="checkbox" aria-label="Select all scans" disabled />
                   </th>
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">TARGET</th>
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">TYPE</th>
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">STATUS</th>
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">FINDINGS</th>
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">SUBMITTED</th>
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium min-w-[14rem]">ACTIONS</th>
+                  <th className="text-left py-3 px-2 sm:px-3 text-muted-foreground font-medium">TARGET</th>
+                  <th className="text-left py-3 px-2 sm:px-3 text-muted-foreground font-medium">TYPE</th>
+                  <th className="text-left py-3 px-2 sm:px-3 text-muted-foreground font-medium">STATUS</th>
+                  <th className="text-left py-3 px-2 sm:px-3 text-muted-foreground font-medium">FINDINGS</th>
+                  <th className="text-left py-3 px-2 sm:px-3 text-muted-foreground font-medium">SUBMITTED</th>
+                  <th className="text-right py-3 px-2 sm:px-3 text-muted-foreground font-medium w-[80px]">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -371,7 +393,7 @@ export function ScanTable({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/30">
-                  <th className="py-3 px-4">
+                  <th className="py-3 px-2 sm:px-3 w-10">
                     <input
                       type="checkbox"
                       aria-label="Select all visible scans"
@@ -384,7 +406,7 @@ export function ScanTable({
                     return (
                       <th
                         key={column.field}
-                        className="text-left py-3 px-4 text-muted-foreground font-medium"
+                        className="text-left py-3 px-2 sm:px-3 text-muted-foreground font-medium"
                         aria-sort={active ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
                       >
                         <button
@@ -403,7 +425,7 @@ export function ScanTable({
                       </th>
                     );
                   })}
-                  <th className="text-left py-3 px-4 text-muted-foreground font-medium min-w-[12rem]">ACTIONS</th>
+                  <th className="text-right py-3 px-2 sm:px-3 text-muted-foreground font-medium w-[80px]">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -414,7 +436,7 @@ export function ScanTable({
                   const canCancel = CANCELLABLE_STATUSES.has(scan.status.toLowerCase());
                   const canRerun = scan.inputRef.trim().length > 0 && scan.inputType.trim().length > 0;
                   const isActive = index === activeRowIndex;
-
+ 
                   return (
                     <tr
                       key={scan.id}
@@ -426,7 +448,7 @@ export function ScanTable({
                       onClick={() => handleRowOpen(scan.id)}
                       aria-selected={isActive}
                     >
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-2 sm:px-3 w-10">
                         <input
                           type="checkbox"
                           checked={selectedScanIds.includes(scan.id)}
@@ -438,15 +460,15 @@ export function ScanTable({
                           aria-label={`Select scan ${scan.id}`}
                         />
                       </td>
-                      <td className="py-3 px-4 text-foreground text-xs max-w-[20rem] truncate" title={scan.inputRef}>
+                      <td className="py-3 px-2 sm:px-3 text-foreground text-xs max-w-[16rem] break-all whitespace-normal" title={scan.inputRef}>
                         {scan.inputRef}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-2 sm:px-3">
                         <span className="text-xs px-2 py-1 border border-primary/50 text-primary rounded">
                           {scanType}
                         </span>
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-2 sm:px-3">
                         <span
                           data-testid="scan-status"
                           className={`text-xs px-2 py-1 border rounded font-medium ${statusBadge.color} ${statusBadge.border}`}
@@ -454,62 +476,67 @@ export function ScanTable({
                           {getReadableStatusLabel(scan.status)}
                         </span>
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-2 sm:px-3">
                         <span className="text-foreground font-medium">{scan.vulnerability_count}</span>
                       </td>
-                      <td className="py-3 px-4 text-muted-foreground text-xs">{relativeTime}</td>
-                      <td className="py-3 px-4 min-w-[12rem]">
-                        <div className="flex flex-wrap items-center gap-1 opacity-90 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-                          <button
-                            type="button"
-                            className="rounded px-2 py-1 text-[11px] text-primary transition hover:bg-primary/10"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleRowOpen(scan.id);
-                            }}
-                            aria-label={`Open scan ${scan.id}`}
-                          >
-                            Open
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded px-2 py-1 text-[11px] text-amber-500 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={!canCancel}
-                            title={!canCancel ? 'Only pending/scanning scans can be cancelled' : 'Cancel scan'}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              if (!canCancel) return;
-                              void onCancelScan(scan.id);
-                            }}
-                            aria-label={`Cancel scan ${scan.id}`}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded px-2 py-1 text-[11px] text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={!canRerun}
-                            title={!canRerun ? 'Missing input reference/type for re-run' : 'Re-run scan'}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              if (!canRerun) return;
-                              void onRerunScan(scan.id);
-                            }}
-                            aria-label={`Re-run scan ${scan.id}`}
-                          >
-                            Re-run
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded px-2 py-1 text-[11px] text-foreground transition hover:bg-accent"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void onCopyScanId(scan.id);
-                            }}
-                            aria-label={`Copy scan id ${scan.id}`}
-                          >
-                            Copy ID
-                          </button>
+                      <td className="py-3 px-2 sm:px-3 text-muted-foreground text-xs">{relativeTime}</td>
+                      <td className="py-3 px-2 sm:px-3 text-right w-[80px]">
+                        <div className="flex justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className="h-8 w-8 p-0 hover:bg-accent hover:text-accent-foreground rounded-md flex items-center justify-center transition-colors"
+                                onClick={(event) => event.stopPropagation()}
+                                aria-label="Open actions menu"
+                              >
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-36 bg-popover border border-border/50 text-popover-foreground">
+                              <DropdownMenuItem
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleRowOpen(scan.id);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                Open
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={!canCancel}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (!canCancel) return;
+                                  void onCancelScan(scan.id);
+                                }}
+                                className={`cursor-pointer ${!canCancel ? 'opacity-50 pointer-events-none' : ''}`}
+                              >
+                                Cancel
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={!canRerun}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (!canRerun) return;
+                                  void onRerunScan(scan.id);
+                                }}
+                                className={`cursor-pointer ${!canRerun ? 'opacity-50 pointer-events-none' : ''}`}
+                              >
+                                Re-run
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void onCopyScanId(scan.id);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                Copy ID
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </td>
                     </tr>
