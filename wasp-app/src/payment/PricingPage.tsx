@@ -5,6 +5,7 @@ import { useAuth } from "wasp/client/auth";
 import {
   generateCheckoutSession,
   getCustomerPortalUrl,
+  getBillingPlans,
   useQuery,
 } from "wasp/client/operations";
 import { Alert, AlertDescription } from "../client/components/ui/alert";
@@ -22,45 +23,10 @@ import {
   paymentPlans,
   prettyPaymentPlanName,
   SubscriptionStatus,
+  unifiedPlans as localUnifiedPlans,
 } from "./plans";
 
 const bestDealPaymentPlanId: PaymentPlanId = PaymentPlanId.Pro;
-
-interface PaymentPlanCard {
-  name: string;
-  price: string;
-  description: string;
-  features: string[];
-}
-
-export const paymentPlanCards: Record<PaymentPlanId, PaymentPlanCard> = {
-  [PaymentPlanId.Hobby]: {
-    name: prettyPaymentPlanName(PaymentPlanId.Hobby),
-    price: "$9.99",
-    description: "Starter access for personal repos and small teams",
-    features: [
-      "Scan submissions and status tracking",
-      "Severity counts with delta summary",
-      "Basic email support",
-    ],
-  },
-  [PaymentPlanId.Pro]: {
-    name: prettyPaymentPlanName(PaymentPlanId.Pro),
-    price: "$19.99",
-    description: "Full vulnerability visibility for growing teams",
-    features: [
-      "Everything in Hobby",
-      "Detailed findings with fix guidance",
-      "Priority support response",
-    ],
-  },
-  [PaymentPlanId.Credits10]: {
-    name: prettyPaymentPlanName(PaymentPlanId.Credits10),
-    price: "$9.99",
-    description: "One-time pack for burst scan usage",
-    features: ["Add 10 scan credits", "Use for one-off projects", "No expiration date"],
-  },
-};
 
 const PricingPage = () => {
   const [isPaymentLoading, setIsPaymentLoading] = useState<boolean>(false);
@@ -77,6 +43,10 @@ const PricingPage = () => {
     isLoading: isCustomerPortalUrlLoading,
     error: customerPortalUrlError,
   } = useQuery(getCustomerPortalUrl, { enabled: isUserSubscribed });
+
+  const { data: unifiedPlans } = useQuery(getBillingPlans);
+  const activePlans = unifiedPlans || localUnifiedPlans;
+  const purchasablePlans = activePlans.filter((p) => p.paymentPlanId !== undefined);
 
   const navigate = useNavigate();
 
@@ -147,20 +117,20 @@ const PricingPage = () => {
           </Alert>
         )}
         <div className="isolate mx-auto mt-16 grid max-w-md grid-cols-1 gap-y-8 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-3 lg:gap-x-8">
-          {Object.values(PaymentPlanId).map((planId) => (
+          {purchasablePlans.map((plan) => (
             <Card
-              key={planId}
+              key={plan.id}
               className={cn(
                 "relative flex grow flex-col justify-between overflow-hidden transition-all duration-300 hover:shadow-lg",
                 {
                   "ring-primary bg-transparent! ring-2":
-                    planId === bestDealPaymentPlanId,
+                    plan.paymentPlanId === bestDealPaymentPlanId,
                   "ring-border ring-1 lg:my-8":
-                    planId !== bestDealPaymentPlanId,
+                    plan.paymentPlanId !== bestDealPaymentPlanId,
                 },
               )}
             >
-              {planId === bestDealPaymentPlanId && (
+              {plan.paymentPlanId === bestDealPaymentPlanId && (
                 <div
                   className="absolute top-0 right-0 -z-10 h-full w-full transform-gpu blur-3xl"
                   aria-hidden="true"
@@ -176,29 +146,28 @@ const PricingPage = () => {
               <CardContent className="h-full justify-between p-8 xl:p-10">
                 <div className="flex items-center justify-between gap-x-4">
                   <CardTitle
-                    id={planId}
+                    id={plan.id}
                     className="text-foreground text-lg leading-8 font-semibold"
                   >
-                    {paymentPlanCards[planId].name}
+                    {plan.name}
                   </CardTitle>
                 </div>
                 <p className="text-muted-foreground mt-4 text-sm leading-6">
-                  {paymentPlanCards[planId].description}
+                  {plan.description}
                 </p>
                 <p className="mt-6 flex items-baseline gap-x-1">
                   <span className="text-foreground text-4xl font-bold tracking-tight">
-                    {paymentPlanCards[planId].price}
+                    {plan.price}
                   </span>
                   <span className="text-muted-foreground text-sm leading-6 font-semibold">
-                    {paymentPlans[planId].effect.kind === "subscription" &&
-                      "/month"}
+                    {plan.isSubscription && "/month"}
                   </span>
                 </p>
                 <ul
                   role="list"
                   className="text-muted-foreground mt-8 space-y-3 text-sm leading-6"
                 >
-                  {paymentPlanCards[planId].features.map((feature) => (
+                  {plan.features.map((feature) => (
                     <li key={feature} className="flex gap-x-3">
                       <CheckCircle
                         className="text-primary h-5 w-5 flex-none"
@@ -216,7 +185,7 @@ const PricingPage = () => {
                     disabled={isCustomerPortalUrlLoading}
                     aria-describedby="manage-subscription"
                     variant={
-                      planId === bestDealPaymentPlanId ? "default" : "outline"
+                      plan.paymentPlanId === bestDealPaymentPlanId ? "default" : "outline"
                     }
                     className="w-full"
                   >
@@ -224,10 +193,10 @@ const PricingPage = () => {
                   </Button>
                 ) : (
                   <Button
-                    onClick={() => handleBuyNowClick(planId)}
-                    aria-describedby={planId}
+                    onClick={() => plan.paymentPlanId && handleBuyNowClick(plan.paymentPlanId)}
+                    aria-describedby={plan.id}
                     variant={
-                      planId === bestDealPaymentPlanId ? "default" : "outline"
+                      plan.paymentPlanId === bestDealPaymentPlanId ? "default" : "outline"
                     }
                     className="w-full"
                     disabled={isPaymentLoading}

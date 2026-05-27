@@ -1,49 +1,25 @@
 import { useMemo } from "react";
 import { Link as WaspRouterLink, routes } from "wasp/client/router";
 import { useAuth } from "wasp/client/auth";
-import { getCustomerPortalUrl, getProfileSettings, useQuery } from "wasp/client/operations";
+import { getCustomerPortalUrl, getProfileSettings, getBillingPlans, useQuery } from "wasp/client/operations";
 import { Alert, AlertDescription } from "../client/components/ui/alert";
 import { Badge } from "../client/components/ui/badge";
 import { Button } from "../client/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../client/components/ui/card";
 import {
   actionVerbLabels,
-  billingPlanLabels,
-  billingPlanSummaries,
   getBillingPlanLabel,
   getBillingStateLabel,
   getBillingPlanSummary,
   type BillingPlanTier,
 } from "../client/utils/productVocabulary";
+import { unifiedPlans as localUnifiedPlans } from "../payment/plans";
 
 type BillingProfile = {
   plan_tier: BillingPlanTier;
   subscription_status: string | null;
   monthly_quota_used: number;
   monthly_quota_limit: number;
-};
-
-const planEntitlements: Record<BillingPlanTier, string[]> = {
-  free_trial: [
-    "Core scan submissions",
-    "Workspace-aware reporting",
-    "Basic dashboard and findings access",
-  ],
-  starter: [
-    "Higher monthly scan limits",
-    "Saved views and notifications",
-    "Workspace-level billing visibility",
-  ],
-  pro: [
-    "GitHub-triggered scans and richer findings",
-    "Remediation workflows and reporting depth",
-    "Priority support path",
-  ],
-  enterprise: [
-    "Higher throughput and team controls",
-    "Internal admin oversight and support lookup",
-    "Full control-plane visibility",
-  ],
 };
 
 function nextPlan(plan: BillingPlanTier): BillingPlanTier {
@@ -67,8 +43,22 @@ export default function BillingPage() {
   const profile = (profileData ?? null) as BillingProfile | null;
   const currentPlan = profile?.plan_tier ?? (user?.plan as BillingPlanTier | undefined) ?? "free_trial";
   const billingStatus = profile?.subscription_status ?? user?.subscriptionStatus ?? null;
-  const currentLabel = getBillingPlanLabel(currentPlan);
-  const currentSummary = getBillingPlanSummary(currentPlan);
+
+  const { data: unifiedPlans } = useQuery(getBillingPlans);
+  const activePlans = unifiedPlans || localUnifiedPlans;
+
+  const planInfo = useMemo(() => {
+    return activePlans.find(p => p.id === currentPlan) || {
+      id: currentPlan,
+      name: getBillingPlanLabel(currentPlan),
+      description: getBillingPlanSummary(currentPlan),
+      features: [],
+    };
+  }, [activePlans, currentPlan]);
+
+  const currentLabel = planInfo.name;
+  const currentSummary = planInfo.description;
+
   const portalEnabled = Boolean(billingStatus && billingStatus !== "deleted");
   const { data: portalUrl } = useQuery(getCustomerPortalUrl, {}, {
     enabled: portalEnabled,
@@ -83,6 +73,10 @@ export default function BillingPage() {
       free: Math.max(limit - used, 0),
     };
   }, [profile, user]);
+
+  const subscriptionPlans = useMemo(() => {
+    return activePlans.filter((p) => p.isSubscription);
+  }, [activePlans]);
 
   if (!user) {
     return (
@@ -182,24 +176,24 @@ export default function BillingPage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {(Object.keys(planEntitlements) as BillingPlanTier[]).map((plan) => (
-            <Card key={plan} className={plan === currentPlan ? "border-primary/50" : ""}>
+          {subscriptionPlans.map((plan) => (
+            <Card key={plan.id} className={plan.id === currentPlan ? "border-primary/50" : ""}>
               <CardHeader>
-                <CardTitle>{billingPlanLabels[plan]}</CardTitle>
-                <CardDescription>{billingPlanSummaries[plan]}</CardDescription>
+                <CardTitle>{plan.name}</CardTitle>
+                <CardDescription>{plan.description}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  {planEntitlements[plan].map((item) => (
+                  {plan.features.map((item) => (
                     <li key={item}>• {item}</li>
                   ))}
                 </ul>
-                {plan === currentPlan ? (
+                {plan.id === currentPlan ? (
                   <Badge>Current plan</Badge>
                 ) : (
-                  <Button asChild variant={plan === nextPlan(currentPlan) ? "default" : "outline"} className="w-full">
+                  <Button asChild variant={plan.id === nextPlan(currentPlan) ? "default" : "outline"} className="w-full">
                     <WaspRouterLink to={routes.PricingPageRoute.to}>
-                      {plan === nextPlan(currentPlan) ? "Upgrade next" : "Review upgrade"}
+                      {plan.id === nextPlan(currentPlan) ? "Upgrade next" : "Review upgrade"}
                     </WaspRouterLink>
                   </Button>
                 )}

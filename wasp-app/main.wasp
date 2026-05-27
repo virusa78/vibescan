@@ -554,6 +554,13 @@ query getCustomerPortalUrl {
   auth: true
 }
 
+query getBillingPlans {
+  fn: import { getBillingPlans } from "@src/payment/operations",
+  entities: [],
+  auth: false
+}
+
+
 action generateCheckoutSession {
   fn: import { generateCheckoutSession } from "@src/payment/operations",
   entities: [User],

@@ -4,7 +4,8 @@ import type { Stripe } from "stripe";
 import { env, type MiddlewareConfigFn } from "wasp/server";
 import { type PaymentsWebhook } from "wasp/server/api";
 import { UnhandledWebhookEventError } from "../errors";
-import { SubscriptionStatus } from "../plans";
+import { SubscriptionStatus, PaymentPlanId } from "../plans";
+import { getPaymentPlanIdByPaymentProcessorPlanId } from "../paymentProcessorPlans";
 import { updateUserSubscription } from "../user";
 import { stripeClient } from "./stripeClient";
 
@@ -63,9 +64,9 @@ export const stripeWebhook: PaymentsWebhook = async (
       // In development, it is likely that we will receive events that we are not handling.
       // E.g. via the `stripe trigger` command.
       if (process.env.NODE_ENV === "development") {
-        console.info("Unhandled Stripe webhook event in development: ", error);
+         console.info("Unhandled Stripe webhook event in development: ", error);
       } else if (process.env.NODE_ENV === "production") {
-        console.error("Unhandled Stripe webhook event in production: ", error);
+         console.error("Unhandled Stripe webhook event in production: ", error);
       }
 
       // We must return a 2XX status code, otherwise Stripe will keep retrying the event.
@@ -120,8 +121,23 @@ async function handleCustomerSubscriptionUpdated(
 
   const customerId = getCustomerId(subscription.customer);
 
+  let plan: string | undefined = undefined;
+  const priceId = subscription.items.data[0]?.price.id;
+  if (priceId) {
+    try {
+      const paymentPlanId = getPaymentPlanIdByPaymentProcessorPlanId(priceId);
+      if (paymentPlanId === PaymentPlanId.Hobby) {
+        plan = "starter";
+      } else if (paymentPlanId === PaymentPlanId.Pro) {
+        plan = "pro";
+      }
+    } catch (error) {
+      console.error("Failed to map subscription price ID to plan tier:", error);
+    }
+  }
+
   await updateUserSubscription(
-    { stripeCustomerId: customerId, subscriptionStatus },
+    { stripeCustomerId: customerId, subscriptionStatus, plan },
     prismaUserDelegate,
   );
 }
@@ -167,6 +183,7 @@ async function handleCustomerSubscriptionDeleted(
     {
       stripeCustomerId: customerId,
       subscriptionStatus: SubscriptionStatus.Deleted,
+      plan: "free_trial",
     },
     prismaUserDelegate,
   );
