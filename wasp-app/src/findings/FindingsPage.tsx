@@ -155,11 +155,17 @@ function StatusBadge({ status }: { status: FindingStatus }) {
 
 function SlaBadge({ state, dueAt }: { state: ProjectFindingRow['slaState']; dueAt?: string | null }) {
   const label = state === 'none' ? 'No SLA' : state.replace('_', ' ');
-  const className = state === 'overdue'
-    ? 'border-red-300 bg-red-50 text-red-700'
-    : state === 'due_soon'
-      ? 'border-amber-300 bg-amber-50 text-amber-700'
-      : 'border-emerald-300 bg-emerald-50 text-emerald-700';
+  let className = '';
+  if (state === 'overdue') {
+    className = 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400';
+  } else if (state === 'due_soon') {
+    className = 'border-amber-300 bg-amber-50/90 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-400';
+  } else if (state === 'on_track') {
+    className = 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400';
+  } else {
+    // none
+    className = 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400';
+  }
   return <Badge variant="outline" className={className}>{label}{dueAt ? ` · ${formatDate(dueAt)}` : ''}</Badge>;
 }
 
@@ -412,8 +418,8 @@ export default function FindingsPage() {
 
         <section className="overflow-hidden rounded-lg border bg-card/30">
           <div className="overflow-x-auto w-full">
-            <div className="min-w-[1000px]">
-              <div className="grid grid-cols-[minmax(180px,1.2fr)_minmax(130px,0.8fr)_minmax(120px,0.9fr)_85px_85px_95px_70px_90px_48px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-semibold uppercase text-muted-foreground">
+            <div className="min-w-[900px] lg:min-w-full">
+              <div className="grid grid-cols-[minmax(180px,1.2fr)_minmax(140px,0.9fr)_minmax(130px,1fr)_90px_90px_100px_70px_100px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-semibold uppercase text-muted-foreground">
                 <span>Project / CVE</span>
                 <span>Package</span>
                 <span>Scanners</span>
@@ -422,7 +428,6 @@ export default function FindingsPage() {
                 <span>Seen</span>
                 <span>Scans</span>
                 <span>SLA</span>
-                <span className="text-right">Info</span>
               </div>
               {isLoading ? (
                 <div className="p-8 text-sm text-muted-foreground">Loading findings...</div>
@@ -459,7 +464,7 @@ export default function FindingsPage() {
                       <div
                         key={finding.id}
                         onClick={() => setSelectedFindingId(finding.id)}
-                        className="grid w-full grid-cols-[minmax(180px,1.2fr)_minmax(130px,0.8fr)_minmax(120px,0.9fr)_85px_85px_95px_70px_90px_48px] gap-3 border-b px-4 py-3 text-left text-sm hover:bg-muted/30 cursor-pointer items-center group/row"
+                        className="grid w-full grid-cols-[minmax(180px,1.2fr)_minmax(140px,0.9fr)_minmax(130px,1fr)_90px_90px_100px_70px_100px] gap-3 border-b px-4 py-3 text-left text-sm hover:bg-muted/30 cursor-pointer items-center group/row"
                       >
                         <span className="min-w-0 border-l-4 pl-3">
                           <span className="block truncate font-medium">{finding.project.name}</span>
@@ -476,21 +481,6 @@ export default function FindingsPage() {
                         <span className="text-xs text-muted-foreground">{formatDate(finding.firstSeenAt)}<br />{finding.ageDays}d old</span>
                         <span>{finding.scanCount}</span>
                         <span><SlaBadge state={finding.slaState} dueAt={finding.slaDueAt} /></span>
-                        <div className="flex justify-end">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8 border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground shadow-sm transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedFindingId(finding.id);
-                            }}
-                            aria-label="View details"
-                          >
-                            <ChevronRight className="size-4" />
-                          </Button>
-                        </div>
                       </div>
                     )) : null}
                   </div>
