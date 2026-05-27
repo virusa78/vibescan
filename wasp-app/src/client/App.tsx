@@ -124,10 +124,11 @@ export default function App() {
 
   const isMarketingPage = useMemo(() => {
     return (
-      location.pathname.startsWith('/landing') ||
-      location.pathname.startsWith('/pricing')
+      (location.pathname.startsWith('/landing') ||
+       location.pathname.startsWith('/pricing')) &&
+      !user
     );
-  }, [location]);
+  }, [location, user]);
 
   const navigationItems = isMarketingPage
     ? marketingNavigationItems

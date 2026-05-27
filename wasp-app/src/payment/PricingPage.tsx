@@ -116,78 +116,88 @@ const PricingPage = () => {
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         )}
-        <div className="isolate mx-auto mt-16 grid max-w-md grid-cols-1 gap-y-8 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-3 lg:gap-x-8">
+        <div className="isolate mx-auto mt-16 grid max-w-md grid-cols-1 gap-y-10 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-3 lg:gap-x-8">
           {purchasablePlans.map((plan) => (
             <Card
               key={plan.id}
               className={cn(
-                "relative flex grow flex-col justify-between overflow-hidden transition-all duration-300 hover:shadow-lg",
-                {
-                  "ring-primary bg-transparent! ring-2":
-                    plan.paymentPlanId === bestDealPaymentPlanId,
-                  "ring-border ring-1 lg:my-8":
-                    plan.paymentPlanId !== bestDealPaymentPlanId,
-                },
+                "relative flex grow flex-col justify-between overflow-hidden rounded-2xl border transition-all duration-500 hover:-translate-y-1.5",
+                plan.paymentPlanId === bestDealPaymentPlanId
+                  ? "border-primary/50 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-md shadow-2xl shadow-primary/10 ring-1 ring-primary/30"
+                  : "border-border/60 bg-slate-900/10 dark:bg-slate-950/20 backdrop-blur-sm hover:border-border hover:shadow-xl lg:my-4"
               )}
             >
               {plan.paymentPlanId === bestDealPaymentPlanId && (
-                <div
-                  className="absolute top-0 right-0 -z-10 h-full w-full transform-gpu blur-3xl"
-                  aria-hidden="true"
-                >
+                <>
                   <div
-                    className="from-primary/40 via-primary/20 to-primary/10 absolute h-full w-full bg-linear-to-br opacity-30"
-                    style={{
-                      clipPath: "circle(670% at 50% 50%)",
-                    }}
-                  />
-                </div>
+                    className="absolute top-0 right-0 -z-10 h-full w-full transform-gpu blur-3xl"
+                    aria-hidden="true"
+                  >
+                    <div
+                      className="from-primary/40 via-primary/20 to-primary/10 absolute h-full w-full bg-linear-to-br opacity-30"
+                      style={{
+                        clipPath: "circle(670% at 50% 50%)",
+                      }}
+                    />
+                  </div>
+                  <div className="absolute top-4 right-4 z-10">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary border border-primary/20 shadow-sm shadow-primary/5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                      Popular
+                    </span>
+                  </div>
+                </>
               )}
-              <CardContent className="h-full justify-between p-8 xl:p-10">
-                <div className="flex items-center justify-between gap-x-4">
+              <CardContent className="h-full justify-between p-8 xl:p-10 flex flex-col">
+                <div>
                   <CardTitle
                     id={plan.id}
-                    className="text-foreground text-lg leading-8 font-semibold"
+                    className="text-foreground text-xl font-bold tracking-tight"
                   >
                     {plan.name}
                   </CardTitle>
+                  <p className="text-muted-foreground mt-3 text-sm leading-relaxed">
+                    {plan.description}
+                  </p>
                 </div>
-                <p className="text-muted-foreground mt-4 text-sm leading-6">
-                  {plan.description}
-                </p>
-                <p className="mt-6 flex items-baseline gap-x-1">
-                  <span className="text-foreground text-4xl font-bold tracking-tight">
-                    {plan.price}
-                  </span>
-                  <span className="text-muted-foreground text-sm leading-6 font-semibold">
-                    {plan.isSubscription && "/month"}
-                  </span>
-                </p>
+
+                <div className="mt-6 border-b border-border/40 pb-6">
+                  <p className="flex items-baseline gap-x-2">
+                    <span className="text-foreground text-5xl font-extrabold tracking-tight bg-gradient-to-br from-foreground to-foreground/80 bg-clip-text text-transparent">
+                      {plan.price}
+                    </span>
+                    <span className="text-muted-foreground text-sm font-medium">
+                      {plan.isSubscription ? "/ month" : " one-time"}
+                    </span>
+                  </p>
+                </div>
+
                 <ul
                   role="list"
-                  className="text-muted-foreground mt-8 space-y-3 text-sm leading-6"
+                  className="text-muted-foreground mt-8 space-y-4 text-sm leading-6 flex-grow"
                 >
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex gap-x-3">
-                      <CheckCircle
-                        className="text-primary h-5 w-5 flex-none"
-                        aria-hidden="true"
-                      />
-                      {feature}
+                    <li key={feature} className="flex items-start gap-x-3">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary border border-primary/20 mt-0.5 shadow-sm">
+                        <CheckCircle className="h-3 w-3" />
+                      </span>
+                      <span className="text-foreground/90 font-medium">{feature}</span>
                     </li>
                   ))}
                 </ul>
               </CardContent>
-              <CardFooter>
+              <CardFooter className="p-8 pt-0">
                 {isUserSubscribed ? (
                   <Button
                     onClick={handleCustomerPortalClick}
                     disabled={isCustomerPortalUrlLoading}
                     aria-describedby="manage-subscription"
-                    variant={
-                      plan.paymentPlanId === bestDealPaymentPlanId ? "default" : "outline"
-                    }
-                    className="w-full"
+                    className={cn(
+                      "w-full h-11 transition-all duration-300 font-bold tracking-wide rounded-xl",
+                      plan.paymentPlanId === bestDealPaymentPlanId
+                        ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-primary/35 hover:-translate-y-0.5"
+                        : "border border-border/80 hover:bg-accent/50 text-foreground"
+                    )}
                   >
                     Manage Subscription
                   </Button>
@@ -195,13 +205,15 @@ const PricingPage = () => {
                   <Button
                     onClick={() => plan.paymentPlanId && handleBuyNowClick(plan.paymentPlanId)}
                     aria-describedby={plan.id}
-                    variant={
-                      plan.paymentPlanId === bestDealPaymentPlanId ? "default" : "outline"
-                    }
-                    className="w-full"
                     disabled={isPaymentLoading}
+                    className={cn(
+                      "w-full h-11 transition-all duration-300 font-bold tracking-wide rounded-xl",
+                      plan.paymentPlanId === bestDealPaymentPlanId
+                        ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-primary/35 hover:-translate-y-0.5"
+                        : "border border-border/80 hover:bg-accent/50 text-foreground"
+                    )}
                   >
-                    {!!user ? "Start checkout" : "Log in to continue"}
+                    {!!user ? "Upgrade Plan" : "Log in to continue"}
                   </Button>
                 )}
               </CardFooter>
